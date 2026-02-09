@@ -1,0 +1,27 @@
+world:
+  height: 40
+  width: 40
+  step_time: 0.1
+  sample_time: 0.1
+  offset: [0, 0]
+
+robot:
+  kinematics: {name: 'diff'}
+  shape: {name: 'circle', radius: 0.2}
+  state: [0, 0, 0]
+  sensors:
+    - type: 'lidar2d'
+      range_min: 0.2
+      range_max: 15
+      angle_range: 6.2831853 # 2*pi
+      number: 720
+      noise: True
+      std: 0.01
+
+obstacle:
+  - shape: {name: 'circle', radius: 1.0}
+    state: [5.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  - shape: {name: 'polygon', vertices: [[0, 1.2], [-1.04, -0.6], [1.04, -0.6]]}
+    state: [-3.2, -8.6, 5.9, 0, 0, 0]
+  - shape: {name: 'rectangle', width: 1.5, length: 1.5}
+    state: [-7.8, -2.9, 4.8, 0, 0, 0]

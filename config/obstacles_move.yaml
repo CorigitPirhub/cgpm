@@ -1,0 +1,28 @@
+world:
+  height: 40
+  width: 40
+  step_time: 0.1
+  sample_time: 0.1
+  offset: [0, 0]
+
+robot:
+  kinematics: {name: 'diff'}
+  shape: {name: 'circle', radius: 0.2}
+  state: [0, 0, 0]
+  sensors:
+    - type: 'lidar2d'
+      range_min: 0.2
+      range_max: 15
+      angle_range: 6.2831853 # 2*pi
+      number: 1440
+      noise: True
+      std: 0.01
+
+obstacle:
+  - shape: {name: 'circle', radius: 1.0}
+    kinematics: {name: 'diff'}         # 让 obstacle 使用差分模型，可接受 [v, ω] 控制
+    state: [5.0, 0.0, 0.0]             # 初始位置在 (5, 0)，朝向 0
+    behavior: {name: 'dash'}           # 给它一个行为（如果不用自定义控制时有用）
+  - shape: {name: 'circle', radius: 1.0}
+    state: [-10.0, 0.0, 0.0]
+

@@ -1,0 +1,59 @@
+world:
+  height: 20
+  width: 20
+  step_time: 0.1  # 步长
+  sample_time: 0.1  # 采样时间
+  offset: [0, 0]
+
+robot:
+  kinematics: {name: 'diff'}  # 运动学模型：差速模型
+  shape: {name: 'circle', radius: 0.2}
+  state: [0, 0, 0]
+  color: 'g'
+  sensors:
+    - type: 'lidar2d'
+      range_min: 0.2
+      range_max: 10
+      angle_range: 6.2831853
+      number: 360
+      noise: True 
+      std: 0.03
+
+obstacle:
+  # 静态障碍物组
+  - number: 10
+    distribution:
+      name: 'random'
+      range_low:  [-9, -9, 0]
+      range_high: [ 9,  9, 6.28]
+    shape:
+      # 随机圆（基准半径 0.5，实际会在附近随机变化）
+      - {name: 'circle', radius: 0.5, random_shape: True}
+      # 随机多边形（尺寸和形状都随机）
+      - {name: 'polygon',
+         random_shape: true,
+         avg_radius_range: [0.3, 0.8],
+         irregularity_range: [0, 0.4],
+         spikeyness_range: [0, 0.4],
+         num_vertices_range: [4, 6]}
+    color: 'k'
+    # 不写 kinematics，即静态
+
+  # 动态障碍物组
+  - number: 10
+    distribution:
+      name: 'random'
+      range_low:  [-9, -9, 0]
+      range_high: [ 9,  9, 6.28]
+    shape:
+      - {name: 'circle', radius: 0.5, random_shape: True}
+      - {name: 'polygon',
+         random_shape: true,
+         avg_radius_range: [0.3, 0.8],
+         irregularity_range: [0, 0.4],
+         spikeyness_range: [0, 0.4],
+         num_vertices_range: [4, 6]}
+    kinematics: {name: 'omni'}
+    behavior: {name: 'rvo', wander: True, radius_exp: 1.5}
+    color: 'b'
+
