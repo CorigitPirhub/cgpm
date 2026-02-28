@@ -23,6 +23,8 @@ class VoxelCell3D:
     clear_hits: float = 0.0
     # Frontier activation score (cold-start growth support).
     frontier_score: float = 0.0
+    # Last frame index when the voxel was updated by a measurement.
+    last_seen: int = 0
 
 
 @dataclass

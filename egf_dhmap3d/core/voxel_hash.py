@@ -115,6 +115,8 @@ class VoxelHashMap3D:
         phi_thresh: float,
         rho_thresh: float,
         min_weight: float,
+        current_step: int = 0,
+        max_age_frames: int = 1_000_000_000,
         max_d_score: float = 1.0,
         max_free_ratio: float = 1e9,
         prune_free_min: float = 1e9,
@@ -131,6 +133,8 @@ class VoxelHashMap3D:
             if cell.phi_w < min_weight:
                 continue
             if cell.d_score > max_d_score:
+                continue
+            if (int(current_step) - int(cell.last_seen)) > int(max_age_frames):
                 continue
             free_ratio = float(cell.free_evidence / max(1e-6, cell.surf_evidence))
             if free_ratio > max_free_ratio:

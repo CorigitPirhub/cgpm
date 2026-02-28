@@ -24,6 +24,20 @@ class EGFDHMap3D:
         self.prev_gt_pose: np.ndarray | None = None
         self.trajectory: list[np.ndarray] = []
         self.dynamic_score: float = 0.0
+        self.frame_counter: int = 0
+        self.prev_cam_pcd: o3d.geometry.PointCloud | None = None
+        self.prev_rgbd: o3d.geometry.RGBDImage | None = None
+        cam = self.cfg.camera
+        self.intrinsic = o3d.camera.PinholeCameraIntrinsic(
+            int(cam.width),
+            int(cam.height),
+            float(cam.fx),
+            float(cam.fy),
+            float(cam.cx),
+            float(cam.cy),
+        )
+        self.last_delta_cam: np.ndarray = np.eye(4, dtype=float)
+        self.odom_valid_ratio: float = 0.0
 
     def _delta_from_gt(self, t_wc: np.ndarray) -> np.ndarray:
         if self.prev_gt_pose is None:
@@ -46,13 +60,172 @@ class EGFDHMap3D:
         normals_world = normals_world / np.clip(np.linalg.norm(normals_world, axis=1, keepdims=True), 1e-9, None)
         return points_world, normals_world
 
+    @staticmethod
+    def _delta_stats(delta: np.ndarray) -> Tuple[float, float]:
+        t = float(np.linalg.norm(delta[:3, 3]))
+        tr = float(np.clip((np.trace(delta[:3, :3]) - 1.0) * 0.5, -1.0, 1.0))
+        r = float(np.degrees(np.arccos(tr)))
+        return t, r
+
+    def _build_cam_pcd(self, points_cam: np.ndarray, normals_cam: np.ndarray) -> o3d.geometry.PointCloud:
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.asarray(points_cam, dtype=float))
+        pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals_cam, dtype=float))
+        voxel = float(max(1e-3, self.cfg.predict.icp_voxel_size))
+        if voxel > 1e-6:
+            pcd = pcd.voxel_down_sample(voxel)
+            if len(pcd.points) >= 16:
+                pcd.estimate_normals(
+                    search_param=o3d.geometry.KDTreeSearchParamHybrid(
+                        radius=max(0.04, 2.0 * voxel),
+                        max_nn=30,
+                    )
+                )
+                pcd.orient_normals_towards_camera_location(np.zeros(3, dtype=float))
+        return pcd
+
+    def _load_rgbd(self, frame: TUMFrame3D) -> o3d.geometry.RGBDImage:
+        color = o3d.io.read_image(str(Path(frame.rgb_path)))
+        depth = o3d.io.read_image(str(Path(frame.depth_path)))
+        cam = self.cfg.camera
+        return o3d.geometry.RGBDImage.create_from_color_and_depth(
+            color,
+            depth,
+            depth_scale=float(cam.depth_scale),
+            depth_trunc=float(cam.depth_max),
+            convert_rgb_to_intensity=False,
+        )
+
+    def _delta_from_rgbd(self, frame: TUMFrame3D) -> Tuple[np.ndarray, Dict[str, float]]:
+        curr = self._load_rgbd(frame)
+        if self.prev_rgbd is None:
+            self.prev_rgbd = curr
+            return np.eye(4, dtype=float), {"odom_fitness": 1.0, "odom_rmse": 0.0, "odom_valid": 1.0, "odom_trans_norm": 0.0, "odom_rot_deg": 0.0, "odom_source": 2.0}
+
+        jac = o3d.pipelines.odometry.RGBDOdometryJacobianFromHybridTerm()
+        option = o3d.pipelines.odometry.OdometryOption()
+        option.depth_diff_max = float(max(0.03, self.cfg.predict.icp_max_corr))
+        success, delta, info = o3d.pipelines.odometry.compute_rgbd_odometry(
+            self.prev_rgbd,
+            curr,
+            self.intrinsic,
+            np.eye(4, dtype=float),
+            jac,
+            option,
+        )
+        delta = np.asarray(delta, dtype=float)
+        trans_norm, rot_deg = self._delta_stats(delta)
+        info_trace = float(np.trace(np.asarray(info, dtype=float))) if info is not None else 0.0
+        # Convert information trace to a bounded confidence proxy [0, 1].
+        fitness = float(np.clip(info_trace / 12000.0, 0.0, 1.0))
+        valid = bool(
+            success
+            and np.all(np.isfinite(delta))
+            and trans_norm <= float(self.cfg.predict.icp_max_trans_step)
+            and rot_deg <= float(self.cfg.predict.icp_max_rot_deg_step)
+        )
+        # Open3D odometry returns source->target (prev->curr), while pose propagation here
+        # uses the same delta convention as GT (curr->prev). Invert once for consistency.
+        if valid:
+            try:
+                delta = np.linalg.inv(delta)
+            except np.linalg.LinAlgError:
+                valid = False
+                delta = np.eye(4, dtype=float)
+        trans_norm, rot_deg = self._delta_stats(delta)
+        self.prev_rgbd = curr
+        return delta, {
+            "odom_fitness": fitness,
+            "odom_rmse": 0.0,
+            "odom_valid": 1.0 if valid else 0.0,
+            "odom_trans_norm": trans_norm,
+            "odom_rot_deg": rot_deg,
+            "odom_source": 2.0,
+        }
+
+    def _delta_from_icp(self, points_cam: np.ndarray, normals_cam: np.ndarray) -> Tuple[np.ndarray, Dict[str, float]]:
+        curr_pcd = self._build_cam_pcd(points_cam, normals_cam)
+        if self.prev_cam_pcd is None:
+            self.prev_cam_pcd = curr_pcd
+            return np.eye(4, dtype=float), {"odom_fitness": 1.0, "odom_rmse": 0.0, "odom_valid": 1.0, "odom_source": 1.0}
+
+        prev_pcd = self.prev_cam_pcd
+        if len(prev_pcd.points) < 16 or len(curr_pcd.points) < 16:
+            self.prev_cam_pcd = curr_pcd
+            return self.last_delta_cam.copy(), {"odom_fitness": 0.0, "odom_rmse": float("inf"), "odom_valid": 0.0, "odom_source": 1.0}
+
+        criteria = o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=int(self.cfg.predict.icp_max_iters))
+        estimation = o3d.pipelines.registration.TransformationEstimationPointToPlane()
+        reg = o3d.pipelines.registration.registration_icp(
+            prev_pcd,
+            curr_pcd,
+            float(max(1e-3, self.cfg.predict.icp_max_corr)),
+            np.eye(4, dtype=float),
+            estimation,
+            criteria,
+        )
+        delta = np.asarray(reg.transformation, dtype=float)
+        fitness = float(reg.fitness)
+        rmse = float(reg.inlier_rmse)
+        trans_norm, rot_deg = self._delta_stats(delta)
+        valid = bool(
+            np.all(np.isfinite(delta))
+            and fitness >= float(self.cfg.predict.icp_min_fitness)
+            and rmse <= float(self.cfg.predict.icp_max_rmse)
+            and trans_norm <= float(self.cfg.predict.icp_max_trans_step)
+            and rot_deg <= float(self.cfg.predict.icp_max_rot_deg_step)
+        )
+        if valid:
+            try:
+                delta_pose = np.linalg.inv(delta)
+            except np.linalg.LinAlgError:
+                delta_pose = self.last_delta_cam.copy()
+                valid = False
+            self.last_delta_cam = delta_pose.copy()
+        else:
+            delta_pose = self.last_delta_cam.copy()
+        trans_norm, rot_deg = self._delta_stats(delta_pose)
+
+        self.prev_cam_pcd = curr_pcd
+        return delta_pose, {
+            "odom_fitness": fitness,
+            "odom_rmse": rmse,
+            "odom_valid": 1.0 if valid else 0.0,
+            "odom_trans_norm": trans_norm,
+            "odom_rot_deg": rot_deg,
+            "odom_source": 1.0,
+        }
+
     def step(self, frame: TUMFrame3D, use_gt_pose: bool = True) -> Dict[str, float]:
+        odom_stats: Dict[str, float] = {}
         if use_gt_pose:
             delta = self._delta_from_gt(frame.pose_w_c)
             self.predictor.predict(delta_t=delta, dt=frame.dt)
             self.predictor.set_pose(frame.pose_w_c)
+            self.prev_cam_pcd = None
+            self.prev_rgbd = None
+            self.last_delta_cam = np.eye(4, dtype=float)
+            odom_stats = {"odom_fitness": 1.0, "odom_rmse": 0.0, "odom_valid": 1.0, "odom_trans_norm": 0.0, "odom_rot_deg": 0.0, "odom_source": 0.0}
         else:
-            self.predictor.predict(delta_t=None, dt=frame.dt)
+            if not self.trajectory and bool(self.cfg.predict.slam_anchor_with_first_gt):
+                # SLAM mode uses a known start pose anchor; subsequent motion is pure ICP odometry.
+                self.predictor.set_pose(frame.pose_w_c)
+            if bool(self.cfg.predict.slam_use_gt_delta_odom):
+                delta = self._delta_from_gt(frame.pose_w_c)
+                d_t, d_r = self._delta_stats(delta)
+                odom_stats = {
+                    "odom_fitness": 1.0,
+                    "odom_rmse": 0.0,
+                    "odom_valid": 1.0,
+                    "odom_trans_norm": d_t,
+                    "odom_rot_deg": d_r,
+                    "odom_source": 3.0,
+                }
+            else:
+                delta, odom_stats = self._delta_from_rgbd(frame)
+                if odom_stats.get("odom_valid", 0.0) < 0.5:
+                    delta, odom_stats = self._delta_from_icp(frame.points_cam, frame.normals_cam)
+            self.predictor.predict(delta_t=delta, dt=frame.dt)
 
         self.predictor.apply_field_prediction(self.voxel_map, dynamic_score=self.dynamic_score)
 
@@ -67,7 +240,13 @@ class EGFDHMap3D:
             sensor_origin = frame.pose_w_c[:3, 3]
         else:
             sensor_origin = self.predictor.pose.as_matrix()[:3, 3]
-        update_stats = self.updater.update(self.voxel_map, accepted, rejected, sensor_origin=sensor_origin)
+        update_stats = self.updater.update(
+            self.voxel_map,
+            accepted,
+            rejected,
+            sensor_origin=sensor_origin,
+            frame_id=self.frame_counter,
+        )
 
         # Global dynamic score (used only in legacy global forgetting mode + debug).
         alpha = float(np.clip(self.cfg.update.dyn_score_alpha, 0.01, 0.5))
@@ -81,11 +260,15 @@ class EGFDHMap3D:
         target = 0.82 * score_obs + 0.18 * rej_tail
         self.dynamic_score = float((1.0 - alpha) * self.dynamic_score + alpha * target)
         self.dynamic_score = float(np.clip(self.dynamic_score, 0.0, 1.0))
+        self.odom_valid_ratio = float((1.0 - alpha) * self.odom_valid_ratio + alpha * odom_stats.get("odom_valid", 0.0))
 
         self.trajectory.append(self.predictor.pose.as_matrix())
+        self.frame_counter += 1
         out = {}
         out.update(assoc_stats)
         out.update(update_stats)
+        out.update(odom_stats)
+        out["odom_valid_ratio"] = float(self.odom_valid_ratio)
         out["rejected"] = float(len(rejected))
         out["dynamic_score"] = float(self.dynamic_score)
         return out
@@ -95,6 +278,8 @@ class EGFDHMap3D:
             phi_thresh=self.cfg.surface.phi_thresh,
             rho_thresh=self.cfg.surface.rho_thresh,
             min_weight=self.cfg.surface.min_weight,
+            current_step=int(self.frame_counter),
+            max_age_frames=int(self.cfg.surface.max_age_frames),
             max_d_score=self.cfg.surface.max_d_score,
             max_free_ratio=self.cfg.surface.max_free_ratio,
             prune_free_min=self.cfg.surface.prune_free_min,

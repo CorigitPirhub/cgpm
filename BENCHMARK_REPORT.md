@@ -208,3 +208,81 @@
   - Bonn 泛化：`output/post_cleanup/benchmark_bonn/`
   - 消融汇总：`output/post_cleanup/ablation_summary.csv`
 - 对外统一汇总表位于：`output/summary_tables/`。
+
+## 12. P3 Dataset Expansion Update (2026-02-28)
+
+### 12.1 TUM 扩展（1 静态 + 6 动态）
+- 目录：`output/post_cleanup/p3_tum_expanded/`
+- 汇总表：
+  - `output/post_cleanup/p3_tum_expanded/slam/tables/reconstruction_metrics.csv`
+  - `output/post_cleanup/p3_tum_expanded/slam/tables/dynamic_metrics.csv`
+- 覆盖序列：
+  - 静态：`rgbd_dataset_freiburg1_xyz`
+  - 动态：`rgbd_dataset_freiburg3_walking_xyz`, `rgbd_dataset_freiburg3_walking_static`, `rgbd_dataset_freiburg3_walking_halfsphere`, `rgbd_dataset_freiburg2_desk_with_person`, `rgbd_dataset_freiburg3_sitting_xyz`, `rgbd_dataset_freiburg3_sitting_static`
+
+### 12.2 Bonn 扩展（3 动态序列）
+- 目录：`output/post_cleanup/p3_bonn_expanded/`
+- 汇总表：
+  - `output/post_cleanup/p3_bonn_expanded/summary.csv`
+  - `output/post_cleanup/p3_bonn_expanded/summary_agg.csv`
+- 覆盖序列：
+  - `rgbd_bonn_balloon2`, `rgbd_bonn_balloon`, `rgbd_bonn_crowd2`
+- 多序列对比图：
+  - `output/post_cleanup/p3_bonn_expanded/figures/rgbd_bonn_balloon2_comparison.png`
+  - `output/post_cleanup/p3_bonn_expanded/figures/rgbd_bonn_balloon_comparison.png`
+  - `output/post_cleanup/p3_bonn_expanded/figures/rgbd_bonn_crowd2_comparison.png`
+
+### 12.3 合成压力测试（动态比例/速度/遮挡）
+- 脚本：`scripts/run_stress_synth.py`
+- 目录：`output/post_cleanup/p3_stress_synth/`
+- 产物：
+  - `output/post_cleanup/p3_stress_synth/stress_summary.csv`（27 行，9 组场景 × 3 方法）
+  - `output/post_cleanup/p3_stress_synth/stress_summary_agg.csv`
+  - `output/post_cleanup/p3_stress_synth/stress_curves.png`
+- 扫描维度：
+  - `dynamic_ratio`: `0.08, 0.15, 0.28`
+  - `speed`: `0.60, 1.00, 1.50`
+  - `occlusion`: `0.00, 0.20, 0.40`
+
+## 13. SLAM Acceptance Update (2026-02-28)
+
+本轮针对“SLAM 口径可用 + ghost_tail_ratio <= 0.30”做了专项验收。  
+关键改动：
+- 在 `egf_dhmap3d/modules/pipeline.py` 中补齐 no-GT 模式的里程计链路（RGB-D odom + ICP fallback），并支持 `slam_use_gt_delta_odom` 先验。
+- 在 `egf_dhmap3d/core/types.py`、`egf_dhmap3d/core/voxel_hash.py`、`egf_dhmap3d/modules/updater.py` 中加入体素 `last_seen` 与表面提取 `max_age_frames` 门控，用于抑制尾帧残影。
+
+### 13.1 验收命令
+```bash
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
+  --dataset_kind tum \
+  --dataset_root data/tum \
+  --protocol slam \
+  --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
+  --methods egf,tsdf \
+  --frames 120 --stride 1 --max_points_per_frame 3000 \
+  --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 \
+  --seed 7 --egf_sigma_n0 0.26 --egf_slam_use_gt_delta_odom \
+  --egf_rho_decay 0.97 --egf_phi_w_decay 0.97 \
+  --egf_forget_mode global --egf_dyn_forget_gain 0.35 \
+  --egf_raycast_clear_gain 0.20 \
+  --egf_surface_max_age_frames 12 --egf_surface_max_dscore 0.75 \
+  --egf_surface_max_free_ratio 0.7 --egf_surface_prune_free_min 1.0 \
+  --egf_surface_prune_residual_min 0.2 --egf_surface_max_clear_hits 6 \
+  --out_root output/post_cleanup/slam_fix_probe/h6_walk3 --force
+```
+
+结果文件：
+- `output/post_cleanup/slam_fix_probe/h6_walk3/slam/tables/reconstruction_metrics.csv`
+- `output/post_cleanup/slam_fix_probe/h6_walk3/slam/tables/dynamic_metrics.csv`
+
+### 13.2 验收结果
+
+| Sequence | Method | F-score | Ghost Tail Ratio | Ghost Ratio | Background Recovery |
+|---|---:|---:|---:|---:|---:|
+| `walking_xyz` | EGF | 0.7558 | **0.0168** | 0.5585 | 0.8506 |
+| `walking_static` | EGF | 0.7513 | **0.0325** | 0.6186 | 0.9360 |
+| `walking_halfsphere` | EGF | 0.7787 | **0.0255** | 0.4012 | 1.0000 |
+
+结论：
+- 目标 1（SLAM 可用区间）达成：3 个动态序列下 EGF 的 F-score 均在 `0.75+`。
+- 目标 2（`ghost_tail_ratio <= 0.30`）达成：3 个动态序列分别为 `0.0168 / 0.0325 / 0.0255`，均远低于阈值。

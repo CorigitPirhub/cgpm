@@ -80,6 +80,15 @@ class Update3DConfig:
 class Predict3DConfig:
     process_noise_trans: float = 0.01
     process_noise_rot: float = 0.01
+    slam_anchor_with_first_gt: bool = True
+    slam_use_gt_delta_odom: bool = True
+    icp_voxel_size: float = 0.04
+    icp_max_corr: float = 0.12
+    icp_max_iters: int = 30
+    icp_min_fitness: float = 0.10
+    icp_max_rmse: float = 0.10
+    icp_max_trans_step: float = 0.35
+    icp_max_rot_deg_step: float = 30.0
 
 
 @dataclass
@@ -88,6 +97,7 @@ class Surface3DConfig:
     rho_thresh: float = 0.20
     min_weight: float = 1.5
     max_d_score: float = 1.0
+    max_age_frames: int = 1_000_000_000
     max_free_ratio: float = 1e9
     prune_free_min: float = 1e9
     prune_residual_min: float = 1e9

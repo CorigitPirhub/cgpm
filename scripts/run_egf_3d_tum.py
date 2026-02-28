@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from egf_dhmap3d.core.config import EGF3DConfig
 from egf_dhmap3d.data.tum_rgbd import TUMRGBDStream
-from egf_dhmap3d.eval.metrics import compute_reconstruction_metrics
+from egf_dhmap3d.eval.metrics import compute_reconstruction_metrics, compute_trajectory_metrics
 from egf_dhmap3d.modules.pipeline import EGFDHMap3D
 
 
@@ -73,13 +73,21 @@ def main():
     parser.add_argument("--max_points_per_frame", type=int, default=5000)
     parser.add_argument("--surface_eval_thresh", type=float, default=0.05)
     parser.add_argument("--out", type=str, default="output/egf3d/freiburg1_xyz")
-    parser.add_argument("--use_gt_pose", action="store_true", default=True)
+    gt_pose_group = parser.add_mutually_exclusive_group()
+    gt_pose_group.add_argument("--use_gt_pose", dest="use_gt_pose", action="store_true")
+    gt_pose_group.add_argument("--no_gt_pose", dest="use_gt_pose", action="store_false")
+    parser.set_defaults(use_gt_pose=False)
+    slam_delta_group = parser.add_mutually_exclusive_group()
+    slam_delta_group.add_argument("--slam_use_gt_delta_odom", dest="slam_use_gt_delta_odom", action="store_true")
+    slam_delta_group.add_argument("--slam_no_gt_delta_odom", dest="slam_use_gt_delta_odom", action="store_false")
+    parser.set_defaults(slam_use_gt_delta_odom=True)
     parser.add_argument("--voxel_size", type=float, default=0.05)
     parser.add_argument("--rho_decay", type=float, default=None)
     parser.add_argument("--phi_w_decay", type=float, default=None)
     parser.add_argument("--surface_phi_thresh", type=float, default=0.04)
     parser.add_argument("--surface_rho_thresh", type=float, default=0.20)
     parser.add_argument("--surface_min_weight", type=float, default=1.5)
+    parser.add_argument("--surface_max_age_frames", type=int, default=1000000000)
     parser.add_argument("--surface_max_dscore", type=float, default=1.0)
     parser.add_argument("--surface_max_free_ratio", type=float, default=1e9)
     parser.add_argument("--surface_prune_free_min", type=float, default=1e9)
@@ -105,10 +113,18 @@ def main():
     parser.add_argument("--raycast_rho_max", type=float, default=5.0)
     parser.add_argument("--raycast_phiw_max", type=float, default=40.0)
     parser.add_argument("--raycast_dyn_boost", type=float, default=0.25)
+    parser.add_argument("--icp_voxel_size", type=float, default=0.04)
+    parser.add_argument("--icp_max_corr", type=float, default=0.12)
+    parser.add_argument("--icp_max_iters", type=int, default=30)
+    parser.add_argument("--icp_min_fitness", type=float, default=0.10)
+    parser.add_argument("--icp_max_rmse", type=float, default=0.10)
+    parser.add_argument("--icp_max_trans_step", type=float, default=0.35)
+    parser.add_argument("--icp_max_rot_deg_step", type=float, default=30.0)
     parser.add_argument("--ablation_no_evidence", action="store_true")
     parser.add_argument("--ablation_no_gradient", action="store_true")
     parser.add_argument("--save_dscore_map", action="store_true")
     parser.add_argument("--dscore_min_weight", type=float, default=0.2)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)
@@ -131,6 +147,7 @@ def main():
     cfg.surface.phi_thresh = float(args.surface_phi_thresh)
     cfg.surface.rho_thresh = float(args.surface_rho_thresh)
     cfg.surface.min_weight = float(args.surface_min_weight)
+    cfg.surface.max_age_frames = int(args.surface_max_age_frames)
     cfg.surface.max_d_score = float(args.surface_max_dscore)
     cfg.surface.max_free_ratio = float(args.surface_max_free_ratio)
     cfg.surface.prune_free_min = float(args.surface_prune_free_min)
@@ -157,6 +174,14 @@ def main():
     cfg.update.raycast_rho_max = float(args.raycast_rho_max)
     cfg.update.raycast_phiw_max = float(args.raycast_phiw_max)
     cfg.update.raycast_dyn_boost = float(args.raycast_dyn_boost)
+    cfg.predict.icp_voxel_size = float(args.icp_voxel_size)
+    cfg.predict.icp_max_corr = float(args.icp_max_corr)
+    cfg.predict.icp_max_iters = int(args.icp_max_iters)
+    cfg.predict.icp_min_fitness = float(args.icp_min_fitness)
+    cfg.predict.icp_max_rmse = float(args.icp_max_rmse)
+    cfg.predict.icp_max_trans_step = float(args.icp_max_trans_step)
+    cfg.predict.icp_max_rot_deg_step = float(args.icp_max_rot_deg_step)
+    cfg.predict.slam_use_gt_delta_odom = bool(args.slam_use_gt_delta_odom)
     cfg.update.enable_evidence = bool(not args.ablation_no_evidence)
     cfg.assoc.use_evidence_in_noise = bool(not args.ablation_no_evidence)
     cfg.update.enable_gradient_fusion = bool(not args.ablation_no_gradient)
@@ -170,6 +195,7 @@ def main():
         max_points=args.max_points_per_frame,
         assoc_max_diff=0.02,
         normal_radius=0.08,
+        seed=int(args.seed),
     )
     model = EGFDHMap3D(cfg)
 
@@ -177,10 +203,15 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     gt_refs: List[np.ndarray] = []
+    gt_norm_refs: List[np.ndarray] = []
+    gt_traj: List[np.ndarray] = []
     assoc_ratios: List[float] = []
     touched_voxels: List[float] = []
     dyn_scores: List[float] = []
-    rng = np.random.default_rng(7)
+    odom_fitness: List[float] = []
+    odom_rmse: List[float] = []
+    odom_valid: List[float] = []
+    rng = np.random.default_rng(int(args.seed))
 
     total = len(stream)
     print(f"[run] sequence={seq_dir.name} frames={total}")
@@ -189,27 +220,42 @@ def main():
         assoc_ratios.append(float(stat["assoc_ratio"]))
         touched_voxels.append(float(stat["touched_voxels"]))
         dyn_scores.append(float(stat.get("dynamic_score", 0.0)))
+        odom_fitness.append(float(stat.get("odom_fitness", 0.0)))
+        odom_rmse.append(float(stat.get("odom_rmse", 0.0)))
+        odom_valid.append(float(stat.get("odom_valid", 0.0)))
 
         ref = frame.points_world
+        ref_n = frame.normals_world
         if ref.shape[0] > 2500:
             keep = rng.choice(ref.shape[0], size=2500, replace=False)
             ref = ref[keep]
+            ref_n = ref_n[keep]
         gt_refs.append(ref)
+        gt_norm_refs.append(ref_n)
+        gt_traj.append(np.asarray(frame.pose_w_c, dtype=float))
 
         if (i + 1) % 10 == 0 or i == 0 or (i + 1) == total:
             print(
                 f"  frame={i + 1:04d}/{total:04d} "
                 f"assoc={stat['assoc_ratio']:.3f} "
                 f"vox={int(stat['active_voxels'])} "
-                f"dyn={stat.get('dynamic_score', 0.0):.3f}"
+                f"dyn={stat.get('dynamic_score', 0.0):.3f} "
+                f"odom={stat.get('odom_valid', 0.0):.0f}/{stat.get('odom_fitness', 0.0):.2f}"
             )
 
     pred_points, pred_normals = model.extract_surface_points()
     gt_points = np.vstack(gt_refs) if gt_refs else np.zeros((0, 3), dtype=float)
-    metrics = compute_reconstruction_metrics(pred_points, gt_points, threshold=args.surface_eval_thresh)
+    gt_normals = np.vstack(gt_norm_refs) if gt_norm_refs else np.zeros((0, 3), dtype=float)
+    metrics = compute_reconstruction_metrics(
+        pred_points,
+        gt_points,
+        threshold=args.surface_eval_thresh,
+        pred_normals=pred_normals,
+        gt_normals=gt_normals,
+    )
 
     save_point_cloud(out_dir / "surface_points.ply", pred_points, pred_normals)
-    save_point_cloud(out_dir / "reference_points.ply", gt_points, None)
+    save_point_cloud(out_dir / "reference_points.ply", gt_points, gt_normals)
     mesh_info = model.save_poisson_mesh(out_dir / "surface_mesh.ply", min_points=int(args.mesh_min_points))
 
     if args.save_dscore_map:
@@ -248,18 +294,28 @@ def main():
         plt.close(fig)
 
     trajectory = model.get_trajectory()
+    gt_trajectory = np.asarray(gt_traj, dtype=float) if gt_traj else np.zeros((0, 4, 4), dtype=float)
+    traj_metrics = compute_trajectory_metrics(
+        pred_poses=trajectory,
+        gt_poses=gt_trajectory,
+        step=1,
+        align_first=True,
+    )
     np.save(out_dir / "trajectory.npy", trajectory)
+    np.save(out_dir / "gt_trajectory.npy", gt_trajectory)
 
     summary = {
         "sequence": seq_dir.name,
         "frames_used": int(total),
         "stride": int(args.stride),
         "use_gt_pose": bool(args.use_gt_pose),
+        "seed": int(args.seed),
         "voxel_size": float(cfg.map3d.voxel_size),
         "rho_decay": float(cfg.map3d.rho_decay),
         "phi_w_decay": float(cfg.map3d.phi_w_decay),
         "sigma_n0": float(cfg.assoc.sigma_n0),
         "surface_max_dscore": float(cfg.surface.max_d_score),
+        "surface_max_age_frames": int(cfg.surface.max_age_frames),
         "surface_max_free_ratio": float(cfg.surface.max_free_ratio),
         "surface_prune_free_min": float(cfg.surface.prune_free_min),
         "surface_prune_residual_min": float(cfg.surface.prune_residual_min),
@@ -279,6 +335,14 @@ def main():
         "raycast_rho_max": float(cfg.update.raycast_rho_max),
         "raycast_phiw_max": float(cfg.update.raycast_phiw_max),
         "raycast_dyn_boost": float(cfg.update.raycast_dyn_boost),
+        "icp_voxel_size": float(cfg.predict.icp_voxel_size),
+        "icp_max_corr": float(cfg.predict.icp_max_corr),
+        "icp_max_iters": int(cfg.predict.icp_max_iters),
+        "icp_min_fitness": float(cfg.predict.icp_min_fitness),
+        "icp_max_rmse": float(cfg.predict.icp_max_rmse),
+        "icp_max_trans_step": float(cfg.predict.icp_max_trans_step),
+        "icp_max_rot_deg_step": float(cfg.predict.icp_max_rot_deg_step),
+        "slam_use_gt_delta_odom": bool(cfg.predict.slam_use_gt_delta_odom),
         "ablation_no_evidence": bool(args.ablation_no_evidence),
         "ablation_no_gradient": bool(args.ablation_no_gradient),
         "active_voxels": int(len(model.voxel_map)),
@@ -287,12 +351,38 @@ def main():
         "assoc_ratio_mean": float(np.mean(assoc_ratios)) if assoc_ratios else 0.0,
         "touched_voxels_mean": float(np.mean(touched_voxels)) if touched_voxels else 0.0,
         "dynamic_score_mean": float(np.mean(dyn_scores)) if dyn_scores else 0.0,
+        "odom_fitness_mean": float(np.mean(odom_fitness)) if odom_fitness else 0.0,
+        "odom_rmse_mean": float(np.mean(odom_rmse)) if odom_rmse else 0.0,
+        "odom_valid_ratio": float(np.mean(odom_valid)) if odom_valid else 0.0,
+        "trajectory_metrics": {
+            "ate_rmse": float(traj_metrics.ate_rmse),
+            "ate_mean": float(traj_metrics.ate_mean),
+            "ate_median": float(traj_metrics.ate_median),
+            "ate_max": float(traj_metrics.ate_max),
+            "rpe_trans_rmse": float(traj_metrics.rpe_trans_rmse),
+            "rpe_trans_mean": float(traj_metrics.rpe_trans_mean),
+            "rpe_rot_deg_rmse": float(traj_metrics.rpe_rot_deg_rmse),
+            "rpe_rot_deg_mean": float(traj_metrics.rpe_rot_deg_mean),
+            "frame_count": int(traj_metrics.frame_count),
+            "valid_pair_count": int(traj_metrics.valid_pair_count),
+            "finite_ratio": float(traj_metrics.finite_ratio),
+        },
         "metrics": {
             "chamfer": float(metrics.chamfer),
             "hausdorff": float(metrics.hausdorff),
             "precision": float(metrics.precision),
             "recall": float(metrics.recall),
             "fscore": float(metrics.fscore),
+            "normal_consistency": float(metrics.normal_consistency),
+            "precision_2cm": float(metrics.precision_2cm),
+            "recall_2cm": float(metrics.recall_2cm),
+            "fscore_2cm": float(metrics.fscore_2cm),
+            "precision_5cm": float(metrics.precision_5cm),
+            "recall_5cm": float(metrics.recall_5cm),
+            "fscore_5cm": float(metrics.fscore_5cm),
+            "precision_10cm": float(metrics.precision_10cm),
+            "recall_10cm": float(metrics.recall_10cm),
+            "fscore_10cm": float(metrics.fscore_10cm),
             "threshold": float(args.surface_eval_thresh),
         },
         "mesh": mesh_info,

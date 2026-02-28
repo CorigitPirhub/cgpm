@@ -102,6 +102,7 @@ def main():
     parser.add_argument("--sdf_trunc", type=float, default=None)
     parser.add_argument("--surface_eval_thresh", type=float, default=0.05)
     parser.add_argument("--out", type=str, default="output/baseline_compare/freiburg1_xyz/tsdf")
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)
@@ -124,6 +125,7 @@ def main():
         max_points=args.max_points_per_frame,
         assoc_max_diff=0.02,
         normal_radius=0.08,
+        seed=int(args.seed),
     )
 
     volume = o3d.pipelines.integration.ScalableTSDFVolume(
@@ -141,7 +143,8 @@ def main():
     )
 
     gt_refs: List[np.ndarray] = []
-    rng = np.random.default_rng(7)
+    gt_norm_refs: List[np.ndarray] = []
+    rng = np.random.default_rng(int(args.seed))
     total = len(stream)
     print(f"[run-tsdf] sequence={seq_dir.name} frames={total}")
     for i, frame in enumerate(stream):
@@ -160,10 +163,13 @@ def main():
         volume.integrate(rgbd, intrinsic, extrinsic)
 
         ref = frame.points_world
+        ref_n = frame.normals_world
         if ref.shape[0] > 2500:
             keep = rng.choice(ref.shape[0], size=2500, replace=False)
             ref = ref[keep]
+            ref_n = ref_n[keep]
         gt_refs.append(ref)
+        gt_norm_refs.append(ref_n)
 
         if (i + 1) % 10 == 0 or i == 0 or (i + 1) == total:
             print(f"  frame={i + 1:04d}/{total:04d}")
@@ -173,8 +179,19 @@ def main():
     pcd = volume.extract_point_cloud()
 
     pred_points = np.asarray(pcd.points, dtype=float)
+    pred_normals = np.asarray(pcd.normals, dtype=float)
+    if pred_normals.shape[0] != pred_points.shape[0] and pred_points.shape[0] > 0:
+        pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=max(0.08, 2.5 * cfg.map3d.voxel_size), max_nn=40))
+        pred_normals = np.asarray(pcd.normals, dtype=float)
     gt_points = np.vstack(gt_refs) if gt_refs else np.zeros((0, 3), dtype=float)
-    metrics = compute_reconstruction_metrics(pred_points, gt_points, threshold=args.surface_eval_thresh)
+    gt_normals = np.vstack(gt_norm_refs) if gt_norm_refs else np.zeros((0, 3), dtype=float)
+    metrics = compute_reconstruction_metrics(
+        pred_points,
+        gt_points,
+        threshold=args.surface_eval_thresh,
+        pred_normals=pred_normals,
+        gt_normals=gt_normals,
+    )
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -183,12 +200,15 @@ def main():
 
     gt_pcd = o3d.geometry.PointCloud()
     gt_pcd.points = o3d.utility.Vector3dVector(gt_points)
+    if gt_normals.shape == gt_points.shape:
+        gt_pcd.normals = o3d.utility.Vector3dVector(gt_normals)
     o3d.io.write_point_cloud(str(out_dir / "reference_points.ply"), gt_pcd)
 
     summary = {
         "sequence": seq_dir.name,
         "frames_used": int(total),
         "stride": int(args.stride),
+        "seed": int(args.seed),
         "voxel_size": float(cfg.map3d.voxel_size),
         "sdf_trunc": float(cfg.map3d.truncation),
         "surface_points": int(pred_points.shape[0]),
@@ -199,6 +219,16 @@ def main():
             "precision": float(metrics.precision),
             "recall": float(metrics.recall),
             "fscore": float(metrics.fscore),
+            "normal_consistency": float(metrics.normal_consistency),
+            "precision_2cm": float(metrics.precision_2cm),
+            "recall_2cm": float(metrics.recall_2cm),
+            "fscore_2cm": float(metrics.fscore_2cm),
+            "precision_5cm": float(metrics.precision_5cm),
+            "recall_5cm": float(metrics.recall_5cm),
+            "fscore_5cm": float(metrics.fscore_5cm),
+            "precision_10cm": float(metrics.precision_10cm),
+            "recall_10cm": float(metrics.recall_10cm),
+            "fscore_10cm": float(metrics.fscore_10cm),
             "threshold": float(args.surface_eval_thresh),
         },
         "mesh": {

@@ -175,6 +175,7 @@ def main():
     parser.add_argument("--max_saved_points", type=int, default=600000)
     parser.add_argument("--mesh_poisson_depth", type=int, default=8)
     parser.add_argument("--mesh_min_points", type=int, default=800)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)
@@ -196,6 +197,7 @@ def main():
         max_points=args.max_points_per_frame,
         assoc_max_diff=0.02,
         normal_radius=0.08,
+        seed=int(args.seed),
     )
 
     history: deque[set[Tuple[int, int, int]]] = deque(maxlen=max(1, int(args.temporal_window)))
@@ -204,7 +206,8 @@ def main():
 
     filtered_points: List[np.ndarray] = []
     gt_refs: List[np.ndarray] = []
-    rng = np.random.default_rng(7)
+    gt_norm_refs: List[np.ndarray] = []
+    rng = np.random.default_rng(int(args.seed))
     raw_points_total = 0
     kept_points_total = 0
     support_mean_trace: List[float] = []
@@ -244,10 +247,13 @@ def main():
         history.append({(int(v[0]), int(v[1]), int(v[2])) for v in uniq_voxels})
 
         ref = points
+        ref_n = frame.normals_world
         if ref.shape[0] > 2500:
             keep = rng.choice(ref.shape[0], size=2500, replace=False)
             ref = ref[keep]
+            ref_n = ref_n[keep]
         gt_refs.append(ref)
+        gt_norm_refs.append(ref_n)
 
         if (i + 1) % 10 == 0 or i == 0 or (i + 1) == total:
             print(
@@ -264,12 +270,19 @@ def main():
     pred_normals = _estimate_normals(pred_points, radius=max(3.0 * cfg.map3d.voxel_size, 0.05))
 
     gt_points = np.vstack(gt_refs) if gt_refs else np.zeros((0, 3), dtype=float)
-    metrics = compute_reconstruction_metrics(pred_points, gt_points, threshold=args.surface_eval_thresh)
+    gt_normals = np.vstack(gt_norm_refs) if gt_norm_refs else np.zeros((0, 3), dtype=float)
+    metrics = compute_reconstruction_metrics(
+        pred_points,
+        gt_points,
+        threshold=args.surface_eval_thresh,
+        pred_normals=pred_normals,
+        gt_normals=gt_normals,
+    )
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     _save_point_cloud(out_dir / "surface_points.ply", pred_points, pred_normals)
-    _save_point_cloud(out_dir / "reference_points.ply", gt_points, None)
+    _save_point_cloud(out_dir / "reference_points.ply", gt_points, gt_normals)
     mesh_info = _save_poisson_mesh(
         out_path=out_dir / "surface_mesh.ply",
         points=pred_points,
@@ -283,6 +296,7 @@ def main():
         "sequence": seq_dir.name,
         "frames_used": int(total),
         "stride": int(args.stride),
+        "seed": int(args.seed),
         "voxel_size": float(cfg.map3d.voxel_size),
         "surface_points": int(pred_points.shape[0]),
         "reference_points": int(gt_points.shape[0]),
@@ -303,6 +317,16 @@ def main():
             "precision": float(metrics.precision),
             "recall": float(metrics.recall),
             "fscore": float(metrics.fscore),
+            "normal_consistency": float(metrics.normal_consistency),
+            "precision_2cm": float(metrics.precision_2cm),
+            "recall_2cm": float(metrics.recall_2cm),
+            "fscore_2cm": float(metrics.fscore_2cm),
+            "precision_5cm": float(metrics.precision_5cm),
+            "recall_5cm": float(metrics.recall_5cm),
+            "fscore_5cm": float(metrics.fscore_5cm),
+            "precision_10cm": float(metrics.precision_10cm),
+            "recall_10cm": float(metrics.recall_10cm),
+            "fscore_10cm": float(metrics.fscore_10cm),
             "threshold": float(args.surface_eval_thresh),
         },
         "mesh": mesh_info,

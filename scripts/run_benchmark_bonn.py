@@ -248,9 +248,48 @@ def write_csv(path: Path, rows: Sequence[Dict[str, object]], headers: Sequence[s
             writer.writerow({k: row.get(k, "") for k in headers})
 
 
+def aggregate_rows(rows: Sequence[Dict[str, object]]) -> List[Dict[str, object]]:
+    numeric_fields = [
+        "points",
+        "accuracy",
+        "completeness",
+        "chamfer",
+        "hausdorff",
+        "precision",
+        "recall",
+        "fscore",
+        "ghost_count",
+        "ghost_ratio",
+        "ghost_tail_count",
+        "ghost_tail_ratio",
+        "background_recovery",
+    ]
+    bucket: Dict[str, List[Dict[str, object]]] = defaultdict(list)
+    for row in rows:
+        bucket[str(row.get("method", ""))].append(row)
+
+    out: List[Dict[str, object]] = []
+    for method, items in sorted(bucket.items()):
+        agg: Dict[str, object] = {
+            "method": method,
+            "n_sequences": int(len(items)),
+        }
+        for key in numeric_fields:
+            vals = [float(r[key]) for r in items if isinstance(r.get(key), (int, float))]
+            if vals:
+                agg[f"{key}_mean"] = float(np.mean(vals))
+                agg[f"{key}_std"] = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
+            else:
+                agg[f"{key}_mean"] = ""
+                agg[f"{key}_std"] = ""
+        out.append(agg)
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_root", type=str, default="data/bonn")
+    parser.add_argument("--sequences", type=str, default="")
     parser.add_argument("--sequence", type=str, default="rgbd_bonn_balloon2")
     parser.add_argument("--download", action="store_true")
     parser.add_argument("--frames", type=int, default=80)
@@ -266,162 +305,203 @@ def main() -> None:
     args = parser.parse_args()
 
     dataset_root = Path(args.dataset_root)
-    if args.download:
-        seq_dir = download_bonn_sequence(dataset_root, args.sequence)
-    else:
-        seq_dir = dataset_root / args.sequence
-    if not seq_dir.exists():
-        raise FileNotFoundError(f"Bonn sequence not found: {seq_dir}")
+    sequences = [s.strip() for s in args.sequences.split(",") if s.strip()]
+    if not sequences:
+        sequences = [args.sequence.strip()]
 
     out_root = Path(args.out_root)
-    seq_out = out_root / args.sequence
-    egf_out = seq_out / "egf"
-    tsdf_out = seq_out / "tsdf"
-    seq_out.mkdir(parents=True, exist_ok=True)
+    out_root.mkdir(parents=True, exist_ok=True)
 
-    if args.force or not (egf_out / "summary.json").exists():
-        run_cmd(
-            [
-                sys.executable,
-                "scripts/run_egf_3d_tum.py",
-                "--dataset_root",
-                str(dataset_root),
-                "--sequence",
-                args.sequence,
-                "--frames",
-                str(args.frames),
-                "--stride",
-                str(args.stride),
-                "--max_points_per_frame",
-                str(args.max_points_per_frame),
-                "--voxel_size",
-                str(args.voxel_size),
-                "--surface_eval_thresh",
-                str(args.eval_thresh),
-                "--out",
-                str(egf_out),
-                "--sigma_n0",
-                "0.26",
-                "--rho_decay",
-                "0.998",
-                "--phi_w_decay",
-                "0.998",
-                "--dynamic_forgetting",
-                "--forget_mode",
-                "local",
-                "--dyn_forget_gain",
-                "0.0",
-                "--dyn_score_alpha",
-                "0.08",
-                "--dyn_d2_ref",
-                "7.0",
-                "--dscore_ema",
-                "0.12",
-                "--residual_score_weight",
-                "0.25",
-                "--raycast_clear_gain",
-                "0.0",
-                "--raycast_step_scale",
-                "0.75",
-                "--raycast_end_margin",
-                "0.16",
-                "--raycast_max_rays",
-                "1500",
-                "--raycast_rho_max",
-                "20.0",
-                "--raycast_phiw_max",
-                "220.0",
-                "--raycast_dyn_boost",
-                "0.6",
-                "--surface_phi_thresh",
-                "0.8",
-                "--surface_rho_thresh",
-                "0.0",
-                "--surface_min_weight",
-                "0.0",
-                "--surface_max_dscore",
-                "1.0",
-                "--surface_max_free_ratio",
-                "1000000000.0",
-                "--mesh_min_points",
-                "100000000",
-            ]
-        )
-
-    if args.force or not (tsdf_out / "summary.json").exists():
-        run_cmd(
-            [
-                sys.executable,
-                "scripts/run_tsdf_baseline.py",
-                "--dataset_root",
-                str(dataset_root),
-                "--sequence",
-                args.sequence,
-                "--frames",
-                str(args.frames),
-                "--stride",
-                str(args.stride),
-                "--max_points_per_frame",
-                str(args.max_points_per_frame),
-                "--voxel_size",
-                str(args.voxel_size),
-                "--surface_eval_thresh",
-                str(args.eval_thresh),
-                "--out",
-                str(tsdf_out),
-            ]
-        )
-
-    stable_bg, tail_points, dynamic_region, dynamic_voxel = build_regions(
-        sequence_dir=seq_dir,
-        frames=args.frames,
-        stride=args.stride,
-        max_points_per_frame=args.max_points_per_frame,
-        voxel_size=args.voxel_size,
-    )
-    if stable_bg.shape[0] > 0:
-        bg_pcd = o3d.geometry.PointCloud()
-        bg_pcd.points = o3d.utility.Vector3dVector(stable_bg)
-        o3d.io.write_point_cloud(str(seq_out / "stable_background_reference.ply"), bg_pcd)
-
-    gt_points = load_points(egf_out / "reference_points.ply")
     rows: List[Dict[str, object]] = []
-    table_rows: Dict[str, Dict[str, float]] = {}
-    method_points: Dict[str, np.ndarray] = {}
-    for method, out_dir in [("egf", egf_out), ("tsdf", tsdf_out)]:
-        pred_points = load_points(out_dir / "surface_points.ply")
-        method_points[method] = pred_points
-        recon = compute_recon_metrics(pred_points, gt_points, threshold=args.eval_thresh)
-        dyn = compute_dynamic_metrics(
-            pred_points=pred_points,
-            stable_bg_points=stable_bg,
-            tail_points=tail_points,
-            dynamic_region=dynamic_region,
-            dynamic_voxel=dynamic_voxel,
-            ghost_thresh=args.ghost_thresh,
-            bg_thresh=args.bg_thresh,
+    for sequence in sequences:
+        if args.download:
+            seq_dir = download_bonn_sequence(dataset_root, sequence)
+        else:
+            seq_dir = dataset_root / sequence
+        if not seq_dir.exists():
+            raise FileNotFoundError(f"Bonn sequence not found: {seq_dir}")
+
+        seq_out = out_root / sequence
+        egf_out = seq_out / "egf"
+        tsdf_out = seq_out / "tsdf"
+        seq_out.mkdir(parents=True, exist_ok=True)
+
+        if args.force or not (egf_out / "summary.json").exists():
+            run_cmd(
+                [
+                    sys.executable,
+                    "scripts/run_egf_3d_tum.py",
+                    "--dataset_root",
+                    str(dataset_root),
+                    "--sequence",
+                    sequence,
+                    "--frames",
+                    str(args.frames),
+                    "--stride",
+                    str(args.stride),
+                    "--max_points_per_frame",
+                    str(args.max_points_per_frame),
+                    "--voxel_size",
+                    str(args.voxel_size),
+                    "--surface_eval_thresh",
+                    str(args.eval_thresh),
+                    "--out",
+                    str(egf_out),
+                    "--sigma_n0",
+                    "0.26",
+                    "--rho_decay",
+                    "0.998",
+                    "--phi_w_decay",
+                    "0.998",
+                    "--dynamic_forgetting",
+                    "--forget_mode",
+                    "local",
+                    "--dyn_forget_gain",
+                    "0.0",
+                    "--dyn_score_alpha",
+                    "0.08",
+                    "--dyn_d2_ref",
+                    "7.0",
+                    "--dscore_ema",
+                    "0.12",
+                    "--residual_score_weight",
+                    "0.25",
+                    "--raycast_clear_gain",
+                    "0.0",
+                    "--raycast_step_scale",
+                    "0.75",
+                    "--raycast_end_margin",
+                    "0.16",
+                    "--raycast_max_rays",
+                    "1500",
+                    "--raycast_rho_max",
+                    "20.0",
+                    "--raycast_phiw_max",
+                    "220.0",
+                    "--raycast_dyn_boost",
+                    "0.6",
+                    "--surface_phi_thresh",
+                    "0.8",
+                    "--surface_rho_thresh",
+                    "0.0",
+                    "--surface_min_weight",
+                    "0.0",
+                    "--surface_max_dscore",
+                    "1.0",
+                    "--surface_max_free_ratio",
+                    "1000000000.0",
+                    "--mesh_min_points",
+                    "100000000",
+                ]
+            )
+
+        if args.force or not (tsdf_out / "summary.json").exists():
+            run_cmd(
+                [
+                    sys.executable,
+                    "scripts/run_tsdf_baseline.py",
+                    "--dataset_root",
+                    str(dataset_root),
+                    "--sequence",
+                    sequence,
+                    "--frames",
+                    str(args.frames),
+                    "--stride",
+                    str(args.stride),
+                    "--max_points_per_frame",
+                    str(args.max_points_per_frame),
+                    "--voxel_size",
+                    str(args.voxel_size),
+                    "--surface_eval_thresh",
+                    str(args.eval_thresh),
+                    "--out",
+                    str(tsdf_out),
+                ]
+            )
+
+        stable_bg, tail_points, dynamic_region, dynamic_voxel = build_regions(
+            sequence_dir=seq_dir,
+            frames=args.frames,
+            stride=args.stride,
+            max_points_per_frame=args.max_points_per_frame,
+            voxel_size=args.voxel_size,
         )
-        row = {
-            "sequence": args.sequence,
-            "method": method,
-            "points": float(pred_points.shape[0]),
-            "accuracy": recon["accuracy"],
-            "completeness": recon["completeness"],
-            "chamfer": recon["chamfer"],
-            "hausdorff": recon["hausdorff"],
-            "precision": recon["precision"],
-            "recall": recon["recall"],
-            "fscore": recon["fscore"],
-            "ghost_count": dyn["ghost_count"],
-            "ghost_ratio": dyn["ghost_ratio"],
-            "ghost_tail_count": dyn["ghost_tail_count"],
-            "ghost_tail_ratio": dyn["ghost_tail_ratio"],
-            "background_recovery": dyn["background_recovery"],
-        }
-        rows.append(row)
-        table_rows[method] = {k: float(v) for k, v in row.items() if isinstance(v, (int, float))}
-        with (out_dir / "benchmark_metrics.json").open("w", encoding="utf-8") as f:
-            json.dump(row, f, indent=2)
+        if stable_bg.shape[0] > 0:
+            bg_pcd = o3d.geometry.PointCloud()
+            bg_pcd.points = o3d.utility.Vector3dVector(stable_bg)
+            o3d.io.write_point_cloud(str(seq_out / "stable_background_reference.ply"), bg_pcd)
+
+        gt_points = load_points(egf_out / "reference_points.ply")
+        seq_rows: List[Dict[str, object]] = []
+        table_rows: Dict[str, Dict[str, float]] = {}
+        method_points: Dict[str, np.ndarray] = {}
+        for method, out_dir in [("egf", egf_out), ("tsdf", tsdf_out)]:
+            pred_points = load_points(out_dir / "surface_points.ply")
+            method_points[method] = pred_points
+            recon = compute_recon_metrics(pred_points, gt_points, threshold=args.eval_thresh)
+            dyn = compute_dynamic_metrics(
+                pred_points=pred_points,
+                stable_bg_points=stable_bg,
+                tail_points=tail_points,
+                dynamic_region=dynamic_region,
+                dynamic_voxel=dynamic_voxel,
+                ghost_thresh=args.ghost_thresh,
+                bg_thresh=args.bg_thresh,
+            )
+            row = {
+                "sequence": sequence,
+                "method": method,
+                "points": float(pred_points.shape[0]),
+                "accuracy": recon["accuracy"],
+                "completeness": recon["completeness"],
+                "chamfer": recon["chamfer"],
+                "hausdorff": recon["hausdorff"],
+                "precision": recon["precision"],
+                "recall": recon["recall"],
+                "fscore": recon["fscore"],
+                "ghost_count": dyn["ghost_count"],
+                "ghost_ratio": dyn["ghost_ratio"],
+                "ghost_tail_count": dyn["ghost_tail_count"],
+                "ghost_tail_ratio": dyn["ghost_tail_ratio"],
+                "background_recovery": dyn["background_recovery"],
+            }
+            rows.append(row)
+            seq_rows.append(row)
+            table_rows[method] = {k: float(v) for k, v in row.items() if isinstance(v, (int, float))}
+            with (out_dir / "benchmark_metrics.json").open("w", encoding="utf-8") as f:
+                json.dump(row, f, indent=2)
+
+        # Per-sequence tables.
+        headers = [
+            "sequence",
+            "method",
+            "points",
+            "accuracy",
+            "completeness",
+            "chamfer",
+            "hausdorff",
+            "precision",
+            "recall",
+            "fscore",
+            "ghost_count",
+            "ghost_ratio",
+            "ghost_tail_count",
+            "ghost_tail_ratio",
+            "background_recovery",
+        ]
+        write_csv(seq_out / "summary.csv", seq_rows, headers=headers)
+        with (seq_out / "summary.json").open("w", encoding="utf-8") as f:
+            json.dump({"rows": seq_rows}, f, indent=2)
+
+        # Figure path behavior:
+        # - single sequence: keep backward-compatible --compare_png path
+        # - multi sequence: auto place per-sequence figures under out_root/figures/
+        if len(sequences) == 1:
+            compare_path = Path(args.compare_png)
+        else:
+            compare_path = out_root / "figures" / f"{sequence}_comparison.png"
+        plot_bonn_compare(method_points, stable_bg, table_rows, compare_path)
+        print(f"[done] Bonn figure ({sequence}): {compare_path}")
 
     headers = [
         "sequence",
@@ -444,11 +524,13 @@ def main() -> None:
     with (out_root / "summary.json").open("w", encoding="utf-8") as f:
         json.dump({"rows": rows}, f, indent=2)
 
-    plot_bonn_compare(method_points, stable_bg, table_rows, Path(args.compare_png))
+    agg_rows = aggregate_rows(rows)
+    if agg_rows:
+        agg_headers = list(agg_rows[0].keys())
+        write_csv(out_root / "summary_agg.csv", agg_rows, headers=agg_headers)
     print(f"[done] Bonn summary: {out_root / 'summary.csv'}")
-    print(f"[done] Bonn figure: {args.compare_png}")
+    print(f"[done] Bonn aggregate: {out_root / 'summary_agg.csv'}")
 
 
 if __name__ == "__main__":
     main()
-

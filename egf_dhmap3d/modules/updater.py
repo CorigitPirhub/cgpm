@@ -25,6 +25,7 @@ class Updater3D:
         voxel_map: VoxelHashMap3D,
         measurement: AssocMeasurement3D,
         touched: Set[VoxelIndex],
+        frame_id: int,
     ) -> None:
         p = measurement.point_world
         n = self._normalize(measurement.normal_world)
@@ -103,6 +104,7 @@ class Updater3D:
                 cell.g_mean = n
                 cell.g_cov = np.eye(3, dtype=float) * self.cfg.map3d.max_cov
             cell.frontier_score *= 0.75
+            cell.last_seen = int(frame_id)
             touched.add(nidx)
 
     def _refresh_evidence_gradient(self, voxel_map: VoxelHashMap3D, touched: Iterable[VoxelIndex]) -> None:
@@ -295,10 +297,11 @@ class Updater3D:
         accepted: List[AssocMeasurement3D],
         rejected: List[AssocMeasurement3D],
         sensor_origin: np.ndarray | None = None,
+        frame_id: int = 0,
     ) -> dict:
         touched: Set[VoxelIndex] = set()
         for m in accepted:
-            self._integrate_measurement(voxel_map, m, touched)
+            self._integrate_measurement(voxel_map, m, touched, frame_id=frame_id)
         self._raycast_clear(voxel_map, accepted, touched, sensor_origin)
         # Frontier activation: unmatched points become growth hints for next frames.
         frontier_boost = float(max(0.0, self.cfg.update.frontier_boost))
