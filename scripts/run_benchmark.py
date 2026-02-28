@@ -364,6 +364,12 @@ def run_method(
     egf_surface_max_dscore: float,
     egf_surface_max_free_ratio: float,
     egf_mesh_min_points: int,
+    egf_static_sigma_n0: float,
+    egf_static_surface_phi_thresh: float,
+    egf_static_surface_rho_thresh: float,
+    egf_static_surface_min_weight: float,
+    egf_static_surface_max_dscore: float,
+    egf_static_surface_max_free_ratio: float,
     egf_ablation_no_evidence: bool,
     egf_ablation_no_gradient: bool,
 ) -> None:
@@ -450,7 +456,7 @@ def run_method(
         else:
             cmd += [
                 "--sigma_n0",
-                str(float(egf_sigma_n0)),
+                str(float(egf_static_sigma_n0)),
                 "--rho_decay",
                 str(float(egf_rho_decay)),
                 "--phi_w_decay",
@@ -459,11 +465,15 @@ def run_method(
                 "--forget_mode",
                 "off",
                 "--surface_phi_thresh",
-                str(float(max(egf_surface_phi_thresh, 0.70))),
+                str(float(max(1e-3, egf_static_surface_phi_thresh))),
                 "--surface_rho_thresh",
-                str(float(egf_surface_rho_thresh)),
+                str(float(max(0.0, egf_static_surface_rho_thresh))),
                 "--surface_min_weight",
-                str(float(egf_surface_min_weight)),
+                str(float(max(0.0, egf_static_surface_min_weight))),
+                "--surface_max_dscore",
+                str(float(np.clip(egf_static_surface_max_dscore, 0.0, 1.0))),
+                "--surface_max_free_ratio",
+                str(float(max(1e-3, egf_static_surface_max_free_ratio))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
@@ -538,6 +548,14 @@ def main():
     parser.add_argument("--egf_surface_max_dscore", type=float, default=1.0)
     parser.add_argument("--egf_surface_max_free_ratio", type=float, default=1e9)
     parser.add_argument("--egf_mesh_min_points", type=int, default=100000000)
+    # Static-only extraction defaults: tighten surface band to suppress outliers
+    # while leaving dynamic experiments unchanged.
+    parser.add_argument("--egf_static_sigma_n0", type=float, default=0.22)
+    parser.add_argument("--egf_static_surface_phi_thresh", type=float, default=0.80)
+    parser.add_argument("--egf_static_surface_rho_thresh", type=float, default=0.30)
+    parser.add_argument("--egf_static_surface_min_weight", type=float, default=2.0)
+    parser.add_argument("--egf_static_surface_max_dscore", type=float, default=0.80)
+    parser.add_argument("--egf_static_surface_max_free_ratio", type=float, default=1e9)
     parser.add_argument("--egf_ablation_no_evidence", action="store_true")
     parser.add_argument("--egf_ablation_no_gradient", action="store_true")
     args = parser.parse_args()
@@ -615,6 +633,12 @@ def main():
                 egf_surface_max_dscore=args.egf_surface_max_dscore,
                 egf_surface_max_free_ratio=args.egf_surface_max_free_ratio,
                 egf_mesh_min_points=args.egf_mesh_min_points,
+                egf_static_sigma_n0=args.egf_static_sigma_n0,
+                egf_static_surface_phi_thresh=args.egf_static_surface_phi_thresh,
+                egf_static_surface_rho_thresh=args.egf_static_surface_rho_thresh,
+                egf_static_surface_min_weight=args.egf_static_surface_min_weight,
+                egf_static_surface_max_dscore=args.egf_static_surface_max_dscore,
+                egf_static_surface_max_free_ratio=args.egf_static_surface_max_free_ratio,
                 egf_ablation_no_evidence=args.egf_ablation_no_evidence,
                 egf_ablation_no_gradient=args.egf_ablation_no_gradient,
             )

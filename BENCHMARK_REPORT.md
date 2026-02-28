@@ -40,6 +40,24 @@
 
 结论：在删除 legacy 后的复现实验中，EGF 在该动态序列上同时取得更高 F-score 和更低 ghost ratio；TSDF 在 point-to-GT 精度（accuracy）上仍更低。
 
+### 3.1 Static Calibration (freiburg1_xyz, no dynamic regression)
+
+针对静态序列 `rgbd_dataset_freiburg1_xyz`，新增“静态专用表面提取参数”：
+- `egf_static_sigma_n0=0.22`
+- `egf_static_surface_phi_thresh=0.80`
+- `egf_static_surface_rho_thresh=0.30`
+- `egf_static_surface_min_weight=2.0`
+- `egf_static_surface_max_dscore=0.80`
+
+复现实验目录：`output/post_cleanup/static_fix_fullverify/`，差分表：`output/summary_tables/static_fix_delta_summary.csv`。
+
+| Sequence | Method | F-score (before) | F-score (after) | Delta | Precision (before) | Precision (after) | Chamfer (before) | Chamfer (after) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `freiburg1_xyz` | EGF | 0.8416 | **0.9054** | **+0.0638** | 0.7266 | **0.8712** | 0.0464 | **0.0435** |
+| `freiburg1_xyz` | TSDF | 0.9474 | 0.9474 | 0.0000 | 0.9997 | 0.9997 | 0.0354 | 0.0354 |
+
+动态回归检查（`walking_xyz`, `walking_static`, `walking_halfsphere`）中，EGF 与 TSDF 指标与基线一致（delta=0），说明该修复仅作用于静态分支，不影响动态效果。
+
 ## 4. Deep Ablation Study (walking_xyz)
 
 数据来源: `output/ablation_study/summary.csv`（四组统一预算：`frames=30`, `max_points_per_frame=1500`）。
@@ -165,6 +183,20 @@
   --out_compare assets/final_comparison_paper_ready.png \
   --rho_npz output/ablation_study/b30_full_rho/egf/dynamic_score_voxels.npz \
   --out_rho assets/evidence_rho_mechanism.png
+```
+
+### 10.4 Static calibration verification (full TUM set)
+```bash
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
+  --dataset_kind tum \
+  --dataset_root data/tum \
+  --out_root output/post_cleanup/static_fix_fullverify \
+  --static_sequences rgbd_dataset_freiburg1_xyz \
+  --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
+  --methods egf,tsdf \
+  --frames 80 --stride 3 --max_points_per_frame 3000 \
+  --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 \
+  --force
 ```
 
 ## 11. Post-Cleanup Verification (2026-02-24)

@@ -31,9 +31,8 @@ copy_dir() {
 
 echo "[package] copying docs"
 copy_file "README.md" "${STAGE_DIR}/README.md"
-copy_file "DATASETS.md" "${STAGE_DIR}/DATASETS.md"
 copy_file "BENCHMARK_REPORT.md" "${STAGE_DIR}/BENCHMARK_REPORT.md"
-copy_file "IMPLEMENTATION.md" "${STAGE_DIR}/IMPLEMENTATION.md"
+copy_file "MERGED_DOCS.md" "${STAGE_DIR}/MERGED_DOCS.md"
 copy_file "LICENSE" "${STAGE_DIR}/LICENSE"
 copy_file "requirements.txt" "${STAGE_DIR}/requirements.txt"
 
