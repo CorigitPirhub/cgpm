@@ -122,9 +122,16 @@ class VoxelHashMap3D:
         prune_free_min: float = 1e9,
         prune_residual_min: float = 1e9,
         max_clear_hits: float = 1e9,
+        use_zero_crossing: bool = True,
+        zero_crossing_max_offset: float = 0.06,
+        zero_crossing_phi_gate: float = 0.05,
+        consistency_enable: bool = False,
+        consistency_radius: int = 1,
+        consistency_min_neighbors: int = 4,
+        consistency_normal_cos: float = 0.55,
+        consistency_phi_diff: float = 0.04,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        pts: List[np.ndarray] = []
-        nrm: List[np.ndarray] = []
+        candidates: List[Tuple[VoxelIndex, VoxelCell3D, np.ndarray, np.ndarray]] = []
         for idx, cell in self.cells.items():
             if abs(cell.phi) > phi_thresh:
                 continue
@@ -147,8 +154,57 @@ class VoxelHashMap3D:
             gn = np.linalg.norm(g)
             if gn < 1e-7:
                 continue
-            pts.append(self.index_to_center(idx))
-            nrm.append(g / gn)
+            candidates.append((idx, cell, self.index_to_center(idx), g / gn))
+        if not candidates:
+            return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
+
+        accepted_idx: set[VoxelIndex]
+        if not consistency_enable:
+            accepted_idx = {idx for idx, _, _, _ in candidates}
+        else:
+            cand_map = {idx: (cell, n) for idx, cell, _, n in candidates}
+            accepted_idx = set()
+            r = max(1, int(consistency_radius))
+            min_n = max(0, int(consistency_min_neighbors))
+            cos_th = float(np.clip(consistency_normal_cos, 0.0, 1.0))
+            phi_th = float(max(1e-4, consistency_phi_diff))
+            for idx, cell, _, n_i in candidates:
+                consistent = 0
+                for nidx in self.neighbor_indices(idx, r):
+                    if nidx == idx:
+                        continue
+                    other = cand_map.get(nidx)
+                    if other is None:
+                        continue
+                    c_j, n_j = other
+                    if abs(float(c_j.phi) - float(cell.phi)) > phi_th:
+                        continue
+                    if abs(float(np.dot(n_i, n_j))) < cos_th:
+                        continue
+                    consistent += 1
+                if consistent >= min_n:
+                    accepted_idx.add(idx)
+
+        if not accepted_idx:
+            return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
+
+        pts: List[np.ndarray] = []
+        nrm: List[np.ndarray] = []
+        max_off = float(max(0.0, zero_crossing_max_offset))
+        phi_gate = float(max(1e-4, zero_crossing_phi_gate))
+        for idx, cell, center, n_i in candidates:
+            if idx not in accepted_idx:
+                continue
+            p = center
+            if use_zero_crossing and abs(float(cell.phi)) <= phi_gate:
+                off = -float(cell.phi) * n_i
+                off_norm = float(np.linalg.norm(off))
+                if max_off > 0.0 and off_norm > max_off:
+                    off = off * (max_off / max(off_norm, 1e-9))
+                p = center + off
+            pts.append(p)
+            nrm.append(n_i)
+
         if not pts:
             return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
         return np.asarray(pts, dtype=float), np.asarray(nrm, dtype=float)

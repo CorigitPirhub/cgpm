@@ -145,7 +145,7 @@ def rigid_align_for_eval(
     pcd_ref = o3d.geometry.PointCloud()
     pcd_ref.points = o3d.utility.Vector3dVector(ref)
 
-    ds = float(max(0.02, min(0.08, 2.0 * voxel_size)))
+    ds = float(max(0.025, min(0.06, 1.25 * voxel_size)))
     pcd_pred_ds = pcd_pred.voxel_down_sample(ds)
     pcd_ref_ds = pcd_ref.voxel_down_sample(ds)
     if len(pcd_pred_ds.points) < 32 or len(pcd_ref_ds.points) < 32:
@@ -163,10 +163,10 @@ def rigid_align_for_eval(
     reg = o3d.pipelines.registration.registration_icp(
         pcd_pred_ds,
         pcd_ref_ds,
-        float(max(0.4, 12.0 * voxel_size)),
+        float(max(0.4, 10.0 * voxel_size)),
         t_init,
         o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=100),
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=200),
     )
     t = np.asarray(reg.transformation, dtype=float)
     pts_aligned = (t[:3, :3] @ pts.T).T + t[:3, 3]
@@ -494,6 +494,23 @@ def resolve_template(
     )
 
 
+def is_placeholder_external_source(source_path: str, out_dir: Path) -> bool:
+    s = str(source_path).strip()
+    if not s:
+        return True
+    p = Path(s)
+    if "simple_removal" in p.parts:
+        return True
+    try:
+        resolved = p.resolve()
+        simple_ref = (out_dir.parent / "simple_removal" / "surface_points.ply").resolve()
+        if resolved == simple_ref:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def method_is_skipped(method_out_dir: Path) -> bool:
     summary_path = method_out_dir / "summary.json"
     if not summary_path.exists():
@@ -582,6 +599,8 @@ def run_method(
     force: bool,
     dry_run: bool,
     egf_sigma_n0: float,
+    egf_truncation: float,
+    egf_static_truncation: float,
     egf_rho_decay: float,
     egf_phi_w_decay: float,
     egf_forget_mode: str,
@@ -604,6 +623,9 @@ def run_method(
     egf_icp_max_rmse: float,
     egf_icp_max_trans_step: float,
     egf_icp_max_rot_deg_step: float,
+    egf_poisson_iters: int,
+    egf_poisson_lr: float,
+    egf_eikonal_lambda: float,
     egf_slam_use_gt_delta_odom: bool,
     egf_surface_phi_thresh: float,
     egf_surface_rho_thresh: float,
@@ -625,6 +647,18 @@ def run_method(
     egf_static_surface_prune_free_min: float,
     egf_static_surface_prune_residual_min: float,
     egf_static_surface_max_clear_hits: float,
+    egf_static_surface_use_zero_crossing: bool,
+    egf_static_surface_zero_crossing_max_offset: float,
+    egf_static_surface_zero_crossing_phi_gate: float,
+    egf_static_surface_consistency_enable: bool,
+    egf_static_surface_consistency_radius: int,
+    egf_static_surface_consistency_min_neighbors: int,
+    egf_static_surface_consistency_normal_cos: float,
+    egf_static_surface_consistency_phi_diff: float,
+    egf_static_frontier_boost: float,
+    egf_static_assoc_seed_fallback_enable: bool,
+    egf_static_assoc_seed_fallback_low_support_scale: float,
+    egf_static_assoc_seed_fallback_frontier_scale: float,
     egf_ablation_no_evidence: bool,
     egf_ablation_no_gradient: bool,
     dynaslam_pred_points_template: str,
@@ -637,6 +671,7 @@ def run_method(
     neural_pred_mesh_template: str,
     neural_cmd_template: str,
     external_allow_missing: bool,
+    external_require_real: bool,
 ) -> None:
     summary_path = out_dir / "summary.json"
     if summary_path.exists() and not force:
@@ -691,9 +726,17 @@ def run_method(
             str(float(egf_icp_max_trans_step)),
             "--icp_max_rot_deg_step",
             str(float(egf_icp_max_rot_deg_step)),
+            "--poisson_iters",
+            str(int(max(0, egf_poisson_iters))),
+            "--poisson_lr",
+            str(float(max(1e-4, egf_poisson_lr))),
+            "--eikonal_lambda",
+            str(float(max(0.0, egf_eikonal_lambda))),
         ]
         if is_dynamic:
             cmd += [
+                "--truncation",
+                str(float(max(1.5 * voxel_size, egf_truncation))),
                 "--sigma_n0",
                 str(float(egf_sigma_n0)),
                 "--rho_decay",
@@ -754,6 +797,8 @@ def run_method(
                 cmd.append("--ablation_no_gradient")
         else:
             cmd += [
+                "--truncation",
+                str(float(max(1.5 * voxel_size, egf_static_truncation))),
                 "--sigma_n0",
                 str(float(egf_static_sigma_n0)),
                 "--rho_decay",
@@ -781,9 +826,39 @@ def run_method(
                 str(float(max(0.0, egf_static_surface_prune_residual_min))),
                 "--surface_max_clear_hits",
                 str(float(max(0.0, egf_static_surface_max_clear_hits))),
+                "--surface_zero_crossing_max_offset",
+                str(float(max(0.0, egf_static_surface_zero_crossing_max_offset))),
+                "--surface_zero_crossing_phi_gate",
+                str(float(max(1e-4, egf_static_surface_zero_crossing_phi_gate))),
+                "--frontier_boost",
+                str(float(max(0.0, egf_static_frontier_boost))),
+                "--assoc_seed_fallback_low_support_scale",
+                str(float(max(0.0, egf_static_assoc_seed_fallback_low_support_scale))),
+                "--assoc_seed_fallback_frontier_scale",
+                str(float(max(0.0, egf_static_assoc_seed_fallback_frontier_scale))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
+            if bool(egf_static_assoc_seed_fallback_enable):
+                cmd.append("--assoc_seed_fallback_enable")
+            else:
+                cmd.append("--assoc_seed_fallback_disable")
+            if bool(egf_static_surface_use_zero_crossing):
+                cmd.append("--surface_use_zero_crossing")
+            else:
+                cmd.append("--surface_no_zero_crossing")
+            if bool(egf_static_surface_consistency_enable):
+                cmd += [
+                    "--surface_consistency_enable",
+                    "--surface_consistency_radius",
+                    str(int(max(1, egf_static_surface_consistency_radius))),
+                    "--surface_consistency_min_neighbors",
+                    str(int(max(0, egf_static_surface_consistency_min_neighbors))),
+                    "--surface_consistency_normal_cos",
+                    str(float(np.clip(egf_static_surface_consistency_normal_cos, 0.0, 1.0))),
+                    "--surface_consistency_phi_diff",
+                    str(float(max(1e-4, egf_static_surface_consistency_phi_diff))),
+                ]
             if egf_ablation_no_evidence:
                 cmd.append("--ablation_no_evidence")
             if egf_ablation_no_gradient:
@@ -836,8 +911,12 @@ def run_method(
         if ref_path.exists():
             cmd += ["--reference_points", str(ref_path)]
         if pred_points:
+            if external_require_real and is_placeholder_external_source(pred_points, out_dir):
+                raise RuntimeError(f"dynaslam source is placeholder/non-real: {pred_points}")
             cmd += ["--pred_points", pred_points]
         if pred_mesh:
+            if external_require_real and is_placeholder_external_source(pred_mesh, out_dir):
+                raise RuntimeError(f"dynaslam source is placeholder/non-real: {pred_mesh}")
             cmd += ["--pred_mesh", pred_mesh]
         if run_cmd_template:
             cmd += ["--runner_cmd", run_cmd_template]
@@ -873,8 +952,12 @@ def run_method(
         if ref_path.exists():
             cmd += ["--reference_points", str(ref_path)]
         if pred_points:
+            if external_require_real and is_placeholder_external_source(pred_points, out_dir):
+                raise RuntimeError(f"midfusion source is placeholder/non-real: {pred_points}")
             cmd += ["--pred_points", pred_points]
         if pred_mesh:
+            if external_require_real and is_placeholder_external_source(pred_mesh, out_dir):
+                raise RuntimeError(f"midfusion source is placeholder/non-real: {pred_mesh}")
             cmd += ["--pred_mesh", pred_mesh]
         if run_cmd_template:
             cmd += ["--runner_cmd", run_cmd_template]
@@ -910,8 +993,12 @@ def run_method(
         if ref_path.exists():
             cmd += ["--reference_points", str(ref_path)]
         if pred_points:
+            if external_require_real and is_placeholder_external_source(pred_points, out_dir):
+                raise RuntimeError(f"neural_implicit source is placeholder/non-real: {pred_points}")
             cmd += ["--pred_points", pred_points]
         if pred_mesh:
+            if external_require_real and is_placeholder_external_source(pred_mesh, out_dir):
+                raise RuntimeError(f"neural_implicit source is placeholder/non-real: {pred_mesh}")
             cmd += ["--pred_mesh", pred_mesh]
         if run_cmd_template:
             cmd += ["--runner_cmd", run_cmd_template]
@@ -948,6 +1035,8 @@ def main():
     parser.add_argument("--dry_run", action="store_true")
     parser.add_argument("--methods", type=str, default="egf,tsdf,simple_removal")
     parser.add_argument("--egf_sigma_n0", type=float, default=0.26)
+    parser.add_argument("--egf_truncation", type=float, default=0.08)
+    parser.add_argument("--egf_static_truncation", type=float, default=0.08)
     parser.add_argument("--egf_rho_decay", type=float, default=0.998)
     parser.add_argument("--egf_phi_w_decay", type=float, default=0.998)
     parser.add_argument("--egf_forget_mode", type=str, default="local", choices=["local", "global", "off"])
@@ -970,6 +1059,9 @@ def main():
     parser.add_argument("--egf_icp_max_rmse", type=float, default=0.10)
     parser.add_argument("--egf_icp_max_trans_step", type=float, default=0.35)
     parser.add_argument("--egf_icp_max_rot_deg_step", type=float, default=30.0)
+    parser.add_argument("--egf_poisson_iters", type=int, default=1)
+    parser.add_argument("--egf_poisson_lr", type=float, default=0.08)
+    parser.add_argument("--egf_eikonal_lambda", type=float, default=0.02)
     parser.add_argument("--egf_slam_use_gt_delta_odom", action="store_true", default=True)
     parser.add_argument("--egf_slam_no_gt_delta_odom", action="store_true")
     parser.add_argument("--egf_surface_phi_thresh", type=float, default=0.80)
@@ -994,6 +1086,22 @@ def main():
     parser.add_argument("--egf_static_surface_prune_free_min", type=float, default=1e9)
     parser.add_argument("--egf_static_surface_prune_residual_min", type=float, default=1e9)
     parser.add_argument("--egf_static_surface_max_clear_hits", type=float, default=1e9)
+    parser.add_argument("--egf_static_surface_use_zero_crossing", dest="egf_static_surface_use_zero_crossing", action="store_true")
+    parser.add_argument("--egf_static_surface_no_zero_crossing", dest="egf_static_surface_use_zero_crossing", action="store_false")
+    parser.set_defaults(egf_static_surface_use_zero_crossing=True)
+    parser.add_argument("--egf_static_surface_zero_crossing_max_offset", type=float, default=0.06)
+    parser.add_argument("--egf_static_surface_zero_crossing_phi_gate", type=float, default=0.05)
+    parser.add_argument("--egf_static_surface_consistency_enable", action="store_true")
+    parser.add_argument("--egf_static_surface_consistency_radius", type=int, default=1)
+    parser.add_argument("--egf_static_surface_consistency_min_neighbors", type=int, default=6)
+    parser.add_argument("--egf_static_surface_consistency_normal_cos", type=float, default=0.70)
+    parser.add_argument("--egf_static_surface_consistency_phi_diff", type=float, default=0.03)
+    parser.add_argument("--egf_static_frontier_boost", type=float, default=0.45)
+    parser.add_argument("--egf_static_assoc_seed_fallback_enable", dest="egf_static_assoc_seed_fallback_enable", action="store_true")
+    parser.add_argument("--egf_static_assoc_seed_fallback_disable", dest="egf_static_assoc_seed_fallback_enable", action="store_false")
+    parser.set_defaults(egf_static_assoc_seed_fallback_enable=True)
+    parser.add_argument("--egf_static_assoc_seed_fallback_low_support_scale", type=float, default=0.7)
+    parser.add_argument("--egf_static_assoc_seed_fallback_frontier_scale", type=float, default=0.7)
     parser.add_argument("--egf_ablation_no_evidence", action="store_true")
     parser.add_argument("--egf_ablation_no_gradient", action="store_true")
     parser.add_argument("--dynaslam_pred_points_template", type=str, default="")
@@ -1006,6 +1114,7 @@ def main():
     parser.add_argument("--neural_pred_mesh_template", type=str, default="")
     parser.add_argument("--neural_cmd_template", type=str, default="")
     parser.add_argument("--external_allow_missing", action="store_true")
+    parser.add_argument("--external_require_real", action="store_true")
     args = parser.parse_args()
     if bool(args.egf_slam_no_gt_delta_odom):
         args.egf_slam_use_gt_delta_odom = False
@@ -1083,6 +1192,8 @@ def main():
                     force=args.force,
                     dry_run=args.dry_run,
                     egf_sigma_n0=args.egf_sigma_n0,
+                    egf_truncation=args.egf_truncation,
+                    egf_static_truncation=args.egf_static_truncation,
                     egf_rho_decay=args.egf_rho_decay,
                     egf_phi_w_decay=args.egf_phi_w_decay,
                     egf_forget_mode=args.egf_forget_mode,
@@ -1105,6 +1216,9 @@ def main():
                     egf_icp_max_rmse=args.egf_icp_max_rmse,
                     egf_icp_max_trans_step=args.egf_icp_max_trans_step,
                     egf_icp_max_rot_deg_step=args.egf_icp_max_rot_deg_step,
+                    egf_poisson_iters=args.egf_poisson_iters,
+                    egf_poisson_lr=args.egf_poisson_lr,
+                    egf_eikonal_lambda=args.egf_eikonal_lambda,
                     egf_slam_use_gt_delta_odom=args.egf_slam_use_gt_delta_odom,
                     egf_surface_phi_thresh=args.egf_surface_phi_thresh,
                     egf_surface_rho_thresh=args.egf_surface_rho_thresh,
@@ -1126,6 +1240,18 @@ def main():
                     egf_static_surface_prune_free_min=args.egf_static_surface_prune_free_min,
                     egf_static_surface_prune_residual_min=args.egf_static_surface_prune_residual_min,
                     egf_static_surface_max_clear_hits=args.egf_static_surface_max_clear_hits,
+                    egf_static_surface_use_zero_crossing=args.egf_static_surface_use_zero_crossing,
+                    egf_static_surface_zero_crossing_max_offset=args.egf_static_surface_zero_crossing_max_offset,
+                    egf_static_surface_zero_crossing_phi_gate=args.egf_static_surface_zero_crossing_phi_gate,
+                    egf_static_surface_consistency_enable=args.egf_static_surface_consistency_enable,
+                    egf_static_surface_consistency_radius=args.egf_static_surface_consistency_radius,
+                    egf_static_surface_consistency_min_neighbors=args.egf_static_surface_consistency_min_neighbors,
+                    egf_static_surface_consistency_normal_cos=args.egf_static_surface_consistency_normal_cos,
+                    egf_static_surface_consistency_phi_diff=args.egf_static_surface_consistency_phi_diff,
+                    egf_static_frontier_boost=args.egf_static_frontier_boost,
+                    egf_static_assoc_seed_fallback_enable=args.egf_static_assoc_seed_fallback_enable,
+                    egf_static_assoc_seed_fallback_low_support_scale=args.egf_static_assoc_seed_fallback_low_support_scale,
+                    egf_static_assoc_seed_fallback_frontier_scale=args.egf_static_assoc_seed_fallback_frontier_scale,
                     egf_ablation_no_evidence=args.egf_ablation_no_evidence,
                     egf_ablation_no_gradient=args.egf_ablation_no_gradient,
                     dynaslam_pred_points_template=args.dynaslam_pred_points_template,
@@ -1138,6 +1264,7 @@ def main():
                     neural_pred_mesh_template=args.neural_pred_mesh_template,
                     neural_cmd_template=args.neural_cmd_template,
                     external_allow_missing=bool(args.external_allow_missing),
+                    external_require_real=bool(args.external_require_real),
                 )
 
             if args.dry_run:
@@ -1175,6 +1302,13 @@ def main():
                     print(f"[skip-metric] {seq} seed={seed} method={method}: adapter marked as skipped")
                     continue
                 method_summary = load_method_summary(m_out)
+                if bool(args.external_require_real) and method in {"dynaslam", "midfusion", "neural_implicit"}:
+                    src = str(method_summary.get("source_path", "")) if isinstance(method_summary, dict) else ""
+                    if is_placeholder_external_source(src, m_out):
+                        raise RuntimeError(
+                            f"{method} at {m_out} is not a real external output (source_path={src}). "
+                            "Provide real outputs via --*_pred_points_template/--*_pred_mesh_template."
+                        )
                 traj = method_summary.get("trajectory_metrics", {}) if isinstance(method_summary, dict) else {}
                 pred_points, pred_normals = load_points_with_normals(m_out / "surface_points.ply")
                 pred_eval_points = np.asarray(pred_points, dtype=float)

@@ -43,6 +43,9 @@ class Assoc3DConfig:
     frontier_activate_thresh: float = 1.2
     use_normal_residual: bool = True
     use_evidence_in_noise: bool = True
+    seed_fallback_enable: bool = True
+    seed_fallback_low_support_scale: float = 0.7
+    seed_fallback_frontier_scale: float = 0.7
 
 
 @dataclass
@@ -103,6 +106,17 @@ class Surface3DConfig:
     prune_residual_min: float = 1e9
     max_clear_hits: float = 1e9
     poisson_depth: int = 8
+    # Surface extraction debiasing: project voxel centers to local zero-level set
+    # along fused gradient direction: x_s = c - phi * n.
+    use_zero_crossing: bool = True
+    zero_crossing_max_offset: float = 0.06
+    zero_crossing_phi_gate: float = 0.05
+    # Local surface-consistency gate (mainly for static denoising).
+    consistency_enable: bool = False
+    consistency_radius: int = 1
+    consistency_min_neighbors: int = 4
+    consistency_normal_cos: float = 0.55
+    consistency_phi_diff: float = 0.04
 
 
 @dataclass

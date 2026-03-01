@@ -124,14 +124,9 @@ class EGFDHMap3D:
             and trans_norm <= float(self.cfg.predict.icp_max_trans_step)
             and rot_deg <= float(self.cfg.predict.icp_max_rot_deg_step)
         )
-        # Open3D odometry returns source->target (prev->curr), while pose propagation here
-        # uses the same delta convention as GT (curr->prev). Invert once for consistency.
-        if valid:
-            try:
-                delta = np.linalg.inv(delta)
-            except np.linalg.LinAlgError:
-                valid = False
-                delta = np.eye(4, dtype=float)
+        # Open3D odometry returns source->target (prev->curr), which matches
+        # predictor pose propagation convention (T_w_c,new = T_w_c,prev @ delta_prev_curr).
+        # Do not invert here; inverting introduces systematic trajectory drift.
         trans_norm, rot_deg = self._delta_stats(delta)
         self.prev_rgbd = curr
         return delta, {
@@ -176,11 +171,7 @@ class EGFDHMap3D:
             and rot_deg <= float(self.cfg.predict.icp_max_rot_deg_step)
         )
         if valid:
-            try:
-                delta_pose = np.linalg.inv(delta)
-            except np.linalg.LinAlgError:
-                delta_pose = self.last_delta_cam.copy()
-                valid = False
+            delta_pose = delta.copy()
             self.last_delta_cam = delta_pose.copy()
         else:
             delta_pose = self.last_delta_cam.copy()
@@ -195,6 +186,69 @@ class EGFDHMap3D:
             "odom_rot_deg": rot_deg,
             "odom_source": 1.0,
         }
+
+    def _refine_pose_with_map(
+        self,
+        points_cam: np.ndarray,
+        normals_cam: np.ndarray,
+    ) -> Dict[str, float]:
+        # Periodic map-to-frame ICP correction to suppress long-horizon drift.
+        if self.frame_counter < 20 or (self.frame_counter % 5) != 0:
+            return {"map_refine_applied": 0.0, "map_refine_fitness": 0.0, "map_refine_rmse": 0.0}
+        if len(self.voxel_map) < 5000:
+            return {"map_refine_applied": 0.0, "map_refine_fitness": 0.0, "map_refine_rmse": 0.0}
+
+        map_pts, _ = self.voxel_map.extract_surface_points(
+            phi_thresh=max(0.10, 2.5 * self.cfg.map3d.voxel_size),
+            rho_thresh=max(0.05, self.cfg.surface.rho_thresh),
+            min_weight=max(0.4, 0.25 * self.cfg.surface.min_weight),
+            current_step=int(self.frame_counter),
+            max_age_frames=int(min(max(30, self.cfg.surface.max_age_frames), 240)),
+            max_d_score=min(0.75, self.cfg.surface.max_d_score + 0.15),
+            max_free_ratio=max(0.9, self.cfg.surface.max_free_ratio),
+            prune_free_min=self.cfg.surface.prune_free_min,
+            prune_residual_min=self.cfg.surface.prune_residual_min,
+            max_clear_hits=self.cfg.surface.max_clear_hits,
+        )
+        if map_pts.shape[0] < 1200:
+            return {"map_refine_applied": 0.0, "map_refine_fitness": 0.0, "map_refine_rmse": 0.0}
+
+        points_world, normals_world = self._transform_from_current_pose(points_cam, normals_cam)
+        src = self._build_cam_pcd(points_world, normals_world)
+        tgt = o3d.geometry.PointCloud()
+        tgt.points = o3d.utility.Vector3dVector(np.asarray(map_pts, dtype=float))
+        refine_voxel = float(max(0.05, 1.25 * self.cfg.predict.icp_voxel_size))
+        src = src.voxel_down_sample(refine_voxel)
+        tgt = tgt.voxel_down_sample(refine_voxel)
+        if len(src.points) < 120 or len(tgt.points) < 300:
+            return {"map_refine_applied": 0.0, "map_refine_fitness": 0.0, "map_refine_rmse": 0.0}
+
+        reg = o3d.pipelines.registration.registration_icp(
+            src,
+            tgt,
+            float(max(0.12, 3.0 * self.cfg.predict.icp_max_corr)),
+            np.eye(4, dtype=float),
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=25),
+        )
+        t_corr = np.asarray(reg.transformation, dtype=float)
+        tr = float(np.linalg.norm(t_corr[:3, 3]))
+        rot = self._delta_stats(t_corr)[1]
+        fit = float(reg.fitness)
+        rmse = float(reg.inlier_rmse)
+        valid = bool(
+            np.all(np.isfinite(t_corr))
+            and fit >= 0.18
+            and rmse <= 0.12
+            and tr <= 0.18
+            and rot <= 8.0
+        )
+        if not valid:
+            return {"map_refine_applied": 0.0, "map_refine_fitness": fit, "map_refine_rmse": rmse}
+
+        t_wc = self.predictor.pose.as_matrix()
+        self.predictor.set_pose(t_corr @ t_wc)
+        return {"map_refine_applied": 1.0, "map_refine_fitness": fit, "map_refine_rmse": rmse}
 
     def step(self, frame: TUMFrame3D, use_gt_pose: bool = True) -> Dict[str, float]:
         odom_stats: Dict[str, float] = {}
@@ -222,12 +276,16 @@ class EGFDHMap3D:
                     "odom_source": 3.0,
                 }
             else:
+                # Use RGB-D odometry as primary front-end and fall back to geometric ICP
+                # when RGB-D estimation is invalid.
                 delta, odom_stats = self._delta_from_rgbd(frame)
                 if odom_stats.get("odom_valid", 0.0) < 0.5:
                     delta, odom_stats = self._delta_from_icp(frame.points_cam, frame.normals_cam)
             self.predictor.predict(delta_t=delta, dt=frame.dt)
 
         self.predictor.apply_field_prediction(self.voxel_map, dynamic_score=self.dynamic_score)
+        if (not use_gt_pose) and (not bool(self.cfg.predict.slam_use_gt_delta_odom)):
+            odom_stats.update(self._refine_pose_with_map(frame.points_cam, frame.normals_cam))
 
         if use_gt_pose:
             points_world = frame.points_world
@@ -285,6 +343,14 @@ class EGFDHMap3D:
             prune_free_min=self.cfg.surface.prune_free_min,
             prune_residual_min=self.cfg.surface.prune_residual_min,
             max_clear_hits=self.cfg.surface.max_clear_hits,
+            use_zero_crossing=bool(self.cfg.surface.use_zero_crossing),
+            zero_crossing_max_offset=float(self.cfg.surface.zero_crossing_max_offset),
+            zero_crossing_phi_gate=float(self.cfg.surface.zero_crossing_phi_gate),
+            consistency_enable=bool(self.cfg.surface.consistency_enable),
+            consistency_radius=int(self.cfg.surface.consistency_radius),
+            consistency_min_neighbors=int(self.cfg.surface.consistency_min_neighbors),
+            consistency_normal_cos=float(self.cfg.surface.consistency_normal_cos),
+            consistency_phi_diff=float(self.cfg.surface.consistency_phi_diff),
         )
 
     def save_surface_pointcloud(self, out_path: str | Path) -> int:

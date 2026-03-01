@@ -82,6 +82,7 @@ def main():
     slam_delta_group.add_argument("--slam_no_gt_delta_odom", dest="slam_use_gt_delta_odom", action="store_false")
     parser.set_defaults(slam_use_gt_delta_odom=True)
     parser.add_argument("--voxel_size", type=float, default=0.05)
+    parser.add_argument("--truncation", type=float, default=None)
     parser.add_argument("--rho_decay", type=float, default=None)
     parser.add_argument("--phi_w_decay", type=float, default=None)
     parser.add_argument("--surface_phi_thresh", type=float, default=0.04)
@@ -93,10 +94,31 @@ def main():
     parser.add_argument("--surface_prune_free_min", type=float, default=1e9)
     parser.add_argument("--surface_prune_residual_min", type=float, default=1e9)
     parser.add_argument("--surface_max_clear_hits", type=float, default=1e9)
+    parser.add_argument("--surface_use_zero_crossing", dest="surface_use_zero_crossing", action="store_true")
+    parser.add_argument("--surface_no_zero_crossing", dest="surface_use_zero_crossing", action="store_false")
+    parser.set_defaults(surface_use_zero_crossing=True)
+    parser.add_argument("--surface_zero_crossing_max_offset", type=float, default=0.06)
+    parser.add_argument("--surface_zero_crossing_phi_gate", type=float, default=0.05)
+    parser.add_argument("--surface_consistency_enable", action="store_true")
+    parser.add_argument("--surface_consistency_radius", type=int, default=1)
+    parser.add_argument("--surface_consistency_min_neighbors", type=int, default=4)
+    parser.add_argument("--surface_consistency_normal_cos", type=float, default=0.55)
+    parser.add_argument("--surface_consistency_phi_diff", type=float, default=0.04)
     parser.add_argument("--poisson_depth", type=int, default=8)
+    parser.add_argument("--poisson_iters", type=int, default=1)
+    parser.add_argument("--poisson_lr", type=float, default=0.08)
+    parser.add_argument("--eikonal_lambda", type=float, default=0.02)
     parser.add_argument("--mesh_min_points", type=int, default=800)
     parser.add_argument("--sigma_n0", type=float, default=0.18)
+    parser.add_argument("--assoc_gate_threshold", type=float, default=14.0)
+    parser.add_argument("--assoc_strict_surface_weight", type=float, default=0.8)
     parser.add_argument("--huber_delta_n", type=float, default=0.20)
+    parser.add_argument("--frontier_boost", type=float, default=0.45)
+    parser.add_argument("--assoc_seed_fallback_enable", dest="assoc_seed_fallback_enable", action="store_true")
+    parser.add_argument("--assoc_seed_fallback_disable", dest="assoc_seed_fallback_enable", action="store_false")
+    parser.set_defaults(assoc_seed_fallback_enable=True)
+    parser.add_argument("--assoc_seed_fallback_low_support_scale", type=float, default=0.7)
+    parser.add_argument("--assoc_seed_fallback_frontier_scale", type=float, default=0.7)
     parser.add_argument("--dynamic_forgetting", dest="dynamic_forgetting", action="store_true")
     parser.add_argument("--no_dynamic_forgetting", dest="dynamic_forgetting", action="store_false")
     parser.set_defaults(dynamic_forgetting=True)
@@ -140,6 +162,8 @@ def main():
     cfg = EGF3DConfig()
     cfg.map3d.voxel_size = float(args.voxel_size)
     cfg.map3d.truncation = max(0.08, 3.0 * cfg.map3d.voxel_size)
+    if args.truncation is not None:
+        cfg.map3d.truncation = float(max(1.5 * cfg.map3d.voxel_size, args.truncation))
     if args.rho_decay is not None:
         cfg.map3d.rho_decay = float(args.rho_decay)
     if args.phi_w_decay is not None:
@@ -153,12 +177,26 @@ def main():
     cfg.surface.prune_free_min = float(args.surface_prune_free_min)
     cfg.surface.prune_residual_min = float(args.surface_prune_residual_min)
     cfg.surface.max_clear_hits = float(args.surface_max_clear_hits)
+    cfg.surface.use_zero_crossing = bool(args.surface_use_zero_crossing)
+    cfg.surface.zero_crossing_max_offset = float(max(0.0, args.surface_zero_crossing_max_offset))
+    cfg.surface.zero_crossing_phi_gate = float(max(1e-4, args.surface_zero_crossing_phi_gate))
+    cfg.surface.consistency_enable = bool(args.surface_consistency_enable)
+    cfg.surface.consistency_radius = int(max(1, args.surface_consistency_radius))
+    cfg.surface.consistency_min_neighbors = int(max(0, args.surface_consistency_min_neighbors))
+    cfg.surface.consistency_normal_cos = float(np.clip(args.surface_consistency_normal_cos, 0.0, 1.0))
+    cfg.surface.consistency_phi_diff = float(max(1e-4, args.surface_consistency_phi_diff))
     cfg.surface.poisson_depth = int(args.poisson_depth)
-    cfg.update.poisson_iters = 1
-    cfg.update.eikonal_lambda = 0.02
-    cfg.assoc.gate_threshold = 14.0
+    cfg.update.poisson_iters = int(max(0, args.poisson_iters))
+    cfg.update.poisson_lr = float(max(1e-4, args.poisson_lr))
+    cfg.update.eikonal_lambda = float(max(0.0, args.eikonal_lambda))
+    cfg.assoc.gate_threshold = float(max(1.0, args.assoc_gate_threshold))
+    cfg.assoc.strict_surface_weight = float(max(0.1, args.assoc_strict_surface_weight))
     cfg.assoc.sigma_n0 = float(args.sigma_n0)
     cfg.assoc.huber_delta_n = float(args.huber_delta_n)
+    cfg.assoc.seed_fallback_enable = bool(args.assoc_seed_fallback_enable)
+    cfg.assoc.seed_fallback_low_support_scale = float(max(0.0, args.assoc_seed_fallback_low_support_scale))
+    cfg.assoc.seed_fallback_frontier_scale = float(max(0.0, args.assoc_seed_fallback_frontier_scale))
+    cfg.update.frontier_boost = float(max(0.0, args.frontier_boost))
     cfg.update.forget_mode = str(args.forget_mode)
     cfg.update.dyn_forget_gain = float(args.dyn_forget_gain if args.dynamic_forgetting else 0.0)
     if not args.dynamic_forgetting:
@@ -311,16 +349,34 @@ def main():
         "use_gt_pose": bool(args.use_gt_pose),
         "seed": int(args.seed),
         "voxel_size": float(cfg.map3d.voxel_size),
+        "truncation": float(cfg.map3d.truncation),
         "rho_decay": float(cfg.map3d.rho_decay),
         "phi_w_decay": float(cfg.map3d.phi_w_decay),
         "sigma_n0": float(cfg.assoc.sigma_n0),
+        "assoc_gate_threshold": float(cfg.assoc.gate_threshold),
+        "assoc_strict_surface_weight": float(cfg.assoc.strict_surface_weight),
         "surface_max_dscore": float(cfg.surface.max_d_score),
         "surface_max_age_frames": int(cfg.surface.max_age_frames),
         "surface_max_free_ratio": float(cfg.surface.max_free_ratio),
         "surface_prune_free_min": float(cfg.surface.prune_free_min),
         "surface_prune_residual_min": float(cfg.surface.prune_residual_min),
         "surface_max_clear_hits": float(cfg.surface.max_clear_hits),
+        "surface_use_zero_crossing": bool(cfg.surface.use_zero_crossing),
+        "surface_zero_crossing_max_offset": float(cfg.surface.zero_crossing_max_offset),
+        "surface_zero_crossing_phi_gate": float(cfg.surface.zero_crossing_phi_gate),
+        "surface_consistency_enable": bool(cfg.surface.consistency_enable),
+        "surface_consistency_radius": int(cfg.surface.consistency_radius),
+        "surface_consistency_min_neighbors": int(cfg.surface.consistency_min_neighbors),
+        "surface_consistency_normal_cos": float(cfg.surface.consistency_normal_cos),
+        "surface_consistency_phi_diff": float(cfg.surface.consistency_phi_diff),
         "huber_delta_n": float(cfg.assoc.huber_delta_n),
+        "poisson_iters": int(cfg.update.poisson_iters),
+        "poisson_lr": float(cfg.update.poisson_lr),
+        "eikonal_lambda": float(cfg.update.eikonal_lambda),
+        "frontier_boost": float(cfg.update.frontier_boost),
+        "assoc_seed_fallback_enable": bool(cfg.assoc.seed_fallback_enable),
+        "assoc_seed_fallback_low_support_scale": float(cfg.assoc.seed_fallback_low_support_scale),
+        "assoc_seed_fallback_frontier_scale": float(cfg.assoc.seed_fallback_frontier_scale),
         "dynamic_forgetting": bool(args.dynamic_forgetting),
         "forget_mode": str(cfg.update.forget_mode),
         "dyn_forget_gain": float(cfg.update.dyn_forget_gain),

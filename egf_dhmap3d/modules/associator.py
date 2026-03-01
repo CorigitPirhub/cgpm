@@ -165,16 +165,21 @@ class Associator3D:
                 accepted.append(m)
                 d2_vals.append(float(m.d2))
                 continue
-            # Fallback: unresolved/low-support voxels are force-seeded to avoid cold-start holes.
-            near = voxel_map.get_cell(m.voxel_index)
-            low_support = near is None or near.phi_w < 0.7 * self.cfg.assoc.strict_surface_weight
-            frontier_hot = near is not None and near.frontier_score >= 0.7 * self.cfg.assoc.frontier_activate_thresh
-            if low_support or frontier_hot:
-                m.seed = True
-                m.frontier = True
-                m.d2 = float(local_gate)
-                accepted.append(m)
-                continue
+            # Fallback: unresolved/low-support voxels are force-seeded to avoid
+            # cold-start holes. This can be disabled in conservative static mode.
+            if bool(self.cfg.assoc.seed_fallback_enable):
+                near = voxel_map.get_cell(m.voxel_index)
+                low_support = near is None or near.phi_w < float(self.cfg.assoc.seed_fallback_low_support_scale) * self.cfg.assoc.strict_surface_weight
+                frontier_hot = (
+                    near is not None
+                    and near.frontier_score >= float(self.cfg.assoc.seed_fallback_frontier_scale) * self.cfg.assoc.frontier_activate_thresh
+                )
+                if low_support or frontier_hot:
+                    m.seed = True
+                    m.frontier = True
+                    m.d2 = float(local_gate)
+                    accepted.append(m)
+                    continue
             rejected.append(m)
 
         total = max(1, points_world.shape[0])
