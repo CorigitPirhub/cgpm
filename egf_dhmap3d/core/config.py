@@ -67,6 +67,7 @@ class Update3DConfig:
     rho_osc_ref: float = 0.8
     dscore_ema: float = 0.12
     residual_score_weight: float = 0.25
+    integration_radius_scale: float = 1.0
     # Optional free-space clearing along sensor rays.
     raycast_clear_gain: float = 0.0
     raycast_step_scale: float = 1.0
@@ -117,6 +118,42 @@ class Surface3DConfig:
     consistency_min_neighbors: int = 4
     consistency_normal_cos: float = 0.55
     consistency_phi_diff: float = 0.04
+    # SNEF-3D local: dynamic confidence quantile clipping in local blocks.
+    snef_local_enable: bool = False
+    snef_block_size_cells: int = 8
+    snef_dscore_quantile: float = 0.80
+    snef_dscore_margin: float = 0.05
+    snef_free_ratio_quantile: float = 0.85
+    snef_free_ratio_margin: float = 0.10
+    snef_abs_phi_quantile: float = 1.00
+    snef_abs_phi_margin: float = 0.00
+    snef_min_keep_per_block: int = 16
+    snef_min_keep_ratio_per_block: float = 0.0
+    snef_min_candidates_per_block: int = 10
+    snef_anchor_rho_quantile: float = 0.90
+    snef_anchor_dscore_quantile: float = 0.25
+    snef_anchor_min_per_block: int = 2
+    # Two-stage extraction:
+    # Stage-A relaxes geometric gate to protect completeness;
+    # Stage-B only denoises locally in dynamic-confidence blocks.
+    two_stage_enable: bool = False
+    two_stage_geom_margin: float = 0.02
+    two_stage_dynamic_dscore_quantile: float = 0.70
+    two_stage_dynamic_free_quantile: float = 0.70
+    # Rho-aware two-stage dynamic gating:
+    # only treat a local block as dynamic when dynamic cues are high
+    # and (optionally) confidence rho is low.
+    two_stage_dynamic_rho_quantile: float = 0.40
+    two_stage_dynamic_rho_margin: float = 0.0
+    two_stage_dynamic_require_low_rho: bool = True
+    # Adaptive extraction (useful for highly dynamic Bonn scenes):
+    # tighten unstable cells while preserving high-confidence static support.
+    adaptive_enable: bool = False
+    adaptive_rho_ref: float = 2.0
+    adaptive_phi_min_scale: float = 0.55
+    adaptive_phi_max_scale: float = 1.15
+    adaptive_min_weight_gain: float = 0.8
+    adaptive_free_ratio_gain: float = 0.5
 
 
 @dataclass

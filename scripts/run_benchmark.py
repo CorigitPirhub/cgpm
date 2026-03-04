@@ -609,6 +609,7 @@ def run_method(
     egf_dyn_d2_ref: float,
     egf_dscore_ema: float,
     egf_residual_score_weight: float,
+    egf_integration_radius_scale: float,
     egf_raycast_clear_gain: float,
     egf_raycast_step_scale: float,
     egf_raycast_end_margin: float,
@@ -636,6 +637,47 @@ def run_method(
     egf_surface_prune_free_min: float,
     egf_surface_prune_residual_min: float,
     egf_surface_max_clear_hits: float,
+    egf_surface_use_zero_crossing: bool,
+    egf_surface_zero_crossing_max_offset: float,
+    egf_surface_zero_crossing_phi_gate: float,
+    egf_surface_consistency_enable: bool,
+    egf_surface_consistency_radius: int,
+    egf_surface_consistency_min_neighbors: int,
+    egf_surface_consistency_normal_cos: float,
+    egf_surface_consistency_phi_diff: float,
+    egf_surface_snef_local_enable: bool,
+    egf_surface_snef_block_size_cells: int,
+    egf_surface_snef_dscore_quantile: float,
+    egf_surface_snef_dscore_margin: float,
+    egf_surface_snef_free_ratio_quantile: float,
+    egf_surface_snef_free_ratio_margin: float,
+    egf_surface_snef_abs_phi_quantile: float,
+    egf_surface_snef_abs_phi_margin: float,
+    egf_surface_snef_min_keep_per_block: int,
+    egf_surface_snef_min_keep_ratio_per_block: float,
+    egf_surface_snef_min_candidates_per_block: int,
+    egf_surface_snef_anchor_rho_quantile: float,
+    egf_surface_snef_anchor_dscore_quantile: float,
+    egf_surface_snef_anchor_min_per_block: int,
+    egf_surface_two_stage_enable: bool,
+    egf_surface_two_stage_geom_margin: float,
+    egf_surface_two_stage_dynamic_dscore_quantile: float,
+    egf_surface_two_stage_dynamic_free_quantile: float,
+    egf_surface_two_stage_dynamic_rho_quantile: float,
+    egf_surface_two_stage_dynamic_rho_margin: float,
+    egf_surface_two_stage_dynamic_require_low_rho: bool,
+    egf_surface_adaptive_enable: bool,
+    egf_surface_adaptive_rho_ref: float,
+    egf_surface_adaptive_phi_min_scale: float,
+    egf_surface_adaptive_phi_max_scale: float,
+    egf_surface_adaptive_min_weight_gain: float,
+    egf_surface_adaptive_free_ratio_gain: float,
+    egf_bonn_surface_adaptive_enable: bool,
+    egf_bonn_surface_adaptive_rho_ref: float,
+    egf_bonn_surface_adaptive_phi_min_scale: float,
+    egf_bonn_surface_adaptive_phi_max_scale: float,
+    egf_bonn_surface_adaptive_min_weight_gain: float,
+    egf_bonn_surface_adaptive_free_ratio_gain: float,
     egf_mesh_min_points: int,
     egf_static_sigma_n0: float,
     egf_static_surface_phi_thresh: float,
@@ -655,10 +697,32 @@ def run_method(
     egf_static_surface_consistency_min_neighbors: int,
     egf_static_surface_consistency_normal_cos: float,
     egf_static_surface_consistency_phi_diff: float,
+    egf_static_surface_snef_local_enable: bool,
+    egf_static_surface_snef_block_size_cells: int,
+    egf_static_surface_snef_dscore_quantile: float,
+    egf_static_surface_snef_dscore_margin: float,
+    egf_static_surface_snef_free_ratio_quantile: float,
+    egf_static_surface_snef_free_ratio_margin: float,
+    egf_static_surface_snef_abs_phi_quantile: float,
+    egf_static_surface_snef_abs_phi_margin: float,
+    egf_static_surface_snef_min_keep_per_block: int,
+    egf_static_surface_snef_min_keep_ratio_per_block: float,
+    egf_static_surface_snef_min_candidates_per_block: int,
+    egf_static_surface_snef_anchor_rho_quantile: float,
+    egf_static_surface_snef_anchor_dscore_quantile: float,
+    egf_static_surface_snef_anchor_min_per_block: int,
+    egf_static_surface_two_stage_enable: bool,
+    egf_static_surface_two_stage_geom_margin: float,
+    egf_static_surface_two_stage_dynamic_dscore_quantile: float,
+    egf_static_surface_two_stage_dynamic_free_quantile: float,
+    egf_static_surface_two_stage_dynamic_rho_quantile: float,
+    egf_static_surface_two_stage_dynamic_rho_margin: float,
+    egf_static_surface_two_stage_dynamic_require_low_rho: bool,
     egf_static_frontier_boost: float,
     egf_static_assoc_seed_fallback_enable: bool,
     egf_static_assoc_seed_fallback_low_support_scale: float,
     egf_static_assoc_seed_fallback_frontier_scale: float,
+    egf_static_integration_radius_scale: float,
     egf_ablation_no_evidence: bool,
     egf_ablation_no_gradient: bool,
     dynaslam_pred_points_template: str,
@@ -670,6 +734,9 @@ def run_method(
     neural_pred_points_template: str,
     neural_pred_mesh_template: str,
     neural_cmd_template: str,
+    stress_occlusion_ratio: float,
+    stress_occlusion_mode: str,
+    stress_occlusion_axis: str,
     external_allow_missing: bool,
     external_require_real: bool,
 ) -> None:
@@ -695,6 +762,12 @@ def run_method(
         str(voxel_size),
         "--surface_eval_thresh",
         str(eval_thresh),
+        "--stress_occlusion_ratio",
+        str(float(max(0.0, stress_occlusion_ratio))),
+        "--stress_occlusion_mode",
+        str(stress_occlusion_mode),
+        "--stress_occlusion_axis",
+        str(stress_occlusion_axis),
         "--out",
         str(out_dir),
     ]
@@ -703,6 +776,19 @@ def run_method(
 
     if method == "egf":
         cmd = [sys.executable, "scripts/run_egf_3d_tum.py", *base]
+        adaptive_enable = bool(egf_surface_adaptive_enable)
+        adaptive_rho_ref = float(egf_surface_adaptive_rho_ref)
+        adaptive_phi_min_scale = float(egf_surface_adaptive_phi_min_scale)
+        adaptive_phi_max_scale = float(egf_surface_adaptive_phi_max_scale)
+        adaptive_min_weight_gain = float(egf_surface_adaptive_min_weight_gain)
+        adaptive_free_ratio_gain = float(egf_surface_adaptive_free_ratio_gain)
+        if str(sequence_kind).lower() == "bonn":
+            adaptive_enable = bool(egf_bonn_surface_adaptive_enable)
+            adaptive_rho_ref = float(egf_bonn_surface_adaptive_rho_ref)
+            adaptive_phi_min_scale = float(egf_bonn_surface_adaptive_phi_min_scale)
+            adaptive_phi_max_scale = float(egf_bonn_surface_adaptive_phi_max_scale)
+            adaptive_min_weight_gain = float(egf_bonn_surface_adaptive_min_weight_gain)
+            adaptive_free_ratio_gain = float(egf_bonn_surface_adaptive_free_ratio_gain)
         if str(protocol).lower() == "oracle":
             cmd.append("--use_gt_pose")
         else:
@@ -756,6 +842,8 @@ def run_method(
                 str(float(egf_dscore_ema)),
                 "--residual_score_weight",
                 str(float(egf_residual_score_weight)),
+                "--integration_radius_scale",
+                str(float(np.clip(egf_integration_radius_scale, 0.45, 1.0))),
                 "--raycast_clear_gain",
                 str(float(egf_raycast_clear_gain)),
                 "--raycast_step_scale",
@@ -788,9 +876,89 @@ def run_method(
                 str(float(egf_surface_prune_residual_min)),
                 "--surface_max_clear_hits",
                 str(float(egf_surface_max_clear_hits)),
+                "--surface_zero_crossing_max_offset",
+                str(float(max(0.0, egf_surface_zero_crossing_max_offset))),
+                "--surface_zero_crossing_phi_gate",
+                str(float(max(1e-4, egf_surface_zero_crossing_phi_gate))),
+                "--surface_adaptive_rho_ref",
+                str(float(max(1e-6, adaptive_rho_ref))),
+                "--surface_adaptive_phi_min_scale",
+                str(float(np.clip(adaptive_phi_min_scale, 0.25, 2.0))),
+                "--surface_adaptive_phi_max_scale",
+                str(float(np.clip(adaptive_phi_max_scale, 0.25, 2.0))),
+                "--surface_adaptive_min_weight_gain",
+                str(float(max(0.0, adaptive_min_weight_gain))),
+                "--surface_adaptive_free_ratio_gain",
+                str(float(np.clip(adaptive_free_ratio_gain, 0.0, 0.99))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
+            if bool(egf_surface_use_zero_crossing):
+                cmd.append("--surface_use_zero_crossing")
+            else:
+                cmd.append("--surface_no_zero_crossing")
+            if bool(egf_surface_consistency_enable):
+                cmd += [
+                    "--surface_consistency_enable",
+                    "--surface_consistency_radius",
+                    str(int(max(1, egf_surface_consistency_radius))),
+                    "--surface_consistency_min_neighbors",
+                    str(int(max(0, egf_surface_consistency_min_neighbors))),
+                    "--surface_consistency_normal_cos",
+                    str(float(np.clip(egf_surface_consistency_normal_cos, 0.0, 1.0))),
+                    "--surface_consistency_phi_diff",
+                    str(float(max(1e-4, egf_surface_consistency_phi_diff))),
+                ]
+            if bool(egf_surface_snef_local_enable):
+                cmd += [
+                    "--surface_snef_local_enable",
+                    "--surface_snef_block_size_cells",
+                    str(int(max(1, egf_surface_snef_block_size_cells))),
+                    "--surface_snef_dscore_quantile",
+                    str(float(np.clip(egf_surface_snef_dscore_quantile, 0.0, 1.0))),
+                    "--surface_snef_dscore_margin",
+                    str(float(max(0.0, egf_surface_snef_dscore_margin))),
+                    "--surface_snef_free_ratio_quantile",
+                    str(float(np.clip(egf_surface_snef_free_ratio_quantile, 0.0, 1.0))),
+                    "--surface_snef_free_ratio_margin",
+                    str(float(max(0.0, egf_surface_snef_free_ratio_margin))),
+                    "--surface_snef_abs_phi_quantile",
+                    str(float(np.clip(egf_surface_snef_abs_phi_quantile, 0.0, 1.0))),
+                    "--surface_snef_abs_phi_margin",
+                    str(float(max(0.0, egf_surface_snef_abs_phi_margin))),
+                    "--surface_snef_min_keep_per_block",
+                    str(int(max(1, egf_surface_snef_min_keep_per_block))),
+                    "--surface_snef_min_keep_ratio_per_block",
+                    str(float(np.clip(egf_surface_snef_min_keep_ratio_per_block, 0.0, 1.0))),
+                    "--surface_snef_min_candidates_per_block",
+                    str(int(max(1, egf_surface_snef_min_candidates_per_block))),
+                    "--surface_snef_anchor_rho_quantile",
+                    str(float(np.clip(egf_surface_snef_anchor_rho_quantile, 0.0, 1.0))),
+                    "--surface_snef_anchor_dscore_quantile",
+                    str(float(np.clip(egf_surface_snef_anchor_dscore_quantile, 0.0, 1.0))),
+                    "--surface_snef_anchor_min_per_block",
+                    str(int(max(0, egf_surface_snef_anchor_min_per_block))),
+                ]
+            if bool(egf_surface_two_stage_enable):
+                cmd += [
+                    "--surface_two_stage_enable",
+                    "--surface_two_stage_geom_margin",
+                    str(float(max(0.0, egf_surface_two_stage_geom_margin))),
+                    "--surface_two_stage_dynamic_dscore_quantile",
+                    str(float(np.clip(egf_surface_two_stage_dynamic_dscore_quantile, 0.0, 1.0))),
+                    "--surface_two_stage_dynamic_free_quantile",
+                    str(float(np.clip(egf_surface_two_stage_dynamic_free_quantile, 0.0, 1.0))),
+                    "--surface_two_stage_dynamic_rho_quantile",
+                    str(float(np.clip(egf_surface_two_stage_dynamic_rho_quantile, 0.0, 1.0))),
+                    "--surface_two_stage_dynamic_rho_margin",
+                    str(float(max(0.0, egf_surface_two_stage_dynamic_rho_margin))),
+                ]
+                if bool(egf_surface_two_stage_dynamic_require_low_rho):
+                    cmd.append("--surface_two_stage_dynamic_require_low_rho")
+                else:
+                    cmd.append("--surface_two_stage_dynamic_no_require_low_rho")
+            if adaptive_enable:
+                cmd.append("--surface_adaptive_enable")
             if egf_ablation_no_evidence:
                 cmd.append("--ablation_no_evidence")
             if egf_ablation_no_gradient:
@@ -830,15 +998,29 @@ def run_method(
                 str(float(max(0.0, egf_static_surface_zero_crossing_max_offset))),
                 "--surface_zero_crossing_phi_gate",
                 str(float(max(1e-4, egf_static_surface_zero_crossing_phi_gate))),
+                "--surface_adaptive_rho_ref",
+                str(float(max(1e-6, adaptive_rho_ref))),
+                "--surface_adaptive_phi_min_scale",
+                str(float(np.clip(adaptive_phi_min_scale, 0.25, 2.0))),
+                "--surface_adaptive_phi_max_scale",
+                str(float(np.clip(adaptive_phi_max_scale, 0.25, 2.0))),
+                "--surface_adaptive_min_weight_gain",
+                str(float(max(0.0, adaptive_min_weight_gain))),
+                "--surface_adaptive_free_ratio_gain",
+                str(float(np.clip(adaptive_free_ratio_gain, 0.0, 0.99))),
                 "--frontier_boost",
                 str(float(max(0.0, egf_static_frontier_boost))),
                 "--assoc_seed_fallback_low_support_scale",
                 str(float(max(0.0, egf_static_assoc_seed_fallback_low_support_scale))),
                 "--assoc_seed_fallback_frontier_scale",
                 str(float(max(0.0, egf_static_assoc_seed_fallback_frontier_scale))),
+                "--integration_radius_scale",
+                str(float(np.clip(egf_static_integration_radius_scale, 0.45, 1.0))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
+            if adaptive_enable:
+                cmd.append("--surface_adaptive_enable")
             if bool(egf_static_assoc_seed_fallback_enable):
                 cmd.append("--assoc_seed_fallback_enable")
             else:
@@ -859,6 +1041,54 @@ def run_method(
                     "--surface_consistency_phi_diff",
                     str(float(max(1e-4, egf_static_surface_consistency_phi_diff))),
                 ]
+            if bool(egf_static_surface_snef_local_enable):
+                cmd += [
+                    "--surface_snef_local_enable",
+                    "--surface_snef_block_size_cells",
+                    str(int(max(1, egf_static_surface_snef_block_size_cells))),
+                    "--surface_snef_dscore_quantile",
+                    str(float(np.clip(egf_static_surface_snef_dscore_quantile, 0.0, 1.0))),
+                    "--surface_snef_dscore_margin",
+                    str(float(max(0.0, egf_static_surface_snef_dscore_margin))),
+                    "--surface_snef_free_ratio_quantile",
+                    str(float(np.clip(egf_static_surface_snef_free_ratio_quantile, 0.0, 1.0))),
+                    "--surface_snef_free_ratio_margin",
+                    str(float(max(0.0, egf_static_surface_snef_free_ratio_margin))),
+                    "--surface_snef_abs_phi_quantile",
+                    str(float(np.clip(egf_static_surface_snef_abs_phi_quantile, 0.0, 1.0))),
+                    "--surface_snef_abs_phi_margin",
+                    str(float(max(0.0, egf_static_surface_snef_abs_phi_margin))),
+                    "--surface_snef_min_keep_per_block",
+                    str(int(max(1, egf_static_surface_snef_min_keep_per_block))),
+                    "--surface_snef_min_keep_ratio_per_block",
+                    str(float(np.clip(egf_static_surface_snef_min_keep_ratio_per_block, 0.0, 1.0))),
+                    "--surface_snef_min_candidates_per_block",
+                    str(int(max(1, egf_static_surface_snef_min_candidates_per_block))),
+                    "--surface_snef_anchor_rho_quantile",
+                    str(float(np.clip(egf_static_surface_snef_anchor_rho_quantile, 0.0, 1.0))),
+                    "--surface_snef_anchor_dscore_quantile",
+                    str(float(np.clip(egf_static_surface_snef_anchor_dscore_quantile, 0.0, 1.0))),
+                    "--surface_snef_anchor_min_per_block",
+                    str(int(max(0, egf_static_surface_snef_anchor_min_per_block))),
+                ]
+            if bool(egf_static_surface_two_stage_enable):
+                cmd += [
+                    "--surface_two_stage_enable",
+                    "--surface_two_stage_geom_margin",
+                    str(float(max(0.0, egf_static_surface_two_stage_geom_margin))),
+                    "--surface_two_stage_dynamic_dscore_quantile",
+                    str(float(np.clip(egf_static_surface_two_stage_dynamic_dscore_quantile, 0.0, 1.0))),
+                    "--surface_two_stage_dynamic_free_quantile",
+                    str(float(np.clip(egf_static_surface_two_stage_dynamic_free_quantile, 0.0, 1.0))),
+                    "--surface_two_stage_dynamic_rho_quantile",
+                    str(float(np.clip(egf_static_surface_two_stage_dynamic_rho_quantile, 0.0, 1.0))),
+                    "--surface_two_stage_dynamic_rho_margin",
+                    str(float(max(0.0, egf_static_surface_two_stage_dynamic_rho_margin))),
+                ]
+                if bool(egf_static_surface_two_stage_dynamic_require_low_rho):
+                    cmd.append("--surface_two_stage_dynamic_require_low_rho")
+                else:
+                    cmd.append("--surface_two_stage_dynamic_no_require_low_rho")
             if egf_ablation_no_evidence:
                 cmd.append("--ablation_no_evidence")
             if egf_ablation_no_gradient:
@@ -1010,24 +1240,60 @@ def run_method(
 
 
 def main():
+    default_tum_static = "rgbd_dataset_freiburg1_xyz"
+    default_tum_dynamic = (
+        "rgbd_dataset_freiburg3_walking_xyz,"
+        "rgbd_dataset_freiburg3_walking_static,"
+        "rgbd_dataset_freiburg3_walking_halfsphere"
+    )
+    default_bonn_dynamic_all3 = "rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2"
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_kind", type=str, default="auto", choices=["auto", "tum", "bonn"])
     parser.add_argument("--dataset_root", type=str, default="data/tum")
     parser.add_argument("--out_root", type=str, default="output/benchmark_results")
     parser.add_argument("--protocol", type=str, default="slam", choices=["oracle", "slam"])
-    parser.add_argument("--static_sequences", type=str, default="rgbd_dataset_freiburg1_xyz")
+    parser.add_argument("--static_sequences", type=str, default=default_tum_static)
     parser.add_argument(
         "--dynamic_sequences",
         type=str,
-        default="rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere",
+        default=default_tum_dynamic,
+    )
+    parser.add_argument(
+        "--bonn_dynamic_preset",
+        type=str,
+        default="auto",
+        choices=["auto", "none", "balloon2", "all3"],
+        help=(
+            "Bonn sequence preset when --dataset_kind bonn is used. "
+            "'auto' maps default TUM dynamic list to all3 preset and clears default static list."
+        ),
     )
     parser.add_argument("--frames", type=int, default=80)
     parser.add_argument("--stride", type=int, default=3)
     parser.add_argument("--max_points_per_frame", type=int, default=3000)
+    parser.add_argument("--stress_occlusion_ratio", type=float, default=0.0)
+    parser.add_argument(
+        "--stress_occlusion_mode",
+        type=str,
+        default="moving_band",
+        choices=["moving_band", "fixed_center"],
+    )
+    parser.add_argument(
+        "--stress_occlusion_axis",
+        type=str,
+        default="x",
+        choices=["x", "y"],
+    )
     parser.add_argument("--voxel_size", type=float, default=0.02)
     parser.add_argument("--eval_thresh", type=float, default=0.05)
     parser.add_argument("--ghost_thresh", type=float, default=0.08)
     parser.add_argument("--bg_thresh", type=float, default=0.05)
+    parser.add_argument("--dynamic_ref_stable_ratio", type=float, default=0.25)
+    parser.add_argument("--dynamic_ref_tail_frames", type=int, default=12)
+    parser.add_argument("--dynamic_ref_voxel", type=float, default=0.05)
+    parser.add_argument("--dynamic_ref_min_hits", type=int, default=2)
+    parser.add_argument("--dynamic_ref_max_ratio", type=float, default=0.40)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--seeds", type=str, default="")
     parser.add_argument("--download", action="store_true")
@@ -1045,6 +1311,7 @@ def main():
     parser.add_argument("--egf_dyn_d2_ref", type=float, default=7.0)
     parser.add_argument("--egf_dscore_ema", type=float, default=0.12)
     parser.add_argument("--egf_residual_score_weight", type=float, default=0.25)
+    parser.add_argument("--egf_integration_radius_scale", type=float, default=1.0)
     parser.add_argument("--egf_raycast_clear_gain", type=float, default=0.0)
     parser.add_argument("--egf_raycast_step_scale", type=float, default=0.75)
     parser.add_argument("--egf_raycast_end_margin", type=float, default=0.16)
@@ -1073,6 +1340,61 @@ def main():
     parser.add_argument("--egf_surface_prune_free_min", type=float, default=1e9)
     parser.add_argument("--egf_surface_prune_residual_min", type=float, default=1e9)
     parser.add_argument("--egf_surface_max_clear_hits", type=float, default=1e9)
+    parser.add_argument("--egf_surface_use_zero_crossing", dest="egf_surface_use_zero_crossing", action="store_true")
+    parser.add_argument("--egf_surface_no_zero_crossing", dest="egf_surface_use_zero_crossing", action="store_false")
+    parser.set_defaults(egf_surface_use_zero_crossing=True)
+    parser.add_argument("--egf_surface_zero_crossing_max_offset", type=float, default=0.06)
+    parser.add_argument("--egf_surface_zero_crossing_phi_gate", type=float, default=0.05)
+    parser.add_argument("--egf_surface_consistency_enable", action="store_true")
+    parser.add_argument("--egf_surface_consistency_radius", type=int, default=1)
+    parser.add_argument("--egf_surface_consistency_min_neighbors", type=int, default=4)
+    parser.add_argument("--egf_surface_consistency_normal_cos", type=float, default=0.55)
+    parser.add_argument("--egf_surface_consistency_phi_diff", type=float, default=0.04)
+    parser.add_argument("--egf_surface_snef_local_enable", action="store_true")
+    parser.add_argument("--egf_surface_snef_block_size_cells", type=int, default=8)
+    parser.add_argument("--egf_surface_snef_dscore_quantile", type=float, default=0.80)
+    parser.add_argument("--egf_surface_snef_dscore_margin", type=float, default=0.05)
+    parser.add_argument("--egf_surface_snef_free_ratio_quantile", type=float, default=0.85)
+    parser.add_argument("--egf_surface_snef_free_ratio_margin", type=float, default=0.10)
+    parser.add_argument("--egf_surface_snef_abs_phi_quantile", type=float, default=1.0)
+    parser.add_argument("--egf_surface_snef_abs_phi_margin", type=float, default=0.0)
+    parser.add_argument("--egf_surface_snef_min_keep_per_block", type=int, default=16)
+    parser.add_argument("--egf_surface_snef_min_keep_ratio_per_block", type=float, default=0.0)
+    parser.add_argument("--egf_surface_snef_min_candidates_per_block", type=int, default=10)
+    parser.add_argument("--egf_surface_snef_anchor_rho_quantile", type=float, default=0.90)
+    parser.add_argument("--egf_surface_snef_anchor_dscore_quantile", type=float, default=0.25)
+    parser.add_argument("--egf_surface_snef_anchor_min_per_block", type=int, default=2)
+    parser.add_argument("--egf_surface_two_stage_enable", action="store_true")
+    parser.add_argument("--egf_surface_two_stage_geom_margin", type=float, default=0.02)
+    parser.add_argument("--egf_surface_two_stage_dynamic_dscore_quantile", type=float, default=0.70)
+    parser.add_argument("--egf_surface_two_stage_dynamic_free_quantile", type=float, default=0.70)
+    parser.add_argument("--egf_surface_two_stage_dynamic_rho_quantile", type=float, default=0.40)
+    parser.add_argument("--egf_surface_two_stage_dynamic_rho_margin", type=float, default=0.0)
+    parser.add_argument(
+        "--egf_surface_two_stage_dynamic_require_low_rho",
+        dest="egf_surface_two_stage_dynamic_require_low_rho",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_two_stage_dynamic_no_require_low_rho",
+        dest="egf_surface_two_stage_dynamic_require_low_rho",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_two_stage_dynamic_require_low_rho=True)
+    parser.add_argument("--egf_surface_adaptive_enable", action="store_true")
+    parser.add_argument("--egf_surface_adaptive_rho_ref", type=float, default=2.0)
+    parser.add_argument("--egf_surface_adaptive_phi_min_scale", type=float, default=0.55)
+    parser.add_argument("--egf_surface_adaptive_phi_max_scale", type=float, default=1.15)
+    parser.add_argument("--egf_surface_adaptive_min_weight_gain", type=float, default=0.8)
+    parser.add_argument("--egf_surface_adaptive_free_ratio_gain", type=float, default=0.5)
+    parser.add_argument("--egf_bonn_surface_adaptive_enable", dest="egf_bonn_surface_adaptive_enable", action="store_true")
+    parser.add_argument("--egf_bonn_surface_no_adaptive", dest="egf_bonn_surface_adaptive_enable", action="store_false")
+    parser.set_defaults(egf_bonn_surface_adaptive_enable=True)
+    parser.add_argument("--egf_bonn_surface_adaptive_rho_ref", type=float, default=1.4)
+    parser.add_argument("--egf_bonn_surface_adaptive_phi_min_scale", type=float, default=0.85)
+    parser.add_argument("--egf_bonn_surface_adaptive_phi_max_scale", type=float, default=1.30)
+    parser.add_argument("--egf_bonn_surface_adaptive_min_weight_gain", type=float, default=0.25)
+    parser.add_argument("--egf_bonn_surface_adaptive_free_ratio_gain", type=float, default=0.20)
     parser.add_argument("--egf_mesh_min_points", type=int, default=100000000)
     # Static-only extraction defaults: tighten surface band to suppress outliers
     # while leaving dynamic experiments unchanged.
@@ -1096,12 +1418,44 @@ def main():
     parser.add_argument("--egf_static_surface_consistency_min_neighbors", type=int, default=6)
     parser.add_argument("--egf_static_surface_consistency_normal_cos", type=float, default=0.70)
     parser.add_argument("--egf_static_surface_consistency_phi_diff", type=float, default=0.03)
+    parser.add_argument("--egf_static_surface_snef_local_enable", action="store_true")
+    parser.add_argument("--egf_static_surface_snef_block_size_cells", type=int, default=8)
+    parser.add_argument("--egf_static_surface_snef_dscore_quantile", type=float, default=0.80)
+    parser.add_argument("--egf_static_surface_snef_dscore_margin", type=float, default=0.05)
+    parser.add_argument("--egf_static_surface_snef_free_ratio_quantile", type=float, default=0.85)
+    parser.add_argument("--egf_static_surface_snef_free_ratio_margin", type=float, default=0.10)
+    parser.add_argument("--egf_static_surface_snef_abs_phi_quantile", type=float, default=1.0)
+    parser.add_argument("--egf_static_surface_snef_abs_phi_margin", type=float, default=0.0)
+    parser.add_argument("--egf_static_surface_snef_min_keep_per_block", type=int, default=16)
+    parser.add_argument("--egf_static_surface_snef_min_keep_ratio_per_block", type=float, default=0.0)
+    parser.add_argument("--egf_static_surface_snef_min_candidates_per_block", type=int, default=10)
+    parser.add_argument("--egf_static_surface_snef_anchor_rho_quantile", type=float, default=0.90)
+    parser.add_argument("--egf_static_surface_snef_anchor_dscore_quantile", type=float, default=0.25)
+    parser.add_argument("--egf_static_surface_snef_anchor_min_per_block", type=int, default=2)
+    parser.add_argument("--egf_static_surface_two_stage_enable", action="store_true")
+    parser.add_argument("--egf_static_surface_two_stage_geom_margin", type=float, default=0.02)
+    parser.add_argument("--egf_static_surface_two_stage_dynamic_dscore_quantile", type=float, default=0.70)
+    parser.add_argument("--egf_static_surface_two_stage_dynamic_free_quantile", type=float, default=0.70)
+    parser.add_argument("--egf_static_surface_two_stage_dynamic_rho_quantile", type=float, default=0.40)
+    parser.add_argument("--egf_static_surface_two_stage_dynamic_rho_margin", type=float, default=0.0)
+    parser.add_argument(
+        "--egf_static_surface_two_stage_dynamic_require_low_rho",
+        dest="egf_static_surface_two_stage_dynamic_require_low_rho",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_static_surface_two_stage_dynamic_no_require_low_rho",
+        dest="egf_static_surface_two_stage_dynamic_require_low_rho",
+        action="store_false",
+    )
+    parser.set_defaults(egf_static_surface_two_stage_dynamic_require_low_rho=True)
     parser.add_argument("--egf_static_frontier_boost", type=float, default=0.45)
     parser.add_argument("--egf_static_assoc_seed_fallback_enable", dest="egf_static_assoc_seed_fallback_enable", action="store_true")
     parser.add_argument("--egf_static_assoc_seed_fallback_disable", dest="egf_static_assoc_seed_fallback_enable", action="store_false")
     parser.set_defaults(egf_static_assoc_seed_fallback_enable=True)
     parser.add_argument("--egf_static_assoc_seed_fallback_low_support_scale", type=float, default=0.7)
     parser.add_argument("--egf_static_assoc_seed_fallback_frontier_scale", type=float, default=0.7)
+    parser.add_argument("--egf_static_integration_radius_scale", type=float, default=1.0)
     parser.add_argument("--egf_ablation_no_evidence", action="store_true")
     parser.add_argument("--egf_ablation_no_gradient", action="store_true")
     parser.add_argument("--dynaslam_pred_points_template", type=str, default="")
@@ -1118,6 +1472,22 @@ def main():
     args = parser.parse_args()
     if bool(args.egf_slam_no_gt_delta_odom):
         args.egf_slam_use_gt_delta_odom = False
+
+    # Bonn short-command preset: avoid repeating long dynamic sequence lists.
+    # Example: --dataset_kind bonn --dataset_root data/bonn --out_root ...  (no explicit sequences)
+    if str(args.dataset_kind).lower() == "bonn":
+        if str(args.static_sequences).strip() == default_tum_static:
+            args.static_sequences = ""
+        preset = str(args.bonn_dynamic_preset).lower()
+        if preset == "balloon2":
+            args.dynamic_sequences = "rgbd_bonn_balloon2"
+        elif preset == "all3":
+            args.dynamic_sequences = default_bonn_dynamic_all3
+        elif preset == "none":
+            pass
+        else:  # auto
+            if str(args.dynamic_sequences).strip() == default_tum_dynamic:
+                args.dynamic_sequences = default_bonn_dynamic_all3
 
     dataset_root = Path(args.dataset_root)
     protocol = str(args.protocol).lower()
@@ -1202,6 +1572,7 @@ def main():
                     egf_dyn_d2_ref=args.egf_dyn_d2_ref,
                     egf_dscore_ema=args.egf_dscore_ema,
                     egf_residual_score_weight=args.egf_residual_score_weight,
+                    egf_integration_radius_scale=args.egf_integration_radius_scale,
                     egf_raycast_clear_gain=args.egf_raycast_clear_gain,
                     egf_raycast_step_scale=args.egf_raycast_step_scale,
                     egf_raycast_end_margin=args.egf_raycast_end_margin,
@@ -1229,6 +1600,47 @@ def main():
                     egf_surface_prune_free_min=args.egf_surface_prune_free_min,
                     egf_surface_prune_residual_min=args.egf_surface_prune_residual_min,
                     egf_surface_max_clear_hits=args.egf_surface_max_clear_hits,
+                    egf_surface_use_zero_crossing=args.egf_surface_use_zero_crossing,
+                    egf_surface_zero_crossing_max_offset=args.egf_surface_zero_crossing_max_offset,
+                    egf_surface_zero_crossing_phi_gate=args.egf_surface_zero_crossing_phi_gate,
+                    egf_surface_consistency_enable=args.egf_surface_consistency_enable,
+                    egf_surface_consistency_radius=args.egf_surface_consistency_radius,
+                    egf_surface_consistency_min_neighbors=args.egf_surface_consistency_min_neighbors,
+                    egf_surface_consistency_normal_cos=args.egf_surface_consistency_normal_cos,
+                    egf_surface_consistency_phi_diff=args.egf_surface_consistency_phi_diff,
+                    egf_surface_snef_local_enable=args.egf_surface_snef_local_enable,
+                    egf_surface_snef_block_size_cells=args.egf_surface_snef_block_size_cells,
+                    egf_surface_snef_dscore_quantile=args.egf_surface_snef_dscore_quantile,
+                    egf_surface_snef_dscore_margin=args.egf_surface_snef_dscore_margin,
+                    egf_surface_snef_free_ratio_quantile=args.egf_surface_snef_free_ratio_quantile,
+                    egf_surface_snef_free_ratio_margin=args.egf_surface_snef_free_ratio_margin,
+                    egf_surface_snef_abs_phi_quantile=args.egf_surface_snef_abs_phi_quantile,
+                    egf_surface_snef_abs_phi_margin=args.egf_surface_snef_abs_phi_margin,
+                    egf_surface_snef_min_keep_per_block=args.egf_surface_snef_min_keep_per_block,
+                    egf_surface_snef_min_keep_ratio_per_block=args.egf_surface_snef_min_keep_ratio_per_block,
+                    egf_surface_snef_min_candidates_per_block=args.egf_surface_snef_min_candidates_per_block,
+                    egf_surface_snef_anchor_rho_quantile=args.egf_surface_snef_anchor_rho_quantile,
+                    egf_surface_snef_anchor_dscore_quantile=args.egf_surface_snef_anchor_dscore_quantile,
+                    egf_surface_snef_anchor_min_per_block=args.egf_surface_snef_anchor_min_per_block,
+                    egf_surface_two_stage_enable=args.egf_surface_two_stage_enable,
+                    egf_surface_two_stage_geom_margin=args.egf_surface_two_stage_geom_margin,
+                    egf_surface_two_stage_dynamic_dscore_quantile=args.egf_surface_two_stage_dynamic_dscore_quantile,
+                    egf_surface_two_stage_dynamic_free_quantile=args.egf_surface_two_stage_dynamic_free_quantile,
+                    egf_surface_two_stage_dynamic_rho_quantile=args.egf_surface_two_stage_dynamic_rho_quantile,
+                    egf_surface_two_stage_dynamic_rho_margin=args.egf_surface_two_stage_dynamic_rho_margin,
+                    egf_surface_two_stage_dynamic_require_low_rho=args.egf_surface_two_stage_dynamic_require_low_rho,
+                    egf_surface_adaptive_enable=bool(args.egf_surface_adaptive_enable),
+                    egf_surface_adaptive_rho_ref=args.egf_surface_adaptive_rho_ref,
+                    egf_surface_adaptive_phi_min_scale=args.egf_surface_adaptive_phi_min_scale,
+                    egf_surface_adaptive_phi_max_scale=args.egf_surface_adaptive_phi_max_scale,
+                    egf_surface_adaptive_min_weight_gain=args.egf_surface_adaptive_min_weight_gain,
+                    egf_surface_adaptive_free_ratio_gain=args.egf_surface_adaptive_free_ratio_gain,
+                    egf_bonn_surface_adaptive_enable=bool(args.egf_bonn_surface_adaptive_enable),
+                    egf_bonn_surface_adaptive_rho_ref=args.egf_bonn_surface_adaptive_rho_ref,
+                    egf_bonn_surface_adaptive_phi_min_scale=args.egf_bonn_surface_adaptive_phi_min_scale,
+                    egf_bonn_surface_adaptive_phi_max_scale=args.egf_bonn_surface_adaptive_phi_max_scale,
+                    egf_bonn_surface_adaptive_min_weight_gain=args.egf_bonn_surface_adaptive_min_weight_gain,
+                    egf_bonn_surface_adaptive_free_ratio_gain=args.egf_bonn_surface_adaptive_free_ratio_gain,
                     egf_mesh_min_points=args.egf_mesh_min_points,
                     egf_static_sigma_n0=args.egf_static_sigma_n0,
                     egf_static_surface_phi_thresh=args.egf_static_surface_phi_thresh,
@@ -1248,10 +1660,32 @@ def main():
                     egf_static_surface_consistency_min_neighbors=args.egf_static_surface_consistency_min_neighbors,
                     egf_static_surface_consistency_normal_cos=args.egf_static_surface_consistency_normal_cos,
                     egf_static_surface_consistency_phi_diff=args.egf_static_surface_consistency_phi_diff,
+                    egf_static_surface_snef_local_enable=args.egf_static_surface_snef_local_enable,
+                    egf_static_surface_snef_block_size_cells=args.egf_static_surface_snef_block_size_cells,
+                    egf_static_surface_snef_dscore_quantile=args.egf_static_surface_snef_dscore_quantile,
+                    egf_static_surface_snef_dscore_margin=args.egf_static_surface_snef_dscore_margin,
+                    egf_static_surface_snef_free_ratio_quantile=args.egf_static_surface_snef_free_ratio_quantile,
+                    egf_static_surface_snef_free_ratio_margin=args.egf_static_surface_snef_free_ratio_margin,
+                    egf_static_surface_snef_abs_phi_quantile=args.egf_static_surface_snef_abs_phi_quantile,
+                    egf_static_surface_snef_abs_phi_margin=args.egf_static_surface_snef_abs_phi_margin,
+                    egf_static_surface_snef_min_keep_per_block=args.egf_static_surface_snef_min_keep_per_block,
+                    egf_static_surface_snef_min_keep_ratio_per_block=args.egf_static_surface_snef_min_keep_ratio_per_block,
+                    egf_static_surface_snef_min_candidates_per_block=args.egf_static_surface_snef_min_candidates_per_block,
+                    egf_static_surface_snef_anchor_rho_quantile=args.egf_static_surface_snef_anchor_rho_quantile,
+                    egf_static_surface_snef_anchor_dscore_quantile=args.egf_static_surface_snef_anchor_dscore_quantile,
+                    egf_static_surface_snef_anchor_min_per_block=args.egf_static_surface_snef_anchor_min_per_block,
+                    egf_static_surface_two_stage_enable=args.egf_static_surface_two_stage_enable,
+                    egf_static_surface_two_stage_geom_margin=args.egf_static_surface_two_stage_geom_margin,
+                    egf_static_surface_two_stage_dynamic_dscore_quantile=args.egf_static_surface_two_stage_dynamic_dscore_quantile,
+                    egf_static_surface_two_stage_dynamic_free_quantile=args.egf_static_surface_two_stage_dynamic_free_quantile,
+                    egf_static_surface_two_stage_dynamic_rho_quantile=args.egf_static_surface_two_stage_dynamic_rho_quantile,
+                    egf_static_surface_two_stage_dynamic_rho_margin=args.egf_static_surface_two_stage_dynamic_rho_margin,
+                    egf_static_surface_two_stage_dynamic_require_low_rho=args.egf_static_surface_two_stage_dynamic_require_low_rho,
                     egf_static_frontier_boost=args.egf_static_frontier_boost,
                     egf_static_assoc_seed_fallback_enable=args.egf_static_assoc_seed_fallback_enable,
                     egf_static_assoc_seed_fallback_low_support_scale=args.egf_static_assoc_seed_fallback_low_support_scale,
                     egf_static_assoc_seed_fallback_frontier_scale=args.egf_static_assoc_seed_fallback_frontier_scale,
+                    egf_static_integration_radius_scale=args.egf_static_integration_radius_scale,
                     egf_ablation_no_evidence=args.egf_ablation_no_evidence,
                     egf_ablation_no_gradient=args.egf_ablation_no_gradient,
                     dynaslam_pred_points_template=args.dynaslam_pred_points_template,
@@ -1263,6 +1697,9 @@ def main():
                     neural_pred_points_template=args.neural_pred_points_template,
                     neural_pred_mesh_template=args.neural_pred_mesh_template,
                     neural_cmd_template=args.neural_cmd_template,
+                    stress_occlusion_ratio=args.stress_occlusion_ratio,
+                    stress_occlusion_mode=args.stress_occlusion_mode,
+                    stress_occlusion_axis=args.stress_occlusion_axis,
                     external_allow_missing=bool(args.external_allow_missing),
                     external_require_real=bool(args.external_require_real),
                 )
@@ -1277,11 +1714,11 @@ def main():
                 max_points_per_frame=args.max_points_per_frame,
                 seed=int(seed),
                 stable_voxel=max(0.03, args.voxel_size),
-                stable_ratio=0.25 if is_dynamic else 0.35,
-                tail_frames=12,
-                dynamic_voxel=max(0.05, 2.0 * args.voxel_size),
-                min_dynamic_hits=2,
-                max_dynamic_ratio=0.35,
+                stable_ratio=float(args.dynamic_ref_stable_ratio) if is_dynamic else 0.35,
+                tail_frames=int(args.dynamic_ref_tail_frames),
+                dynamic_voxel=max(float(args.dynamic_ref_voxel), 2.0 * args.voxel_size),
+                min_dynamic_hits=int(args.dynamic_ref_min_hits),
+                max_dynamic_ratio=float(args.dynamic_ref_max_ratio),
             )
             if stable_bg.shape[0] > 0:
                 pcd_bg = o3d.geometry.PointCloud()

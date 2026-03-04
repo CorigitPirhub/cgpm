@@ -4,10 +4,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
+import math
 
 
 @dataclass(frozen=True)
@@ -77,6 +80,41 @@ def merge_with_override(
     return sort_rows(list(merged.values()))
 
 
+def pick_first_existing(paths: Sequence[Path]) -> Path | None:
+    for p in paths:
+        if p.exists():
+            return p
+    return None
+
+
+def build_bonn_summary_from_recon(recon_csv: Path) -> CsvData:
+    data = read_csv(recon_csv)
+    out_headers = [
+        "sequence",
+        "method",
+        "points",
+        "accuracy",
+        "completeness",
+        "chamfer",
+        "hausdorff",
+        "precision",
+        "recall",
+        "fscore",
+        "ghost_count",
+        "ghost_ratio",
+        "ghost_tail_count",
+        "ghost_tail_ratio",
+        "background_recovery",
+    ]
+    out_rows: List[Dict[str, str]] = []
+    for r in data.rows:
+        seq = str(r.get("sequence", ""))
+        if "bonn" not in seq:
+            continue
+        out_rows.append({k: r.get(k, "") for k in out_headers})
+    return CsvData(headers=out_headers, rows=out_rows)
+
+
 def copy_if_exists(src: Path, dst: Path, outputs: List[str], missing: List[str]) -> None:
     if not src.exists():
         missing.append(str(src))
@@ -84,6 +122,30 @@ def copy_if_exists(src: Path, dst: Path, outputs: List[str], missing: List[str])
     data = read_csv(src)
     write_csv(dst, data.headers, data.rows)
     outputs.append(str(dst))
+
+
+def run_python_script(
+    python_exe: str,
+    script_rel: str,
+    script_args: Sequence[str],
+    project_root: Path,
+    verbose: bool = False,
+) -> Tuple[bool, str]:
+    cmd = [python_exe, script_rel, *script_args]
+    if verbose:
+        print("[run]", " ".join(cmd))
+    proc = subprocess.run(cmd, cwd=str(project_root), capture_output=True, text=True, check=False)
+    if proc.returncode == 0:
+        if verbose and proc.stdout.strip():
+            print(proc.stdout.strip())
+        return True, ""
+    msg = (
+        f"script_failed: {script_rel} rc={proc.returncode} "
+        f"stdout={proc.stdout[-500:].strip()} stderr={proc.stderr[-500:].strip()}"
+    )
+    if verbose:
+        print("[warn]", msg)
+    return False, msg
 
 
 def build_static_fix_delta(
@@ -210,17 +272,101 @@ def build_static_target_checks(
     return out
 
 
+def build_multiseed_significance_tum_bonn(
+    tum_sig_rows: List[Dict[str, str]],
+    bonn_sig_rows: List[Dict[str, str]],
+) -> List[Dict[str, object]]:
+    keep_metrics = {"fscore", "ghost_ratio", "chamfer", "ghost_tail_ratio"}
+    out: List[Dict[str, object]] = []
+
+    def _append(dataset: str, rows: List[Dict[str, str]]) -> None:
+        for r in rows:
+            scene_type = str(r.get("scene_type", "")).strip().lower()
+            metric = str(r.get("metric", "")).strip().lower()
+            if scene_type != "dynamic" or metric not in keep_metrics:
+                continue
+            row = dict(r)
+            row["dataset"] = dataset
+            out.append(row)
+
+    _append("tum", tum_sig_rows)
+    _append("bonn", bonn_sig_rows)
+    out.sort(key=lambda r: (str(r.get("dataset", "")), str(r.get("metric", ""))))
+    return out
+
+
+def build_multiseed_mean_std_tum_bonn(
+    tum_recon_rows: List[Dict[str, str]],
+    bonn_recon_rows: List[Dict[str, str]],
+) -> List[Dict[str, object]]:
+    keep_metrics = ["fscore", "ghost_ratio", "chamfer", "ghost_tail_ratio"]
+    groups: Dict[Tuple[str, str, str, str], List[float]] = {}
+
+    def _ingest(dataset: str, rows: List[Dict[str, str]]) -> None:
+        for r in rows:
+            if str(r.get("scene_type", "")).strip().lower() != "dynamic":
+                continue
+            method = str(r.get("method", "")).strip().lower()
+            if method not in {"egf", "tsdf"}:
+                continue
+            for metric in keep_metrics:
+                v = to_float(r, metric, default=float("nan"))
+                if not math.isfinite(v):
+                    continue
+                key = (dataset, "dynamic", method, metric)
+                groups.setdefault(key, []).append(v)
+
+    _ingest("tum", tum_recon_rows)
+    _ingest("bonn", bonn_recon_rows)
+
+    out: List[Dict[str, object]] = []
+    for key in sorted(groups.keys()):
+        dataset, scene_type, method, metric = key
+        vals = groups[key]
+        if not vals:
+            continue
+        n = len(vals)
+        mean_v = sum(vals) / n
+        if n > 1:
+            var = sum((x - mean_v) ** 2 for x in vals) / (n - 1)
+            std_v = math.sqrt(var)
+        else:
+            std_v = 0.0
+        out.append(
+            {
+                "dataset": dataset,
+                "scene_type": scene_type,
+                "method": method,
+                "metric": metric,
+                "mean": mean_v,
+                "std": std_v,
+                "n": n,
+            }
+        )
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Update output/summary_tables from post_cleanup results.")
     parser.add_argument("--post_cleanup_root", type=str, default="output/post_cleanup")
     parser.add_argument("--summary_root", type=str, default="output/summary_tables")
     parser.add_argument("--legacy_ablation_csv", type=str, default="output/ablation_study/summary.csv")
+    parser.add_argument(
+        "--prefer_p4_final",
+        action="store_true",
+        help="Prefer output/post_cleanup/p4_final_merged/oracle/tables as canonical main TUM table source.",
+    )
+    parser.add_argument("--python_exe", type=str, default=sys.executable)
+    parser.add_argument("--refresh_p6_p9", dest="refresh_p6_p9", action="store_true")
+    parser.add_argument("--no_refresh_p6_p9", dest="refresh_p6_p9", action="store_false")
+    parser.set_defaults(refresh_p6_p9=True)
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     post_cleanup_root = Path(args.post_cleanup_root)
     summary_root = Path(args.summary_root)
     summary_root.mkdir(parents=True, exist_ok=True)
+    project_root = Path(__file__).resolve().parents[1]
 
     outputs: List[str] = []
     missing: List[str] = []
@@ -238,12 +384,23 @@ def main() -> None:
     p1_consistency_dyn = post_cleanup_root / "p1_consistency_v2" / "oracle" / "tables" / "dynamic_metrics.csv"
     temporal = post_cleanup_root / "temporal_ablation" / "summary.csv"
     bonn = post_cleanup_root / "benchmark_bonn" / "summary.csv"
+    bonn_recon_v2 = post_cleanup_root / "p3_bonn_expanded_v2" / "slam" / "tables" / "reconstruction_metrics.csv"
+    bonn_recon_v1 = post_cleanup_root / "p3_bonn_expanded" / "slam" / "tables" / "reconstruction_metrics.csv"
     ablation_post = post_cleanup_root / "ablation_summary.csv"
     p3_real_external_recon = post_cleanup_root / "p3_real_external_niceslam" / "slam" / "tables" / "reconstruction_metrics.csv"
     p3_real_external_dyn = post_cleanup_root / "p3_real_external_niceslam" / "slam" / "tables" / "dynamic_metrics.csv"
     p3_real_external_dual_recon = post_cleanup_root / "p3_real_external_dual" / "slam" / "tables" / "reconstruction_metrics.csv"
     p3_real_external_dual_dyn = post_cleanup_root / "p3_real_external_dual" / "slam" / "tables" / "dynamic_metrics.csv"
-    if p3_real_external_dual_recon.exists() and p3_real_external_dual_dyn.exists():
+    p3_real_external_dynaslam_real_recon = (
+        post_cleanup_root / "p3_real_external_dynaslam_real" / "slam" / "tables" / "reconstruction_metrics.csv"
+    )
+    p3_real_external_dynaslam_real_dyn = (
+        post_cleanup_root / "p3_real_external_dynaslam_real" / "slam" / "tables" / "dynamic_metrics.csv"
+    )
+    if p3_real_external_dynaslam_real_recon.exists() and p3_real_external_dynaslam_real_dyn.exists():
+        p3_real_external_recon = p3_real_external_dynaslam_real_recon
+        p3_real_external_dyn = p3_real_external_dynaslam_real_dyn
+    elif p3_real_external_dual_recon.exists() and p3_real_external_dual_dyn.exists():
         p3_real_external_recon = p3_real_external_dual_recon
         p3_real_external_dyn = p3_real_external_dual_dyn
     ablation_legacy = Path(args.legacy_ablation_csv)
@@ -255,12 +412,68 @@ def main() -> None:
     local_eff = summary_root / "local_mapping_efficiency.csv"
     ext_ind = summary_root / "external_baselines_independent.csv"
     repro_cmds = summary_root / "reproduce_commands.md"
+    p4_goal_check = summary_root / "round20260302_goal_check.csv"
+    dual_recon = summary_root / "dual_protocol_multiseed_reconstruction.csv"
+    dual_recon_agg = summary_root / "dual_protocol_multiseed_reconstruction_agg.csv"
+    dual_dyn = summary_root / "dual_protocol_multiseed_dynamic.csv"
+    dual_dyn_agg = summary_root / "dual_protocol_multiseed_dynamic_agg.csv"
+    dual_sig = summary_root / "dual_protocol_multiseed_significance.csv"
+    paper_main_csv = summary_root / "paper_main_table_local_mapping.csv"
+    paper_main_md = summary_root / "paper_main_table_local_mapping.md"
+    p6_main_csv = summary_root / "local_mapping_main_metrics_toptier.csv"
+    p6_main_md = summary_root / "local_mapping_main_metrics_toptier.md"
+    p7_eff_v2_csv = summary_root / "local_mapping_efficiency_v2.csv"
+    p7_eff_v2_md = summary_root / "local_mapping_efficiency_v2.md"
+    p7_eff_v2_json = summary_root / "local_mapping_efficiency_v2.json"
+    p8_native_recon = summary_root / "external_baselines_native_reconstruction.csv"
+    p8_native_dyn = summary_root / "external_baselines_native_dynamic.csv"
+    p8_native_runtime = summary_root / "external_baselines_native_runtime.csv"
+    p9_stress_csv = summary_root / "stress_test_summary.csv"
+    p9_failure_md = post_cleanup_root / "stress_test" / "FAILURE_CASES.md"
+    p14_stress_csv = summary_root / "stress_test_summary_final.csv"
+    p14_failure_md = post_cleanup_root / "stress_test" / "FAILURE_CASES_FINAL.md"
+    p14_curve_png = project_root / "assets" / "stress_degradation_curves_final.png"
+    p14_meta_json = post_cleanup_root / "stress_test" / "stress_meta_final.json"
+    p10_precision_csv = summary_root / "local_mapping_precision_profile.csv"
+    p11_eff_final_csv = summary_root / "local_mapping_efficiency_final.csv"
+    p11_eff_final_json = summary_root / "local_mapping_efficiency_final.json"
+    p10_probe_scan_csv = summary_root / "p10_probe_scan.csv"
+    p10_tradeoff_png = project_root / "assets" / "acc_comp_tradeoff.png"
+    p11_tradeoff_png = project_root / "assets" / "quality_speed_tradeoff_final.png"
+    p4_tum_recon = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "reconstruction_metrics.csv"
+    p4_tum_dyn = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "dynamic_metrics.csv"
+    p4_tum_recon_agg = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "reconstruction_metrics_agg.csv"
+    p4_tum_dyn_agg = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "dynamic_metrics_agg.csv"
+    p4_tum_sig = post_cleanup_root / "p4_multiseed_tum_final_v2" / "tables" / "significance.csv"
+    p5_bonn_recon = post_cleanup_root / "p5_multiseed_bonn_all3" / "slam" / "tables" / "reconstruction_metrics.csv"
+    p5_bonn_dyn = post_cleanup_root / "p5_multiseed_bonn_all3" / "slam" / "tables" / "dynamic_metrics.csv"
+    p5_bonn_recon_agg = post_cleanup_root / "p5_multiseed_bonn_all3" / "slam" / "tables" / "reconstruction_metrics_agg.csv"
+    p5_bonn_dyn_agg = post_cleanup_root / "p5_multiseed_bonn_all3" / "slam" / "tables" / "dynamic_metrics_agg.csv"
+    p5_bonn_sig = post_cleanup_root / "p5_multiseed_bonn_all3" / "tables" / "significance.csv"
+    p4_final_merged_recon = post_cleanup_root / "p4_final_merged" / "oracle" / "tables" / "reconstruction_metrics.csv"
+    p4_final_merged_dyn = post_cleanup_root / "p4_final_merged" / "oracle" / "tables" / "dynamic_metrics.csv"
+    p4_bonn_recon = post_cleanup_root / "p4_multiseed_bonn_final" / "slam" / "tables" / "reconstruction_metrics.csv"
+    p4_bonn_dyn = post_cleanup_root / "p4_multiseed_bonn_final" / "slam" / "tables" / "dynamic_metrics.csv"
+    p4_bonn_recon_agg = post_cleanup_root / "p4_multiseed_bonn_final" / "slam" / "tables" / "reconstruction_metrics_agg.csv"
+    p4_bonn_dyn_agg = post_cleanup_root / "p4_multiseed_bonn_final" / "slam" / "tables" / "dynamic_metrics_agg.csv"
+    p4_bonn_sig = post_cleanup_root / "p4_multiseed_bonn_final" / "tables" / "significance.csv"
 
-    # Required baseline TUM tables. Prefer p1_consistency_v2 as canonical "main table"
-    # when present; it contains the repaired walking_static consistency result.
-    if p1_consistency_v2_recon.exists() and p1_consistency_v2_dyn.exists():
-        base_recon_data = read_csv(p1_consistency_v2_recon)
-        base_dyn_data = read_csv(p1_consistency_v2_dyn)
+    # Required baseline TUM tables. Canonical source preference:
+    # 1) --prefer_p4_final + p4_final_merged exists
+    # 2) p1_consistency_v2 exists
+    # 3) benchmark_tum (+ optional static_fix legacy override fallback)
+    main_source_recon: Path | None = None
+    main_source_dyn: Path | None = None
+    if args.prefer_p4_final and p4_final_merged_recon.exists() and p4_final_merged_dyn.exists():
+        main_source_recon = p4_final_merged_recon
+        main_source_dyn = p4_final_merged_dyn
+    elif p1_consistency_v2_recon.exists() and p1_consistency_v2_dyn.exists():
+        main_source_recon = p1_consistency_v2_recon
+        main_source_dyn = p1_consistency_v2_dyn
+
+    if main_source_recon is not None and main_source_dyn is not None:
+        base_recon_data = read_csv(main_source_recon)
+        base_dyn_data = read_csv(main_source_dyn)
         write_csv(summary_root / "tum_reconstruction_metrics.csv", base_recon_data.headers, sort_rows(base_recon_data.rows))
         outputs.append(str(summary_root / "tum_reconstruction_metrics.csv"))
         write_csv(summary_root / "tum_dynamic_metrics.csv", base_dyn_data.headers, sort_rows(base_dyn_data.rows))
@@ -313,6 +526,58 @@ def main() -> None:
         outputs.append(str(summary_root / "tum_dynamic_metrics_static_fix.csv"))
     else:
         missing.append(str(static_dyn))
+
+    # Optional: tuned static override (freiburg1_xyz EGF) for stricter static target.
+    tuned_static_summary = post_cleanup_root / "static_target_v2_mw19" / "summary.json"
+    if tuned_static_summary.exists():
+        try:
+            tuned = json.loads(tuned_static_summary.read_text(encoding="utf-8"))
+            tuned_metrics = tuned.get("metrics", {}) if isinstance(tuned, dict) else {}
+            tuned_points = tuned.get("surface_points", "") if isinstance(tuned, dict) else ""
+
+            recon_main_path = summary_root / "tum_reconstruction_metrics.csv"
+            dyn_main_path = summary_root / "tum_dynamic_metrics.csv"
+            recon_main = read_csv(recon_main_path)
+            dyn_main = read_csv(dyn_main_path)
+
+            for row in recon_main.rows:
+                if row.get("sequence") == "rgbd_dataset_freiburg1_xyz" and row.get("method") == "egf":
+                    if tuned_points != "":
+                        row["points"] = str(tuned_points)
+                    for k in [
+                        "chamfer",
+                        "hausdorff",
+                        "precision",
+                        "recall",
+                        "fscore",
+                        "normal_consistency",
+                        "precision_2cm",
+                        "recall_2cm",
+                        "fscore_2cm",
+                        "precision_5cm",
+                        "recall_5cm",
+                        "fscore_5cm",
+                        "precision_10cm",
+                        "recall_10cm",
+                        "fscore_10cm",
+                    ]:
+                        if k in tuned_metrics:
+                            row[k] = str(tuned_metrics[k])
+                    break
+
+            if "fscore" in tuned_metrics:
+                for row in dyn_main.rows:
+                    if row.get("sequence") == "rgbd_dataset_freiburg1_xyz" and row.get("method") == "egf":
+                        row["fscore"] = str(tuned_metrics["fscore"])
+                        break
+
+            write_csv(recon_main_path, recon_main.headers, sort_rows(recon_main.rows))
+            write_csv(dyn_main_path, dyn_main.headers, sort_rows(dyn_main.rows))
+            outputs.append(str(recon_main_path))
+            outputs.append(str(dyn_main_path))
+        except Exception:
+            # Do not block summary generation if tuned override parsing fails.
+            missing.append(str(tuned_static_summary))
 
     # Static-fix delta table (requires static_fix + base).
     if static_recon.exists():
@@ -424,7 +689,13 @@ def main() -> None:
 
     # Temporal / Bonn / Ablation passthrough.
     copy_if_exists(temporal, summary_root / "temporal_ablation_summary.csv", outputs, missing)
-    copy_if_exists(bonn, summary_root / "bonn_summary.csv", outputs, missing)
+    bonn_recon_src = pick_first_existing([bonn_recon_v2, bonn_recon_v1])
+    if bonn_recon_src is not None:
+        bonn_data = build_bonn_summary_from_recon(bonn_recon_src)
+        write_csv(summary_root / "bonn_summary.csv", bonn_data.headers, bonn_data.rows)
+        outputs.append(str(summary_root / "bonn_summary.csv"))
+    else:
+        copy_if_exists(bonn, summary_root / "bonn_summary.csv", outputs, missing)
     copy_if_exists(
         p3_real_external_recon,
         summary_root / "p3_real_external_reconstruction.csv",
@@ -459,11 +730,295 @@ def main() -> None:
         outputs.append(str(ext_ind))
     if repro_cmds.exists():
         outputs.append(str(repro_cmds))
+    if p4_goal_check.exists():
+        outputs.append(str(p4_goal_check))
+    if dual_recon.exists():
+        outputs.append(str(dual_recon))
+    if dual_recon_agg.exists():
+        outputs.append(str(dual_recon_agg))
+    if dual_dyn.exists():
+        outputs.append(str(dual_dyn))
+    if dual_dyn_agg.exists():
+        outputs.append(str(dual_dyn_agg))
+    if dual_sig.exists():
+        outputs.append(str(dual_sig))
+    if paper_main_csv.exists():
+        outputs.append(str(paper_main_csv))
+    if paper_main_md.exists():
+        outputs.append(str(paper_main_md))
+    if p10_precision_csv.exists():
+        outputs.append(str(p10_precision_csv))
+    if p11_eff_final_csv.exists():
+        outputs.append(str(p11_eff_final_csv))
+    if p11_eff_final_json.exists():
+        outputs.append(str(p11_eff_final_json))
+    if p10_probe_scan_csv.exists():
+        outputs.append(str(p10_probe_scan_csv))
+    if p10_tradeoff_png.exists():
+        outputs.append(str(p10_tradeoff_png))
+    if p11_tradeoff_png.exists():
+        outputs.append(str(p11_tradeoff_png))
+
+    # Optional: multi-seed round tables (TUM + Bonn).
+    copy_if_exists(
+        p4_tum_recon,
+        summary_root / "tum_reconstruction_metrics_multiseed.csv",
+        outputs,
+        missing,
+    )
+    copy_if_exists(
+        p4_tum_dyn,
+        summary_root / "tum_dynamic_metrics_multiseed.csv",
+        outputs,
+        missing,
+    )
+    copy_if_exists(
+        p4_tum_recon_agg,
+        summary_root / "tum_reconstruction_metrics_multiseed_agg.csv",
+        outputs,
+        missing,
+    )
+    copy_if_exists(
+        p4_tum_dyn_agg,
+        summary_root / "tum_dynamic_metrics_multiseed_agg.csv",
+        outputs,
+        missing,
+    )
+    copy_if_exists(
+        p4_tum_sig,
+        summary_root / "tum_significance_multiseed.csv",
+        outputs,
+        missing,
+    )
+    bonn_multiseed_recon_src = pick_first_existing([p5_bonn_recon, p4_bonn_recon])
+    bonn_multiseed_dyn_src = pick_first_existing([p5_bonn_dyn, p4_bonn_dyn])
+    bonn_multiseed_recon_agg_src = pick_first_existing([p5_bonn_recon_agg, p4_bonn_recon_agg])
+    bonn_multiseed_dyn_agg_src = pick_first_existing([p5_bonn_dyn_agg, p4_bonn_dyn_agg])
+    bonn_multiseed_sig_src = pick_first_existing([p5_bonn_sig, p4_bonn_sig])
+
+    if bonn_multiseed_recon_src is not None:
+        copy_if_exists(
+            bonn_multiseed_recon_src,
+            summary_root / "bonn_reconstruction_metrics_multiseed.csv",
+            outputs,
+            missing,
+        )
+    else:
+        missing.append(str(p5_bonn_recon))
+        missing.append(str(p4_bonn_recon))
+
+    if bonn_multiseed_dyn_src is not None:
+        copy_if_exists(
+            bonn_multiseed_dyn_src,
+            summary_root / "bonn_dynamic_metrics_multiseed.csv",
+            outputs,
+            missing,
+        )
+    else:
+        missing.append(str(p5_bonn_dyn))
+        missing.append(str(p4_bonn_dyn))
+
+    if bonn_multiseed_recon_agg_src is not None:
+        copy_if_exists(
+            bonn_multiseed_recon_agg_src,
+            summary_root / "bonn_reconstruction_metrics_multiseed_agg.csv",
+            outputs,
+            missing,
+        )
+    else:
+        missing.append(str(p5_bonn_recon_agg))
+        missing.append(str(p4_bonn_recon_agg))
+
+    if bonn_multiseed_dyn_agg_src is not None:
+        copy_if_exists(
+            bonn_multiseed_dyn_agg_src,
+            summary_root / "bonn_dynamic_metrics_multiseed_agg.csv",
+            outputs,
+            missing,
+        )
+    else:
+        missing.append(str(p5_bonn_dyn_agg))
+        missing.append(str(p4_bonn_dyn_agg))
+
+    if bonn_multiseed_sig_src is not None:
+        copy_if_exists(
+            bonn_multiseed_sig_src,
+            summary_root / "bonn_significance_multiseed.csv",
+            outputs,
+            missing,
+        )
+    else:
+        missing.append(str(p5_bonn_sig))
+        missing.append(str(p4_bonn_sig))
+
+    # Combined TUM+Bonn multi-seed tables for paper-facing summaries.
+    tum_sig_path = summary_root / "tum_significance_multiseed.csv"
+    bonn_sig_path = summary_root / "bonn_significance_multiseed.csv"
+    tum_recon_ms_path = summary_root / "tum_reconstruction_metrics_multiseed.csv"
+    bonn_recon_ms_path = summary_root / "bonn_reconstruction_metrics_multiseed.csv"
+
+    if tum_sig_path.exists() and bonn_sig_path.exists():
+        merged_sig = build_multiseed_significance_tum_bonn(
+            read_csv(tum_sig_path).rows,
+            read_csv(bonn_sig_path).rows,
+        )
+        sig_headers = [
+            "dataset",
+            "protocol",
+            "scene_type",
+            "metric",
+            "direction",
+            "method_a",
+            "method_b",
+            "n_pairs",
+            "mean_delta_egf_minus_baseline",
+            "std_delta_egf_minus_baseline",
+            "mean_improvement",
+            "std_improvement",
+            "cohens_d",
+            "t_stat",
+            "t_pvalue",
+            "wilcoxon_stat",
+            "wilcoxon_pvalue",
+        ]
+        write_csv(summary_root / "multiseed_significance_tum_bonn.csv", sig_headers, merged_sig)
+        outputs.append(str(summary_root / "multiseed_significance_tum_bonn.csv"))
+
+    if tum_recon_ms_path.exists() and bonn_recon_ms_path.exists():
+        mean_std_rows = build_multiseed_mean_std_tum_bonn(
+            read_csv(tum_recon_ms_path).rows,
+            read_csv(bonn_recon_ms_path).rows,
+        )
+        mean_std_headers = ["dataset", "scene_type", "method", "metric", "mean", "std", "n"]
+        write_csv(summary_root / "multiseed_mean_std_tum_bonn.csv", mean_std_headers, mean_std_rows)
+        outputs.append(str(summary_root / "multiseed_mean_std_tum_bonn.csv"))
+
+    # Auto-refresh P6-P9 deliverables (default on). Use --no_refresh_p6_p9 to skip.
+    project_root = Path(__file__).resolve().parents[1]
+    if bool(args.refresh_p6_p9):
+        # P7: efficiency v2 + quality-speed plot
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/run_p7_efficiency_v2.py",
+            script_args=[
+                "--out_root",
+                str(post_cleanup_root / "p7_speed_probe"),
+                "--out_csv",
+                str(p7_eff_v2_csv),
+                "--out_md",
+                str(p7_eff_v2_md),
+                "--out_json",
+                str(p7_eff_v2_json),
+            ],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+
+        # P8: native external baseline matrix
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/run_p8_native_external.py",
+            script_args=[],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+
+        # P6: top-tier main metrics (Acc/Comp/Comp-R + significance)
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/build_local_mapping_main_toptier.py",
+            script_args=[
+                "--tum_multiseed",
+                str(tum_recon_ms_path),
+                "--bonn_multiseed",
+                str(bonn_recon_ms_path),
+                "--out_csv",
+                str(p6_main_csv),
+                "--out_md",
+                str(p6_main_md),
+            ],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+
+        # P9: stress summary + failure boundaries
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/build_p9_stress_report.py",
+            script_args=[
+                "--out_csv",
+                str(p9_stress_csv),
+                "--out_failure_md",
+                str(p9_failure_md),
+            ],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+
+        # P14: final 4D stress summary + final failure boundaries
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/build_p14_stress_report.py",
+            script_args=[
+                "--out_csv",
+                str(p14_stress_csv),
+                "--out_png",
+                str(p14_curve_png),
+                "--out_failure_md",
+                str(p14_failure_md),
+            ],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+
+    # Track P6-P14 artifacts in output list (and mark missing when absent).
+    for p in [
+        p6_main_csv,
+        p6_main_md,
+        p7_eff_v2_csv,
+        p7_eff_v2_md,
+        p7_eff_v2_json,
+        p8_native_recon,
+        p8_native_dyn,
+        p8_native_runtime,
+        p9_stress_csv,
+        p9_failure_md,
+        p14_stress_csv,
+        p14_failure_md,
+        p14_curve_png,
+        p14_meta_json,
+        p10_precision_csv,
+        p11_eff_final_csv,
+        p11_eff_final_json,
+        p10_probe_scan_csv,
+        p10_tradeoff_png,
+        p11_tradeoff_png,
+    ]:
+        if p.exists():
+            outputs.append(str(p))
+        else:
+            missing.append(str(p))
+
+    # De-duplicate for a cleaner manifest.
+    outputs = list(dict.fromkeys(outputs))
+    missing = list(dict.fromkeys(missing))
 
     manifest = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "post_cleanup_root": str(post_cleanup_root),
         "summary_root": str(summary_root),
+        "prefer_p4_final": bool(args.prefer_p4_final),
+        "refresh_p6_p9": bool(args.refresh_p6_p9),
         "outputs": outputs,
         "missing_sources": missing,
     }

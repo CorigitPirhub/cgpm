@@ -33,6 +33,7 @@ class Updater3D:
             return
 
         trunc = float(self.cfg.map3d.truncation)
+        trunc_scale = float(np.clip(self.cfg.update.integration_radius_scale, 0.45, 1.0))
         rho_sigma = max(1e-4, float(self.cfg.update.rho_sigma))
         gate = float(self.cfg.assoc.gate_threshold)
         weight_assoc = np.exp(-0.5 * min(measurement.d2, gate))
@@ -41,7 +42,7 @@ class Updater3D:
             trunc_eff = max(1.2 * voxel_map.voxel_size, 0.06)
             neighbor_iter = [measurement.voxel_index]
         else:
-            trunc_eff = trunc
+            trunc_eff = max(1.2 * voxel_map.voxel_size, trunc * trunc_scale)
             neighbor_iter = voxel_map.neighbor_indices_for_point(p, radius_m=trunc_eff)
         surf_band = float(np.clip(self.cfg.update.surf_band_ratio, 0.1, 0.9)) * trunc_eff
 
@@ -132,22 +133,35 @@ class Updater3D:
             c.rho_prev = rho_now
             c.rho_osc = 0.9 * c.rho_osc + 0.1 * rho_delta
             if self.cfg.update.enable_evidence:
-                dyn_occ = c.free_evidence / max(1e-6, c.free_evidence + c.surf_evidence)
+                # Dynamic occupancy cue:
+                # combine bounded occupancy fraction with an amplified free/surface ratio
+                # so dynamic voxels can rise to high d_score bands.
+                surf = float(max(1e-6, c.surf_evidence))
+                free = float(max(0.0, c.free_evidence))
+                free_ratio = free / surf
+                dyn_occ_soft = free / max(1e-6, free + surf)
+                dyn_occ_ratio = float(np.clip((free_ratio - 0.35) / 0.95, 0.0, 1.0))
+                dyn_occ = max(dyn_occ_soft, dyn_occ_ratio)
                 osc = float(np.clip(c.rho_osc / max(1e-6, self.cfg.update.rho_osc_ref), 0.0, 1.0))
             else:
                 dyn_occ = 0.0
                 osc = 0.0
             residual = float(np.clip(c.residual_evidence, 0.0, 1.0))
             frontier = float(np.clip(c.frontier_score / 3.0, 0.0, 1.0))
-            w_res = float(np.clip(self.cfg.update.residual_score_weight, 0.0, 0.6))
-            w_occ = max(0.2, 0.7 - w_res)
-            w_osc = max(0.1, 0.3 - 0.5 * w_res)
-            w_front = max(0.0, 1.0 - (w_occ + w_osc + w_res))
-            target = w_occ * dyn_occ + w_osc * osc + w_res * residual + w_front * frontier
+            clear = float(np.clip(c.clear_hits / 2.0, 0.0, 1.0))
+            w_res = float(np.clip(self.cfg.update.residual_score_weight, 0.0, 0.5))
+            w_occ = max(0.35, 0.65 - w_res)
+            w_osc = max(0.10, 0.22 - 0.3 * w_res)
+            w_clear = 0.05
+            w_front = max(0.0, 1.0 - (w_occ + w_osc + w_res + w_clear))
+            target = w_occ * dyn_occ + w_osc * osc + w_res * residual + w_clear * clear + w_front * frontier
             ema = float(np.clip(self.cfg.update.dscore_ema, 0.01, 0.5))
             c.d_score = float(np.clip((1.0 - ema) * c.d_score + ema * target, 0.0, 1.0))
-            if c.surf_evidence > 1.3 * c.free_evidence:
-                c.d_score *= 0.96
+            # Static-anchor suppression: persistent static support quickly damps dynamic score.
+            if self.cfg.update.enable_evidence and c.surf_evidence > 1.8 * c.free_evidence and rho_now > 0.8:
+                c.d_score *= 0.90
+            elif c.surf_evidence > 1.3 * c.free_evidence:
+                c.d_score *= 0.95
 
     def _raycast_clear(
         self,

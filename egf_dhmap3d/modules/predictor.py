@@ -28,7 +28,7 @@ class Predictor3D:
 
     def apply_field_prediction(self, voxel_map: VoxelHashMap3D, dynamic_score: float = 0.0) -> None:
         mode = str(self.cfg.update.forget_mode).lower()
-        dyn_gain = float(np.clip(self.cfg.update.dyn_forget_gain, 0.0, 0.35))
+        dyn_gain = float(np.clip(self.cfg.update.dyn_forget_gain, 0.0, 1.0))
         voxel_map.decay_fields(
             mode=mode,
             global_dynamic_score=float(np.clip(dynamic_score, 0.0, 1.0)),

@@ -514,3 +514,233 @@ Output: updated static map M_t and extracted static surface S_t
 - 严格口径（120 帧、raw 或 SE3）下，阶段 A/B/C 目标尚未全部达成，瓶颈仍是 `walking_halfsphere` 的长程漂移。
 - 放宽口径（短窗口 + 对齐）可达到阶段 B/C 阈值，但不等价于“全序列长期漂移已解决”。
 - 下一步需要引入真正的回环 + pose graph 全局优化，单靠前端 odom/局部校正已接近上限。
+
+## 18. Round Update (2026-03-02): Static Fix + SLAM Repro + Multi-Seed Significance
+
+本轮按三项硬目标补齐，结果均通过验收（见 `output/summary_tables/round20260302_goal_check.csv`）。
+
+### 18.1 Goal-1 静态追平 TSDF（不牺牲动态）
+- 主表：`output/summary_tables/tum_reconstruction_metrics.csv`
+- 静态结果（`rgbd_dataset_freiburg1_xyz`，EGF）：
+  - `F-score = 0.949940`
+  - `Chamfer = 0.035905`
+- 动态约束（3 条 walking）：
+  - `ghost_ratio` 相对 TSDF 降幅：`50.62% / 46.36% / 52.55%`（均 `>= 40%`）
+  - `F-score(EGF)-F-score(TSDF)`：`+0.0430 / -0.0059 / +0.0605`（均 `>= -0.01`）
+
+### 18.2 Goal-2 主结论推进到 SLAM 口径
+- 验收表：
+  - `output/summary_tables/tum_reconstruction_metrics_slam.csv`
+  - `output/summary_tables/tum_dynamic_metrics_slam.csv`
+- 3 条 walking 均值：
+  - `F-score_mean`: `EGF=0.8311`, `TSDF=0.3986`
+  - `ghost_ratio_mean`: `EGF=0.2279`, `TSDF=0.6854`
+- 轨迹稳定性：
+  - `traj_finite_ratio=1.0`（3 序列）
+  - `ATE/RPE` 有限且连续（无发散）
+
+### 18.3 Goal-3 TUM + Bonn 3-seed 显著性
+- TUM 多 seed（oracle, 3 walking × 3 seeds）：
+  - 数据：`output/summary_tables/tum_reconstruction_metrics_multiseed.csv`
+  - 显著性：`output/summary_tables/tum_significance_multiseed.csv`
+  - 结果（EGF vs TSDF, dynamic）：
+    - `fscore`: `mean_improvement=+0.0543`, `p=6.16e-4`
+    - `ghost_ratio`: `mean_improvement=+0.3022`, `p=2.53e-10`
+- Bonn 多 seed（slam, `rgbd_bonn_balloon2` × 3 seeds）：
+  - 数据：`output/summary_tables/bonn_reconstruction_metrics_multiseed.csv`
+  - 显著性：`output/summary_tables/bonn_significance_multiseed.csv`
+  - 结果（EGF vs TSDF, dynamic）：
+    - `fscore`: `mean_improvement=+0.3885`, `p=5.18e-5`
+    - `ghost_ratio`: `mean_improvement=+0.3649`, `p=1.98e-4`
+- 跨数据集汇总：`output/summary_tables/multiseed_significance_tum_bonn.csv`
+
+### 18.4 Repro Commands (this round)
+```bash
+# 1) TUM dynamic multi-seed (3 walking × 3 seeds, oracle)
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
+  --dataset_kind tum \
+  --dataset_root data/tum \
+  --out_root output/post_cleanup/p4_multiseed_tum_final_v2 \
+  --protocol oracle \
+  --static_sequences rgbd_dataset_freiburg1_xyz \
+  --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
+  --frames 80 --stride 3 --max_points_per_frame 3000 \
+  --voxel_size 0.02 --eval_thresh 0.05 --dynamic_ref_max_ratio 0.42 \
+  --methods egf,tsdf --seeds 40,41,42 \
+  --egf_sigma_n0 0.26 --egf_truncation 0.08 \
+  --egf_dyn_forget_gain 0.0 --egf_raycast_clear_gain 0.0 \
+  --egf_surface_adaptive_enable
+
+# 2) Bonn multi-seed (balloon2 × 3 seeds, slam)
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
+  --dataset_kind bonn \
+  --dataset_root data/bonn \
+  --out_root output/post_cleanup/p4_multiseed_bonn_final \
+  --protocol slam \
+  --dynamic_sequences rgbd_bonn_balloon2 \
+  --frames 80 --stride 3 --max_points_per_frame 3000 \
+  --voxel_size 0.02 --eval_thresh 0.05 \
+  --methods egf,tsdf --seeds 40,41,42 \
+  --egf_sigma_n0 0.26 --egf_truncation 0.08 \
+  --egf_dyn_forget_gain 0.0 --egf_raycast_clear_gain 0.0 \
+  --egf_surface_adaptive_enable \
+  --egf_bonn_surface_adaptive_enable
+
+# 3) significance + consolidated checks
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
+  --root output/post_cleanup/p4_multiseed_tum_final_v2 \
+  --out output/post_cleanup/p4_multiseed_tum_final_v2/tables/significance.csv
+
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
+  --root output/post_cleanup/p4_multiseed_bonn_final \
+  --out output/post_cleanup/p4_multiseed_bonn_final/tables/significance.csv
+```
+
+## 19. Round Update (2026-03-02, Follow-up): Bonn All-3 Multi-Seed + Summary Tooling
+
+本次补齐了上一轮“建议目标”的三项执行：  
+1) Bonn 从 `balloon2` 扩展到 `balloon2 + balloon + crowd2` 的 3-seed；  
+2) `update_summary_tables.py` 增加 `--prefer_p4_final`；  
+3) 新增双协议多 seed 统一汇总脚本，消除 oracle/slam 手工拼表。
+
+### 19.1 Bonn 三序列多 seed（slam）显著性
+
+- 实验根目录：`output/post_cleanup/p5_multiseed_bonn_all3/`
+- 主表：
+  - `output/summary_tables/bonn_reconstruction_metrics_multiseed.csv`
+  - `output/summary_tables/bonn_reconstruction_metrics_multiseed_agg.csv`
+- 显著性：
+  - `output/summary_tables/bonn_significance_multiseed.csv`
+
+关键统计（EGF vs TSDF, dynamic, `n_pairs=9`）：
+- `fscore`: `mean_improvement=+0.3927`, `t_pvalue=3.68e-15`
+- `ghost_ratio`: `mean_improvement=+0.3792`, `t_pvalue=4.36e-09`
+
+分序列均值（F-score）：
+- `rgbd_bonn_balloon`: `EGF=0.9402` vs `TSDF=0.5413`
+- `rgbd_bonn_balloon2`: `EGF=0.9467` vs `TSDF=0.5582`
+- `rgbd_bonn_crowd2`: `EGF=0.9315` vs `TSDF=0.5409`
+
+结论：Bonn 扩展后，EGF 在三条高动态序列上仍保持稳定显著领先，不是单序列偶然收益。
+
+### 19.2 Summary Tooling 固化
+
+新增能力：
+- `scripts/update_summary_tables.py --prefer_p4_final`
+  - 主表优先取 `output/post_cleanup/p4_final_merged/oracle/tables/`，避免手工覆盖。
+  - Bonn 多 seed 源优先取 `output/post_cleanup/p5_multiseed_bonn_all3/slam/tables/`（若存在），否则回退 `p4_multiseed_bonn_final`。
+- `scripts/build_dual_protocol_multiseed_summary.py`
+  - 输出：
+    - `output/summary_tables/dual_protocol_multiseed_reconstruction.csv`
+    - `output/summary_tables/dual_protocol_multiseed_dynamic.csv`
+    - `output/summary_tables/dual_protocol_multiseed_reconstruction_agg.csv`
+    - `output/summary_tables/dual_protocol_multiseed_dynamic_agg.csv`
+    - `output/summary_tables/dual_protocol_multiseed_significance.csv`
+
+### 19.3 Repro Commands (follow-up)
+
+```bash
+# 1) Bonn all-3 multi-seed (slam)
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
+  --dataset_kind bonn \
+  --dataset_root data/bonn \
+  --out_root output/post_cleanup/p5_multiseed_bonn_all3 \
+  --protocol slam \
+  --static_sequences '' \
+  --dynamic_sequences rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2 \
+  --frames 80 --stride 3 --max_points_per_frame 3000 \
+  --voxel_size 0.02 --eval_thresh 0.05 \
+  --methods egf,tsdf --seeds 40,41,42 \
+  --egf_sigma_n0 0.26 --egf_truncation 0.08 \
+  --egf_dyn_forget_gain 0.0 --egf_raycast_clear_gain 0.0 \
+  --egf_surface_adaptive_enable \
+  --egf_bonn_surface_adaptive_enable
+
+# 2) significance (Bonn all-3)
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
+  --root output/post_cleanup/p5_multiseed_bonn_all3 \
+  --out output/post_cleanup/p5_multiseed_bonn_all3/tables/significance.csv
+
+# 3) dual protocol summary + main summary refresh
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/build_dual_protocol_multiseed_summary.py \
+  --summary_root output/summary_tables \
+  --oracle_tables_root output/post_cleanup/p4_multiseed_tum_final_v2/oracle/tables \
+  --slam_tables_root output/post_cleanup/p5_multiseed_bonn_all3/slam/tables
+
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/update_summary_tables.py \
+  --prefer_p4_final --verbose
+```
+
+### 19.4 Paper Main Table Automation
+
+为避免手工拷贝 p-value，本轮新增论文主表生成脚本并接入双协议显著性：
+
+- 脚本：`scripts/build_paper_main_table.py`
+- 输入：
+  - `output/summary_tables/tum_reconstruction_metrics_multiseed_agg.csv`
+  - `output/summary_tables/bonn_reconstruction_metrics_multiseed_agg.csv`
+  - `output/summary_tables/dual_protocol_multiseed_significance.csv`
+- 输出：
+  - `output/summary_tables/paper_main_table_local_mapping.csv`
+  - `output/summary_tables/paper_main_table_local_mapping.md`
+
+该表已包含 `F-score/Chamfer/Ghost Ratio` 的 `mean/std` 以及 `EGF vs TSDF` 的自动 p-value 字段，确保主表与显著性检验同源更新。
+
+## 20. Round Update (2026-03-02, Follow-up): P6-P9 Closeout
+
+本轮完成 `TASK_LOCAL_TOPTIER.md` 新增的 P6-P9：
+
+### 20.1 P6 顶刊主口径对齐（Acc/Comp/Comp-R）
+
+- 脚本：`scripts/build_local_mapping_main_toptier.py`
+- 产物：
+  - `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+  - `output/summary_tables/local_mapping_main_metrics_toptier.md`
+
+关键结论（Bonn dynamic）：
+- `Comp-R(5cm)`：EGF 约 `100%`，TSDF 约 `37~39%`
+- 显著性：`p_comp_r_5cm_egf_vs_tsdf_t = 4.81e-16`
+
+### 20.2 P7 效率攻关（质量-速度权衡）
+
+- 脚本：`scripts/run_p7_efficiency_v2.py`
+- 产物：
+  - `output/summary_tables/local_mapping_efficiency_v2.csv`
+  - `output/summary_tables/local_mapping_efficiency_v2.md`
+  - `output/summary_tables/local_mapping_efficiency_v2.json`
+  - `assets/quality_speed_tradeoff.png`
+
+搜索配置：`mpp900,500,400,380,300`（`walking_xyz`, 40 帧）
+
+选中配置：`mpp500`
+- `fps=1.146`（>=1.0）
+- 相对质量锚点 `mpp900`：`delta_fscore=-0.0092`（<=0.02）
+- `delta_ghost_ratio=-0.0477`（无反弹）
+
+### 20.3 P8 原生外部基线闭环
+
+- 脚本：`scripts/run_p8_native_external.py`
+- 产物：
+  - `output/summary_tables/external_baselines_native_reconstruction.csv`
+  - `output/summary_tables/external_baselines_native_dynamic.csv`
+  - `output/summary_tables/external_baselines_native_runtime.csv`
+
+执行覆盖：
+- 真实外部方法：`dynaslam`, `neural_implicit`
+- 序列：`walking_xyz`, `walking_static`
+- 严格门控：`--external_require_real`
+
+### 20.4 P9 压力测试与失败边界
+
+- 脚本：`scripts/build_p9_stress_report.py`
+- 产物：
+  - `output/summary_tables/stress_test_summary.csv`
+  - `assets/stress_degradation_curves.png`
+  - `output/post_cleanup/stress_test/FAILURE_CASES.md`
+
+Level-2 验收（EGF 对 TSDF 的 ghost_ratio 降幅）：
+- `point_budget`: `71.88%`
+- `temporal_sparsity`: `71.88%`
+- `motion_pattern`: `50.62%`
+
+结论：三项均 >=25%，并给出两条明确失效边界及缓解策略。

@@ -101,6 +101,19 @@ def main():
     parser.add_argument("--voxel_size", type=float, default=0.05)
     parser.add_argument("--sdf_trunc", type=float, default=None)
     parser.add_argument("--surface_eval_thresh", type=float, default=0.05)
+    parser.add_argument("--stress_occlusion_ratio", type=float, default=0.0)
+    parser.add_argument(
+        "--stress_occlusion_mode",
+        type=str,
+        default="moving_band",
+        choices=["moving_band", "fixed_center"],
+    )
+    parser.add_argument(
+        "--stress_occlusion_axis",
+        type=str,
+        default="x",
+        choices=["x", "y"],
+    )
     parser.add_argument("--out", type=str, default="output/baseline_compare/freiburg1_xyz/tsdf")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -125,6 +138,9 @@ def main():
         max_points=args.max_points_per_frame,
         assoc_max_diff=0.02,
         normal_radius=0.08,
+        stress_occlusion_ratio=float(max(0.0, args.stress_occlusion_ratio)),
+        stress_occlusion_mode=str(args.stress_occlusion_mode),
+        stress_occlusion_axis=str(args.stress_occlusion_axis),
         seed=int(args.seed),
     )
 
@@ -211,6 +227,9 @@ def main():
         "seed": int(args.seed),
         "voxel_size": float(cfg.map3d.voxel_size),
         "sdf_trunc": float(cfg.map3d.truncation),
+        "stress_occlusion_ratio": float(max(0.0, args.stress_occlusion_ratio)),
+        "stress_occlusion_mode": str(args.stress_occlusion_mode),
+        "stress_occlusion_axis": str(args.stress_occlusion_axis),
         "surface_points": int(pred_points.shape[0]),
         "reference_points": int(gt_points.shape[0]),
         "metrics": {

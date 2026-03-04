@@ -168,6 +168,7 @@ def main() -> None:
     ap.add_argument("--max_points_per_frame", type=int, default=2500)
     ap.add_argument("--voxel_downsample", type=float, default=0.02)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--runner_timeout_sec", type=int, default=300)
     ap.add_argument("--fx", type=float, default=535.4)
     ap.add_argument("--fy", type=float, default=539.2)
     ap.add_argument("--cx", type=float, default=320.1)
@@ -216,7 +217,18 @@ def main() -> None:
         print("[dynaslam-cmd]", " ".join(cmd))
         env = os.environ.copy()
         env["DYNASLAM_REALTIME"] = "0"
-        subprocess.run(cmd, check=True, cwd=str(run_dir), env=env)
+        try:
+            proc = subprocess.run(
+                cmd,
+                check=False,
+                cwd=str(run_dir),
+                env=env,
+                timeout=max(1, int(args.runner_timeout_sec)),
+            )
+            if proc.returncode != 0:
+                print(f"[warn] DynaSLAM exited with code={proc.returncode}. Will continue if trajectory exists.")
+        except subprocess.TimeoutExpired:
+            print(f"[warn] DynaSLAM timeout after {int(args.runner_timeout_sec)}s. Will continue if trajectory exists.")
 
     traj_path = run_dir / "CameraTrajectory.txt"
     traj = load_trajectory(traj_path)

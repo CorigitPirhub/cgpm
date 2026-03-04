@@ -4,7 +4,7 @@ import argparse
 import json
 import tarfile
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 import open3d as o3d
@@ -63,6 +63,40 @@ def save_point_cloud(path: Path, points: np.ndarray, normals: np.ndarray | None 
     o3d.io.write_point_cloud(str(path), pcd)
 
 
+def save_poisson_mesh_from_surface(
+    path: Path,
+    points: np.ndarray,
+    normals: np.ndarray,
+    voxel_size: float,
+    depth: int,
+) -> Dict[str, float]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(np.asarray(points, dtype=float))
+    pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals, dtype=float))
+    pcd = pcd.voxel_down_sample(max(0.5 * float(voxel_size), 0.01))
+
+    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd,
+        depth=int(depth),
+    )
+    densities = np.asarray(densities, dtype=float)
+    if densities.size > 0:
+        remove_mask = densities < np.quantile(densities, 0.05)
+        mesh.remove_vertices_by_mask(remove_mask)
+    bbox = pcd.get_axis_aligned_bounding_box()
+    bbox = bbox.scale(1.05, bbox.get_center())
+    mesh = mesh.crop(bbox)
+    mesh.compute_vertex_normals()
+    o3d.io.write_triangle_mesh(str(path), mesh)
+    return {
+        "mode": "mesh",
+        "surface_points": float(points.shape[0]),
+        "vertices": float(np.asarray(mesh.vertices).shape[0]),
+        "triangles": float(np.asarray(mesh.triangles).shape[0]),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_root", type=str, default="data/tum")
@@ -104,11 +138,49 @@ def main():
     parser.add_argument("--surface_consistency_min_neighbors", type=int, default=4)
     parser.add_argument("--surface_consistency_normal_cos", type=float, default=0.55)
     parser.add_argument("--surface_consistency_phi_diff", type=float, default=0.04)
+    parser.add_argument("--surface_snef_local_enable", action="store_true")
+    parser.add_argument("--surface_snef_block_size_cells", type=int, default=8)
+    parser.add_argument("--surface_snef_dscore_quantile", type=float, default=0.80)
+    parser.add_argument("--surface_snef_dscore_margin", type=float, default=0.05)
+    parser.add_argument("--surface_snef_free_ratio_quantile", type=float, default=0.85)
+    parser.add_argument("--surface_snef_free_ratio_margin", type=float, default=0.10)
+    parser.add_argument("--surface_snef_abs_phi_quantile", type=float, default=1.0)
+    parser.add_argument("--surface_snef_abs_phi_margin", type=float, default=0.0)
+    parser.add_argument("--surface_snef_min_keep_per_block", type=int, default=16)
+    parser.add_argument("--surface_snef_min_keep_ratio_per_block", type=float, default=0.0)
+    parser.add_argument("--surface_snef_min_candidates_per_block", type=int, default=10)
+    parser.add_argument("--surface_snef_anchor_rho_quantile", type=float, default=0.90)
+    parser.add_argument("--surface_snef_anchor_dscore_quantile", type=float, default=0.25)
+    parser.add_argument("--surface_snef_anchor_min_per_block", type=int, default=2)
+    parser.add_argument("--surface_two_stage_enable", action="store_true")
+    parser.add_argument("--surface_two_stage_geom_margin", type=float, default=0.02)
+    parser.add_argument("--surface_two_stage_dynamic_dscore_quantile", type=float, default=0.70)
+    parser.add_argument("--surface_two_stage_dynamic_free_quantile", type=float, default=0.70)
+    parser.add_argument("--surface_two_stage_dynamic_rho_quantile", type=float, default=0.40)
+    parser.add_argument("--surface_two_stage_dynamic_rho_margin", type=float, default=0.0)
+    parser.add_argument(
+        "--surface_two_stage_dynamic_require_low_rho",
+        dest="surface_two_stage_dynamic_require_low_rho",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--surface_two_stage_dynamic_no_require_low_rho",
+        dest="surface_two_stage_dynamic_require_low_rho",
+        action="store_false",
+    )
+    parser.set_defaults(surface_two_stage_dynamic_require_low_rho=True)
+    parser.add_argument("--surface_adaptive_enable", action="store_true")
+    parser.add_argument("--surface_adaptive_rho_ref", type=float, default=2.0)
+    parser.add_argument("--surface_adaptive_phi_min_scale", type=float, default=0.55)
+    parser.add_argument("--surface_adaptive_phi_max_scale", type=float, default=1.15)
+    parser.add_argument("--surface_adaptive_min_weight_gain", type=float, default=0.8)
+    parser.add_argument("--surface_adaptive_free_ratio_gain", type=float, default=0.5)
     parser.add_argument("--poisson_depth", type=int, default=8)
     parser.add_argument("--poisson_iters", type=int, default=1)
     parser.add_argument("--poisson_lr", type=float, default=0.08)
     parser.add_argument("--eikonal_lambda", type=float, default=0.02)
     parser.add_argument("--mesh_min_points", type=int, default=800)
+    parser.add_argument("--skip_mesh_export", action="store_true")
     parser.add_argument("--sigma_n0", type=float, default=0.18)
     parser.add_argument("--assoc_gate_threshold", type=float, default=14.0)
     parser.add_argument("--assoc_strict_surface_weight", type=float, default=0.8)
@@ -128,6 +200,7 @@ def main():
     parser.add_argument("--dyn_d2_ref", type=float, default=8.0)
     parser.add_argument("--dscore_ema", type=float, default=0.12)
     parser.add_argument("--residual_score_weight", type=float, default=0.25)
+    parser.add_argument("--integration_radius_scale", type=float, default=1.0)
     parser.add_argument("--raycast_clear_gain", type=float, default=0.0)
     parser.add_argument("--raycast_step_scale", type=float, default=1.0)
     parser.add_argument("--raycast_end_margin", type=float, default=0.12)
@@ -146,6 +219,19 @@ def main():
     parser.add_argument("--ablation_no_gradient", action="store_true")
     parser.add_argument("--save_dscore_map", action="store_true")
     parser.add_argument("--dscore_min_weight", type=float, default=0.2)
+    parser.add_argument("--stress_occlusion_ratio", type=float, default=0.0)
+    parser.add_argument(
+        "--stress_occlusion_mode",
+        type=str,
+        default="moving_band",
+        choices=["moving_band", "fixed_center"],
+    )
+    parser.add_argument(
+        "--stress_occlusion_axis",
+        type=str,
+        default="x",
+        choices=["x", "y"],
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -185,6 +271,35 @@ def main():
     cfg.surface.consistency_min_neighbors = int(max(0, args.surface_consistency_min_neighbors))
     cfg.surface.consistency_normal_cos = float(np.clip(args.surface_consistency_normal_cos, 0.0, 1.0))
     cfg.surface.consistency_phi_diff = float(max(1e-4, args.surface_consistency_phi_diff))
+    cfg.surface.snef_local_enable = bool(args.surface_snef_local_enable)
+    cfg.surface.snef_block_size_cells = int(max(1, args.surface_snef_block_size_cells))
+    cfg.surface.snef_dscore_quantile = float(np.clip(args.surface_snef_dscore_quantile, 0.0, 1.0))
+    cfg.surface.snef_dscore_margin = float(max(0.0, args.surface_snef_dscore_margin))
+    cfg.surface.snef_free_ratio_quantile = float(np.clip(args.surface_snef_free_ratio_quantile, 0.0, 1.0))
+    cfg.surface.snef_free_ratio_margin = float(max(0.0, args.surface_snef_free_ratio_margin))
+    cfg.surface.snef_abs_phi_quantile = float(np.clip(args.surface_snef_abs_phi_quantile, 0.0, 1.0))
+    cfg.surface.snef_abs_phi_margin = float(max(0.0, args.surface_snef_abs_phi_margin))
+    cfg.surface.snef_min_keep_per_block = int(max(1, args.surface_snef_min_keep_per_block))
+    cfg.surface.snef_min_keep_ratio_per_block = float(np.clip(args.surface_snef_min_keep_ratio_per_block, 0.0, 1.0))
+    cfg.surface.snef_min_candidates_per_block = int(max(1, args.surface_snef_min_candidates_per_block))
+    cfg.surface.snef_anchor_rho_quantile = float(np.clip(args.surface_snef_anchor_rho_quantile, 0.0, 1.0))
+    cfg.surface.snef_anchor_dscore_quantile = float(np.clip(args.surface_snef_anchor_dscore_quantile, 0.0, 1.0))
+    cfg.surface.snef_anchor_min_per_block = int(max(0, args.surface_snef_anchor_min_per_block))
+    cfg.surface.two_stage_enable = bool(args.surface_two_stage_enable)
+    cfg.surface.two_stage_geom_margin = float(max(0.0, args.surface_two_stage_geom_margin))
+    cfg.surface.two_stage_dynamic_dscore_quantile = float(np.clip(args.surface_two_stage_dynamic_dscore_quantile, 0.0, 1.0))
+    cfg.surface.two_stage_dynamic_free_quantile = float(np.clip(args.surface_two_stage_dynamic_free_quantile, 0.0, 1.0))
+    cfg.surface.two_stage_dynamic_rho_quantile = float(np.clip(args.surface_two_stage_dynamic_rho_quantile, 0.0, 1.0))
+    cfg.surface.two_stage_dynamic_rho_margin = float(max(0.0, args.surface_two_stage_dynamic_rho_margin))
+    cfg.surface.two_stage_dynamic_require_low_rho = bool(args.surface_two_stage_dynamic_require_low_rho)
+    cfg.surface.adaptive_enable = bool(args.surface_adaptive_enable)
+    cfg.surface.adaptive_rho_ref = float(max(1e-6, args.surface_adaptive_rho_ref))
+    cfg.surface.adaptive_phi_min_scale = float(np.clip(args.surface_adaptive_phi_min_scale, 0.25, 2.0))
+    cfg.surface.adaptive_phi_max_scale = float(np.clip(args.surface_adaptive_phi_max_scale, 0.25, 2.0))
+    if cfg.surface.adaptive_phi_max_scale < cfg.surface.adaptive_phi_min_scale:
+        cfg.surface.adaptive_phi_max_scale = cfg.surface.adaptive_phi_min_scale
+    cfg.surface.adaptive_min_weight_gain = float(max(0.0, args.surface_adaptive_min_weight_gain))
+    cfg.surface.adaptive_free_ratio_gain = float(np.clip(args.surface_adaptive_free_ratio_gain, 0.0, 0.99))
     cfg.surface.poisson_depth = int(args.poisson_depth)
     cfg.update.poisson_iters = int(max(0, args.poisson_iters))
     cfg.update.poisson_lr = float(max(1e-4, args.poisson_lr))
@@ -205,6 +320,7 @@ def main():
     cfg.update.dyn_d2_ref = float(args.dyn_d2_ref)
     cfg.update.dscore_ema = float(args.dscore_ema)
     cfg.update.residual_score_weight = float(args.residual_score_weight)
+    cfg.update.integration_radius_scale = float(np.clip(args.integration_radius_scale, 0.45, 1.0))
     cfg.update.raycast_clear_gain = float(args.raycast_clear_gain)
     cfg.update.raycast_step_scale = float(args.raycast_step_scale)
     cfg.update.raycast_end_margin = float(args.raycast_end_margin)
@@ -233,6 +349,9 @@ def main():
         max_points=args.max_points_per_frame,
         assoc_max_diff=0.02,
         normal_radius=0.08,
+        stress_occlusion_ratio=float(max(0.0, args.stress_occlusion_ratio)),
+        stress_occlusion_mode=str(args.stress_occlusion_mode),
+        stress_occlusion_axis=str(args.stress_occlusion_axis),
         seed=int(args.seed),
     )
     model = EGFDHMap3D(cfg)
@@ -294,7 +413,29 @@ def main():
 
     save_point_cloud(out_dir / "surface_points.ply", pred_points, pred_normals)
     save_point_cloud(out_dir / "reference_points.ply", gt_points, gt_normals)
-    mesh_info = model.save_poisson_mesh(out_dir / "surface_mesh.ply", min_points=int(args.mesh_min_points))
+    mesh_min_points = int(max(0, args.mesh_min_points))
+    if args.skip_mesh_export:
+        mesh_info = {
+            "mode": "skipped",
+            "surface_points": float(pred_points.shape[0]),
+            "vertices": 0.0,
+            "triangles": 0.0,
+        }
+    elif pred_points.shape[0] < mesh_min_points:
+        mesh_info = {
+            "mode": "pointcloud",
+            "surface_points": float(pred_points.shape[0]),
+            "vertices": 0.0,
+            "triangles": 0.0,
+        }
+    else:
+        mesh_info = save_poisson_mesh_from_surface(
+            out_dir / "surface_mesh.ply",
+            pred_points,
+            pred_normals,
+            voxel_size=float(cfg.map3d.voxel_size),
+            depth=int(cfg.surface.poisson_depth),
+        )
 
     if args.save_dscore_map:
         (
@@ -369,6 +510,33 @@ def main():
         "surface_consistency_min_neighbors": int(cfg.surface.consistency_min_neighbors),
         "surface_consistency_normal_cos": float(cfg.surface.consistency_normal_cos),
         "surface_consistency_phi_diff": float(cfg.surface.consistency_phi_diff),
+        "surface_snef_local_enable": bool(cfg.surface.snef_local_enable),
+        "surface_snef_block_size_cells": int(cfg.surface.snef_block_size_cells),
+        "surface_snef_dscore_quantile": float(cfg.surface.snef_dscore_quantile),
+        "surface_snef_dscore_margin": float(cfg.surface.snef_dscore_margin),
+        "surface_snef_free_ratio_quantile": float(cfg.surface.snef_free_ratio_quantile),
+        "surface_snef_free_ratio_margin": float(cfg.surface.snef_free_ratio_margin),
+        "surface_snef_abs_phi_quantile": float(cfg.surface.snef_abs_phi_quantile),
+        "surface_snef_abs_phi_margin": float(cfg.surface.snef_abs_phi_margin),
+        "surface_snef_min_keep_per_block": int(cfg.surface.snef_min_keep_per_block),
+        "surface_snef_min_keep_ratio_per_block": float(cfg.surface.snef_min_keep_ratio_per_block),
+        "surface_snef_min_candidates_per_block": int(cfg.surface.snef_min_candidates_per_block),
+        "surface_snef_anchor_rho_quantile": float(cfg.surface.snef_anchor_rho_quantile),
+        "surface_snef_anchor_dscore_quantile": float(cfg.surface.snef_anchor_dscore_quantile),
+        "surface_snef_anchor_min_per_block": int(cfg.surface.snef_anchor_min_per_block),
+        "surface_two_stage_enable": bool(cfg.surface.two_stage_enable),
+        "surface_two_stage_geom_margin": float(cfg.surface.two_stage_geom_margin),
+        "surface_two_stage_dynamic_dscore_quantile": float(cfg.surface.two_stage_dynamic_dscore_quantile),
+        "surface_two_stage_dynamic_free_quantile": float(cfg.surface.two_stage_dynamic_free_quantile),
+        "surface_two_stage_dynamic_rho_quantile": float(cfg.surface.two_stage_dynamic_rho_quantile),
+        "surface_two_stage_dynamic_rho_margin": float(cfg.surface.two_stage_dynamic_rho_margin),
+        "surface_two_stage_dynamic_require_low_rho": bool(cfg.surface.two_stage_dynamic_require_low_rho),
+        "surface_adaptive_enable": bool(cfg.surface.adaptive_enable),
+        "surface_adaptive_rho_ref": float(cfg.surface.adaptive_rho_ref),
+        "surface_adaptive_phi_min_scale": float(cfg.surface.adaptive_phi_min_scale),
+        "surface_adaptive_phi_max_scale": float(cfg.surface.adaptive_phi_max_scale),
+        "surface_adaptive_min_weight_gain": float(cfg.surface.adaptive_min_weight_gain),
+        "surface_adaptive_free_ratio_gain": float(cfg.surface.adaptive_free_ratio_gain),
         "huber_delta_n": float(cfg.assoc.huber_delta_n),
         "poisson_iters": int(cfg.update.poisson_iters),
         "poisson_lr": float(cfg.update.poisson_lr),
@@ -384,6 +552,7 @@ def main():
         "dyn_d2_ref": float(cfg.update.dyn_d2_ref),
         "dscore_ema": float(cfg.update.dscore_ema),
         "residual_score_weight": float(cfg.update.residual_score_weight),
+        "integration_radius_scale": float(cfg.update.integration_radius_scale),
         "raycast_clear_gain": float(cfg.update.raycast_clear_gain),
         "raycast_step_scale": float(cfg.update.raycast_step_scale),
         "raycast_end_margin": float(cfg.update.raycast_end_margin),
@@ -401,6 +570,9 @@ def main():
         "slam_use_gt_delta_odom": bool(cfg.predict.slam_use_gt_delta_odom),
         "ablation_no_evidence": bool(args.ablation_no_evidence),
         "ablation_no_gradient": bool(args.ablation_no_gradient),
+        "stress_occlusion_ratio": float(max(0.0, args.stress_occlusion_ratio)),
+        "stress_occlusion_mode": str(args.stress_occlusion_mode),
+        "stress_occlusion_axis": str(args.stress_occlusion_axis),
         "active_voxels": int(len(model.voxel_map)),
         "surface_points": int(pred_points.shape[0]),
         "reference_points": int(gt_points.shape[0]),
