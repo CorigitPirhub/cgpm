@@ -60,6 +60,7 @@ class Associator3D:
         voxel_map: VoxelHashMap3D,
         point_world: np.ndarray,
         normal_world: np.ndarray,
+        sensor_origin: np.ndarray | None = None,
     ) -> AssocMeasurement3D | None:
         idx = voxel_map.world_to_index(point_world)
         source_idx = self._find_surface_source(voxel_map, idx)
@@ -104,6 +105,7 @@ class Associator3D:
             r_n_raw = float(1.0 - np.clip(np.dot(normal_world, n_pred), -1.0, 1.0))
             r_n = self._huber(r_n_raw, delta=max(1e-4, self.cfg.assoc.huber_delta_n))
         else:
+            r_n_raw = 0.0
             r_n = 0.0
 
         sigma_unc = float(np.trace(cell.g_cov))
@@ -116,6 +118,49 @@ class Associator3D:
         else:
             sigma_d = self.cfg.assoc.sigma_d0 + self.cfg.assoc.beta_uncert * sigma_unc
             sigma_n = self.cfg.assoc.sigma_n0 + 0.5 * self.cfg.assoc.beta_uncert * sigma_unc
+
+        # Heteroscedastic association noise:
+        # degrade noisy observations (grazing/deep/inconsistent normals),
+        # while mildly rewarding high-quality incidence to improve geometric accuracy.
+        if bool(self.cfg.assoc.hetero_enable):
+            if sensor_origin is None:
+                v = np.asarray(point_world, dtype=float)
+            else:
+                v = np.asarray(point_world, dtype=float) - np.asarray(sensor_origin, dtype=float).reshape(3)
+            v_norm = float(np.linalg.norm(v))
+            if v_norm > 1e-9:
+                view_dir = v / v_norm
+            else:
+                view_dir = np.array([0.0, 0.0, 1.0], dtype=float)
+            # Use absolute incidence because surface orientation can be flipped.
+            cos_inc = float(np.clip(abs(np.dot(n_pred, -view_dir)), 0.0, 1.0))
+            inc_ref = float(np.clip(self.cfg.assoc.hetero_inc_ref_cos, 1e-3, 1.0))
+            depth_ref = float(max(1e-3, self.cfg.assoc.hetero_depth_ref_m))
+            normal_ref = float(max(1e-4, self.cfg.assoc.hetero_normal_ref))
+            inc_pen = float(np.clip((inc_ref - cos_inc) / inc_ref, 0.0, 1.0))
+            depth_pen = float(np.clip(v_norm / depth_ref, 0.0, 2.0))
+            normal_pen = float(np.clip(r_n_raw / normal_ref, 0.0, 2.0))
+            scale_raw = float(
+                1.0
+                + self.cfg.assoc.hetero_k_inc * inc_pen
+                + self.cfg.assoc.hetero_k_depth * depth_pen
+                + self.cfg.assoc.hetero_k_normal * normal_pen
+            )
+            good_cos = float(np.clip(self.cfg.assoc.hetero_good_cos, 0.0, 1.0))
+            good_bonus = float(np.clip(self.cfg.assoc.hetero_good_bonus, 0.0, 0.9))
+            if cos_inc > good_cos and good_cos < 0.999:
+                q = (cos_inc - good_cos) / max(1e-3, 1.0 - good_cos)
+                bonus = float(np.clip(1.0 - good_bonus * q, 0.5, 1.0))
+            else:
+                bonus = 1.0
+            d_min = float(max(1e-3, self.cfg.assoc.hetero_sigma_d_min_scale))
+            d_max = float(max(d_min, self.cfg.assoc.hetero_sigma_d_max_scale))
+            n_min = float(max(1e-3, self.cfg.assoc.hetero_sigma_n_min_scale))
+            n_max = float(max(n_min, self.cfg.assoc.hetero_sigma_n_max_scale))
+            scale_d = float(np.clip(scale_raw * bonus, d_min, d_max))
+            scale_n = float(np.clip(scale_raw * (0.95 * bonus), n_min, n_max))
+            sigma_d *= scale_d
+            sigma_n *= scale_n
         sigma_d = max(1e-4, float(sigma_d))
         sigma_n = max(1e-4, float(sigma_n))
 
@@ -139,6 +184,7 @@ class Associator3D:
         voxel_map: VoxelHashMap3D,
         points_world: np.ndarray,
         normals_world: np.ndarray,
+        sensor_origin: np.ndarray | None = None,
     ) -> Tuple[List[AssocMeasurement3D], List[AssocMeasurement3D], Dict[str, float]]:
         accepted: List[AssocMeasurement3D] = []
         rejected: List[AssocMeasurement3D] = []
@@ -147,7 +193,7 @@ class Associator3D:
         gate = float(self.cfg.assoc.gate_threshold)
         relax_gate = float(self.cfg.assoc.relax_gate_scale * gate)
         for p, n in zip(points_world, normals_world):
-            m = self._project_and_score(voxel_map, p, n)
+            m = self._project_and_score(voxel_map, p, n, sensor_origin=sensor_origin)
             if m is None:
                 continue
             if m.seed:

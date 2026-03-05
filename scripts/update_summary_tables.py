@@ -87,6 +87,13 @@ def pick_first_existing(paths: Sequence[Path]) -> Path | None:
     return None
 
 
+def pick_first_existing_pair(candidates: Sequence[Tuple[Path, Path]]) -> Tuple[Path | None, Path | None]:
+    for recon_path, dyn_path in candidates:
+        if recon_path.exists() and dyn_path.exists():
+            return recon_path, dyn_path
+    return None, None
+
+
 def build_bonn_summary_from_recon(recon_csv: Path) -> CsvData:
     data = read_csv(recon_csv)
     out_headers = [
@@ -291,7 +298,7 @@ def build_multiseed_significance_tum_bonn(
 
     _append("tum", tum_sig_rows)
     _append("bonn", bonn_sig_rows)
-    out.sort(key=lambda r: (str(r.get("dataset", "")), str(r.get("metric", ""))))
+    out.sort(key=lambda r: (str(r.get("dataset", "")), str(r.get("protocol", "")), str(r.get("metric", ""))))
     return out
 
 
@@ -300,11 +307,14 @@ def build_multiseed_mean_std_tum_bonn(
     bonn_recon_rows: List[Dict[str, str]],
 ) -> List[Dict[str, object]]:
     keep_metrics = ["fscore", "ghost_ratio", "chamfer", "ghost_tail_ratio"]
-    groups: Dict[Tuple[str, str, str, str], List[float]] = {}
+    groups: Dict[Tuple[str, str, str, str, str], List[float]] = {}
 
     def _ingest(dataset: str, rows: List[Dict[str, str]]) -> None:
         for r in rows:
             if str(r.get("scene_type", "")).strip().lower() != "dynamic":
+                continue
+            protocol = str(r.get("protocol", "")).strip().lower()
+            if protocol not in {"oracle", "slam"}:
                 continue
             method = str(r.get("method", "")).strip().lower()
             if method not in {"egf", "tsdf"}:
@@ -313,7 +323,7 @@ def build_multiseed_mean_std_tum_bonn(
                 v = to_float(r, metric, default=float("nan"))
                 if not math.isfinite(v):
                     continue
-                key = (dataset, "dynamic", method, metric)
+                key = (dataset, protocol, "dynamic", method, metric)
                 groups.setdefault(key, []).append(v)
 
     _ingest("tum", tum_recon_rows)
@@ -321,7 +331,7 @@ def build_multiseed_mean_std_tum_bonn(
 
     out: List[Dict[str, object]] = []
     for key in sorted(groups.keys()):
-        dataset, scene_type, method, metric = key
+        dataset, protocol, scene_type, method, metric = key
         vals = groups[key]
         if not vals:
             continue
@@ -335,6 +345,7 @@ def build_multiseed_mean_std_tum_bonn(
         out.append(
             {
                 "dataset": dataset,
+                "protocol": protocol,
                 "scene_type": scene_type,
                 "method": method,
                 "metric": metric,
@@ -440,6 +451,10 @@ def main() -> None:
     p10_probe_scan_csv = summary_root / "p10_probe_scan.csv"
     p10_tradeoff_png = project_root / "assets" / "acc_comp_tradeoff.png"
     p11_tradeoff_png = project_root / "assets" / "quality_speed_tradeoff_final.png"
+    p15_eff_rt_csv = summary_root / "local_mapping_efficiency_realtime.csv"
+    p15_eff_rt_json = summary_root / "local_mapping_efficiency_realtime.json"
+    p15_profile_md = post_cleanup_root / "p15_realtime" / "PROFILE.md"
+    p15_tradeoff_png = project_root / "assets" / "quality_speed_tradeoff_realtime.png"
     p4_tum_recon = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "reconstruction_metrics.csv"
     p4_tum_dyn = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "dynamic_metrics.csv"
     p4_tum_recon_agg = post_cleanup_root / "p4_multiseed_tum_final_v2" / "oracle" / "tables" / "reconstruction_metrics_agg.csv"
@@ -458,59 +473,78 @@ def main() -> None:
     p4_bonn_dyn_agg = post_cleanup_root / "p4_multiseed_bonn_final" / "slam" / "tables" / "dynamic_metrics_agg.csv"
     p4_bonn_sig = post_cleanup_root / "p4_multiseed_bonn_final" / "tables" / "significance.csv"
 
-    # Required baseline TUM tables. Canonical source preference:
-    # 1) --prefer_p4_final + p4_final_merged exists
-    # 2) p1_consistency_v2 exists
-    # 3) benchmark_tum (+ optional static_fix legacy override fallback)
+    # Protocol-isolated TUM sources.
+    tum_slam_recon_primary = post_cleanup_root / "p3_tum_expanded" / "slam" / "tables" / "reconstruction_metrics.csv"
+    tum_slam_dyn_primary = post_cleanup_root / "p3_tum_expanded" / "slam" / "tables" / "dynamic_metrics.csv"
+    tum_slam_recon_secondary = post_cleanup_root / "p0p1_verify_bench" / "slam" / "tables" / "reconstruction_metrics.csv"
+    tum_slam_dyn_secondary = post_cleanup_root / "p0p1_verify_bench" / "slam" / "tables" / "dynamic_metrics.csv"
+    tum_slam_recon_cached = summary_root / "tum_reconstruction_metrics_slam.csv"
+    tum_slam_dyn_cached = summary_root / "tum_dynamic_metrics_slam.csv"
+
+    oracle_candidates: List[Tuple[Path, Path]]
+    if bool(args.prefer_p4_final):
+        oracle_candidates = [
+            (p4_final_merged_recon, p4_final_merged_dyn),
+            (p1_consistency_v2_recon, p1_consistency_v2_dyn),
+            (base_recon, base_dyn),
+        ]
+    else:
+        oracle_candidates = [
+            (p1_consistency_v2_recon, p1_consistency_v2_dyn),
+            (p4_final_merged_recon, p4_final_merged_dyn),
+            (base_recon, base_dyn),
+        ]
+    slam_candidates: List[Tuple[Path, Path]] = [
+        (tum_slam_recon_primary, tum_slam_dyn_primary),
+        (tum_slam_recon_secondary, tum_slam_dyn_secondary),
+        (tum_slam_recon_cached, tum_slam_dyn_cached),
+    ]
+
+    oracle_recon_src, oracle_dyn_src = pick_first_existing_pair(oracle_candidates)
+    slam_recon_src, slam_dyn_src = pick_first_existing_pair(slam_candidates)
+
+    if oracle_recon_src is not None and oracle_dyn_src is not None:
+        oracle_recon_data = read_csv(oracle_recon_src)
+        oracle_dyn_data = read_csv(oracle_dyn_src)
+        write_csv(summary_root / "tum_reconstruction_metrics_oracle.csv", oracle_recon_data.headers, sort_rows(oracle_recon_data.rows))
+        outputs.append(str(summary_root / "tum_reconstruction_metrics_oracle.csv"))
+        write_csv(summary_root / "tum_dynamic_metrics_oracle.csv", oracle_dyn_data.headers, sort_rows(oracle_dyn_data.rows))
+        outputs.append(str(summary_root / "tum_dynamic_metrics_oracle.csv"))
+    else:
+        missing.append("tum_oracle_source_pair")
+
+    if slam_recon_src is not None and slam_dyn_src is not None:
+        slam_recon_data = read_csv(slam_recon_src)
+        slam_dyn_data = read_csv(slam_dyn_src)
+        write_csv(summary_root / "tum_reconstruction_metrics_slam.csv", slam_recon_data.headers, sort_rows(slam_recon_data.rows))
+        outputs.append(str(summary_root / "tum_reconstruction_metrics_slam.csv"))
+        write_csv(summary_root / "tum_dynamic_metrics_slam.csv", slam_dyn_data.headers, sort_rows(slam_dyn_data.rows))
+        outputs.append(str(summary_root / "tum_dynamic_metrics_slam.csv"))
+    else:
+        missing.append("tum_slam_source_pair")
+
+    # Canonical unsuffixed table remains protocol-safe and oracle-first for
+    # backward compatibility; protocol-specific tables are exported explicitly.
     main_source_recon: Path | None = None
     main_source_dyn: Path | None = None
-    if args.prefer_p4_final and p4_final_merged_recon.exists() and p4_final_merged_dyn.exists():
-        main_source_recon = p4_final_merged_recon
-        main_source_dyn = p4_final_merged_dyn
-    elif p1_consistency_v2_recon.exists() and p1_consistency_v2_dyn.exists():
-        main_source_recon = p1_consistency_v2_recon
-        main_source_dyn = p1_consistency_v2_dyn
+    if oracle_recon_src is not None and oracle_dyn_src is not None:
+        main_source_recon = oracle_recon_src
+        main_source_dyn = oracle_dyn_src
+    elif slam_recon_src is not None and slam_dyn_src is not None:
+        main_source_recon = slam_recon_src
+        main_source_dyn = slam_dyn_src
 
-    if main_source_recon is not None and main_source_dyn is not None:
-        base_recon_data = read_csv(main_source_recon)
-        base_dyn_data = read_csv(main_source_dyn)
-        write_csv(summary_root / "tum_reconstruction_metrics.csv", base_recon_data.headers, sort_rows(base_recon_data.rows))
-        outputs.append(str(summary_root / "tum_reconstruction_metrics.csv"))
-        write_csv(summary_root / "tum_dynamic_metrics.csv", base_dyn_data.headers, sort_rows(base_dyn_data.rows))
-        outputs.append(str(summary_root / "tum_dynamic_metrics.csv"))
-    else:
-        if not base_recon.exists() or not base_dyn.exists():
-            raise FileNotFoundError(
-                f"missing TUM benchmark tables under {post_cleanup_root}/benchmark_tum/tables; "
-                "run benchmark first."
-            )
-        base_recon_data = read_csv(base_recon)
-        base_dyn_data = read_csv(base_dyn)
+    if main_source_recon is None or main_source_dyn is None:
+        raise FileNotFoundError(
+            "missing both SLAM and oracle TUM source pairs; run benchmark first."
+        )
 
-        # Legacy fallback: baseline + static_fix overrides.
-        if static_recon.exists():
-            static_recon_data = read_csv(static_recon)
-            merged_recon_rows = merge_with_override(base_recon_data.rows, static_recon_data.rows)
-            write_csv(summary_root / "tum_reconstruction_metrics.csv", base_recon_data.headers, merged_recon_rows)
-            outputs.append(str(summary_root / "tum_reconstruction_metrics.csv"))
-            write_csv(summary_root / "tum_reconstruction_metrics_static_fix.csv", static_recon_data.headers, sort_rows(static_recon_data.rows))
-            outputs.append(str(summary_root / "tum_reconstruction_metrics_static_fix.csv"))
-        else:
-            write_csv(summary_root / "tum_reconstruction_metrics.csv", base_recon_data.headers, sort_rows(base_recon_data.rows))
-            outputs.append(str(summary_root / "tum_reconstruction_metrics.csv"))
-            missing.append(str(static_recon))
-
-        if static_dyn.exists():
-            static_dyn_data = read_csv(static_dyn)
-            merged_dyn_rows = merge_with_override(base_dyn_data.rows, static_dyn_data.rows)
-            write_csv(summary_root / "tum_dynamic_metrics.csv", base_dyn_data.headers, merged_dyn_rows)
-            outputs.append(str(summary_root / "tum_dynamic_metrics.csv"))
-            write_csv(summary_root / "tum_dynamic_metrics_static_fix.csv", static_dyn_data.headers, sort_rows(static_dyn_data.rows))
-            outputs.append(str(summary_root / "tum_dynamic_metrics_static_fix.csv"))
-        else:
-            write_csv(summary_root / "tum_dynamic_metrics.csv", base_dyn_data.headers, sort_rows(base_dyn_data.rows))
-            outputs.append(str(summary_root / "tum_dynamic_metrics.csv"))
-            missing.append(str(static_dyn))
+    base_recon_data = read_csv(main_source_recon)
+    base_dyn_data = read_csv(main_source_dyn)
+    write_csv(summary_root / "tum_reconstruction_metrics.csv", base_recon_data.headers, sort_rows(base_recon_data.rows))
+    outputs.append(str(summary_root / "tum_reconstruction_metrics.csv"))
+    write_csv(summary_root / "tum_dynamic_metrics.csv", base_dyn_data.headers, sort_rows(base_dyn_data.rows))
+    outputs.append(str(summary_root / "tum_dynamic_metrics.csv"))
 
     # Always export static_fix tables separately if available.
     if static_recon.exists():
@@ -527,57 +561,10 @@ def main() -> None:
     else:
         missing.append(str(static_dyn))
 
-    # Optional: tuned static override (freiburg1_xyz EGF) for stricter static target.
+    # Strong fairness constraint: do not patch/override single-method rows in canonical tables.
     tuned_static_summary = post_cleanup_root / "static_target_v2_mw19" / "summary.json"
     if tuned_static_summary.exists():
-        try:
-            tuned = json.loads(tuned_static_summary.read_text(encoding="utf-8"))
-            tuned_metrics = tuned.get("metrics", {}) if isinstance(tuned, dict) else {}
-            tuned_points = tuned.get("surface_points", "") if isinstance(tuned, dict) else ""
-
-            recon_main_path = summary_root / "tum_reconstruction_metrics.csv"
-            dyn_main_path = summary_root / "tum_dynamic_metrics.csv"
-            recon_main = read_csv(recon_main_path)
-            dyn_main = read_csv(dyn_main_path)
-
-            for row in recon_main.rows:
-                if row.get("sequence") == "rgbd_dataset_freiburg1_xyz" and row.get("method") == "egf":
-                    if tuned_points != "":
-                        row["points"] = str(tuned_points)
-                    for k in [
-                        "chamfer",
-                        "hausdorff",
-                        "precision",
-                        "recall",
-                        "fscore",
-                        "normal_consistency",
-                        "precision_2cm",
-                        "recall_2cm",
-                        "fscore_2cm",
-                        "precision_5cm",
-                        "recall_5cm",
-                        "fscore_5cm",
-                        "precision_10cm",
-                        "recall_10cm",
-                        "fscore_10cm",
-                    ]:
-                        if k in tuned_metrics:
-                            row[k] = str(tuned_metrics[k])
-                    break
-
-            if "fscore" in tuned_metrics:
-                for row in dyn_main.rows:
-                    if row.get("sequence") == "rgbd_dataset_freiburg1_xyz" and row.get("method") == "egf":
-                        row["fscore"] = str(tuned_metrics["fscore"])
-                        break
-
-            write_csv(recon_main_path, recon_main.headers, sort_rows(recon_main.rows))
-            write_csv(dyn_main_path, dyn_main.headers, sort_rows(dyn_main.rows))
-            outputs.append(str(recon_main_path))
-            outputs.append(str(dyn_main_path))
-        except Exception:
-            # Do not block summary generation if tuned override parsing fails.
-            missing.append(str(tuned_static_summary))
+        outputs.append(str(tuned_static_summary))
 
     # Static-fix delta table (requires static_fix + base).
     if static_recon.exists():
@@ -758,6 +745,14 @@ def main() -> None:
         outputs.append(str(p10_tradeoff_png))
     if p11_tradeoff_png.exists():
         outputs.append(str(p11_tradeoff_png))
+    if p15_eff_rt_csv.exists():
+        outputs.append(str(p15_eff_rt_csv))
+    if p15_eff_rt_json.exists():
+        outputs.append(str(p15_eff_rt_json))
+    if p15_profile_md.exists():
+        outputs.append(str(p15_profile_md))
+    if p15_tradeoff_png.exists():
+        outputs.append(str(p15_tradeoff_png))
 
     # Optional: multi-seed round tables (TUM + Bonn).
     copy_if_exists(
@@ -889,7 +884,7 @@ def main() -> None:
             read_csv(tum_recon_ms_path).rows,
             read_csv(bonn_recon_ms_path).rows,
         )
-        mean_std_headers = ["dataset", "scene_type", "method", "metric", "mean", "std", "n"]
+        mean_std_headers = ["dataset", "protocol", "scene_type", "method", "metric", "mean", "std", "n"]
         write_csv(summary_root / "multiseed_mean_std_tum_bonn.csv", mean_std_headers, mean_std_rows)
         outputs.append(str(summary_root / "multiseed_mean_std_tum_bonn.csv"))
 
@@ -1003,6 +998,10 @@ def main() -> None:
         p10_probe_scan_csv,
         p10_tradeoff_png,
         p11_tradeoff_png,
+        p15_eff_rt_csv,
+        p15_eff_rt_json,
+        p15_profile_md,
+        p15_tradeoff_png,
     ]:
         if p.exists():
             outputs.append(str(p))

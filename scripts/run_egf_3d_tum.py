@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import tarfile
+import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -114,7 +115,8 @@ def main():
     slam_delta_group = parser.add_mutually_exclusive_group()
     slam_delta_group.add_argument("--slam_use_gt_delta_odom", dest="slam_use_gt_delta_odom", action="store_true")
     slam_delta_group.add_argument("--slam_no_gt_delta_odom", dest="slam_use_gt_delta_odom", action="store_false")
-    parser.set_defaults(slam_use_gt_delta_odom=True)
+    # Fairness default: do not use GT delta in SLAM mode unless explicitly requested.
+    parser.set_defaults(slam_use_gt_delta_odom=False)
     parser.add_argument("--voxel_size", type=float, default=0.05)
     parser.add_argument("--truncation", type=float, default=None)
     parser.add_argument("--rho_decay", type=float, default=None)
@@ -131,6 +133,9 @@ def main():
     parser.add_argument("--surface_use_zero_crossing", dest="surface_use_zero_crossing", action="store_true")
     parser.add_argument("--surface_no_zero_crossing", dest="surface_use_zero_crossing", action="store_false")
     parser.set_defaults(surface_use_zero_crossing=True)
+    parser.add_argument("--surface_use_phi_geo_channel", dest="surface_use_phi_geo_channel", action="store_true")
+    parser.add_argument("--surface_no_phi_geo_channel", dest="surface_use_phi_geo_channel", action="store_false")
+    parser.set_defaults(surface_use_phi_geo_channel=False)
     parser.add_argument("--surface_zero_crossing_max_offset", type=float, default=0.06)
     parser.add_argument("--surface_zero_crossing_phi_gate", type=float, default=0.05)
     parser.add_argument("--surface_consistency_enable", action="store_true")
@@ -175,6 +180,16 @@ def main():
     parser.add_argument("--surface_adaptive_phi_max_scale", type=float, default=1.15)
     parser.add_argument("--surface_adaptive_min_weight_gain", type=float, default=0.8)
     parser.add_argument("--surface_adaptive_free_ratio_gain", type=float, default=0.5)
+    parser.add_argument("--surface_lzcd_apply_in_extraction", action="store_true")
+    parser.add_argument("--surface_lzcd_bias_scale", type=float, default=1.0)
+    parser.add_argument("--surface_stcg_enable", action="store_true")
+    parser.add_argument("--surface_stcg_min_score", type=float, default=0.35)
+    parser.add_argument("--surface_stcg_rho_ref", type=float, default=1.8)
+    parser.add_argument("--surface_stcg_free_shrink", type=float, default=0.45)
+    parser.add_argument("--surface_stcg_phi_shrink", type=float, default=0.25)
+    parser.add_argument("--surface_stcg_dscore_shrink", type=float, default=0.30)
+    parser.add_argument("--surface_stcg_weight_gain", type=float, default=0.50)
+    parser.add_argument("--surface_stcg_static_protect", type=float, default=0.70)
     parser.add_argument("--poisson_depth", type=int, default=8)
     parser.add_argument("--poisson_iters", type=int, default=1)
     parser.add_argument("--poisson_lr", type=float, default=0.08)
@@ -182,7 +197,23 @@ def main():
     parser.add_argument("--mesh_min_points", type=int, default=800)
     parser.add_argument("--skip_mesh_export", action="store_true")
     parser.add_argument("--sigma_n0", type=float, default=0.18)
+    parser.add_argument("--assoc_hetero_enable", dest="assoc_hetero_enable", action="store_true")
+    parser.add_argument("--assoc_hetero_disable", dest="assoc_hetero_enable", action="store_false")
+    parser.set_defaults(assoc_hetero_enable=False)
+    parser.add_argument("--assoc_hetero_inc_ref_cos", type=float, default=0.65)
+    parser.add_argument("--assoc_hetero_depth_ref_m", type=float, default=2.5)
+    parser.add_argument("--assoc_hetero_normal_ref", type=float, default=0.20)
+    parser.add_argument("--assoc_hetero_k_inc", type=float, default=0.45)
+    parser.add_argument("--assoc_hetero_k_depth", type=float, default=0.12)
+    parser.add_argument("--assoc_hetero_k_normal", type=float, default=0.55)
+    parser.add_argument("--assoc_hetero_good_cos", type=float, default=0.90)
+    parser.add_argument("--assoc_hetero_good_bonus", type=float, default=0.20)
+    parser.add_argument("--assoc_hetero_sigma_d_min_scale", type=float, default=0.75)
+    parser.add_argument("--assoc_hetero_sigma_d_max_scale", type=float, default=1.75)
+    parser.add_argument("--assoc_hetero_sigma_n_min_scale", type=float, default=0.70)
+    parser.add_argument("--assoc_hetero_sigma_n_max_scale", type=float, default=2.20)
     parser.add_argument("--assoc_gate_threshold", type=float, default=14.0)
+    parser.add_argument("--assoc_search_radius_cells", type=int, default=2)
     parser.add_argument("--assoc_strict_surface_weight", type=float, default=0.8)
     parser.add_argument("--huber_delta_n", type=float, default=0.20)
     parser.add_argument("--frontier_boost", type=float, default=0.45)
@@ -201,6 +232,33 @@ def main():
     parser.add_argument("--dscore_ema", type=float, default=0.12)
     parser.add_argument("--residual_score_weight", type=float, default=0.25)
     parser.add_argument("--integration_radius_scale", type=float, default=1.0)
+    parser.add_argument("--integration_min_radius_vox", type=float, default=1.2)
+    parser.add_argument("--decay_interval_frames", type=int, default=1)
+    parser.add_argument("--lzcd_enable", action="store_true")
+    parser.add_argument("--lzcd_interval", type=int, default=2)
+    parser.add_argument("--lzcd_radius_cells", type=int, default=1)
+    parser.add_argument("--lzcd_min_neighbors", type=int, default=6)
+    parser.add_argument("--lzcd_min_phi_w", type=float, default=0.40)
+    parser.add_argument("--lzcd_min_rho", type=float, default=0.05)
+    parser.add_argument("--lzcd_max_dscore", type=float, default=0.85)
+    parser.add_argument("--lzcd_neighbor_phi_gate", type=float, default=0.25)
+    parser.add_argument("--lzcd_normal_cos_min", type=float, default=0.45)
+    parser.add_argument("--lzcd_bias_alpha", type=float, default=0.18)
+    parser.add_argument("--lzcd_correction_gain", type=float, default=0.35)
+    parser.add_argument("--lzcd_max_bias", type=float, default=0.06)
+    parser.add_argument("--lzcd_max_step", type=float, default=0.02)
+    parser.add_argument("--lzcd_trim_quantile", type=float, default=0.75)
+    parser.add_argument("--lzcd_use_geo_channel", dest="lzcd_use_geo_channel", action="store_true")
+    parser.add_argument("--lzcd_no_geo_channel", dest="lzcd_use_geo_channel", action="store_false")
+    parser.set_defaults(lzcd_use_geo_channel=True)
+    parser.add_argument("--stcg_enable", action="store_true")
+    parser.add_argument("--stcg_alpha", type=float, default=0.12)
+    parser.add_argument("--stcg_conflict_weight", type=float, default=0.60)
+    parser.add_argument("--stcg_residual_weight", type=float, default=0.25)
+    parser.add_argument("--stcg_osc_weight", type=float, default=0.15)
+    parser.add_argument("--stcg_free_ratio_ref", type=float, default=0.90)
+    parser.add_argument("--stcg_on_thresh", type=float, default=0.58)
+    parser.add_argument("--stcg_off_thresh", type=float, default=0.42)
     parser.add_argument("--raycast_clear_gain", type=float, default=0.0)
     parser.add_argument("--raycast_step_scale", type=float, default=1.0)
     parser.add_argument("--raycast_end_margin", type=float, default=0.12)
@@ -264,6 +322,7 @@ def main():
     cfg.surface.prune_residual_min = float(args.surface_prune_residual_min)
     cfg.surface.max_clear_hits = float(args.surface_max_clear_hits)
     cfg.surface.use_zero_crossing = bool(args.surface_use_zero_crossing)
+    cfg.surface.use_phi_geo_channel = bool(args.surface_use_phi_geo_channel)
     cfg.surface.zero_crossing_max_offset = float(max(0.0, args.surface_zero_crossing_max_offset))
     cfg.surface.zero_crossing_phi_gate = float(max(1e-4, args.surface_zero_crossing_phi_gate))
     cfg.surface.consistency_enable = bool(args.surface_consistency_enable)
@@ -300,13 +359,37 @@ def main():
         cfg.surface.adaptive_phi_max_scale = cfg.surface.adaptive_phi_min_scale
     cfg.surface.adaptive_min_weight_gain = float(max(0.0, args.surface_adaptive_min_weight_gain))
     cfg.surface.adaptive_free_ratio_gain = float(np.clip(args.surface_adaptive_free_ratio_gain, 0.0, 0.99))
+    cfg.surface.lzcd_apply_in_extraction = bool(args.surface_lzcd_apply_in_extraction)
+    cfg.surface.lzcd_bias_scale = float(max(0.0, args.surface_lzcd_bias_scale))
+    cfg.surface.stcg_enable = bool(args.surface_stcg_enable)
+    cfg.surface.stcg_min_score = float(np.clip(args.surface_stcg_min_score, 0.0, 1.0))
+    cfg.surface.stcg_rho_ref = float(max(1e-6, args.surface_stcg_rho_ref))
+    cfg.surface.stcg_free_shrink = float(np.clip(args.surface_stcg_free_shrink, 0.0, 1.0))
+    cfg.surface.stcg_phi_shrink = float(np.clip(args.surface_stcg_phi_shrink, 0.0, 1.0))
+    cfg.surface.stcg_dscore_shrink = float(np.clip(args.surface_stcg_dscore_shrink, 0.0, 1.0))
+    cfg.surface.stcg_weight_gain = float(max(0.0, args.surface_stcg_weight_gain))
+    cfg.surface.stcg_static_protect = float(np.clip(args.surface_stcg_static_protect, 0.0, 1.0))
     cfg.surface.poisson_depth = int(args.poisson_depth)
     cfg.update.poisson_iters = int(max(0, args.poisson_iters))
     cfg.update.poisson_lr = float(max(1e-4, args.poisson_lr))
     cfg.update.eikonal_lambda = float(max(0.0, args.eikonal_lambda))
     cfg.assoc.gate_threshold = float(max(1.0, args.assoc_gate_threshold))
+    cfg.assoc.search_radius_cells = int(max(0, args.assoc_search_radius_cells))
     cfg.assoc.strict_surface_weight = float(max(0.1, args.assoc_strict_surface_weight))
     cfg.assoc.sigma_n0 = float(args.sigma_n0)
+    cfg.assoc.hetero_enable = bool(args.assoc_hetero_enable)
+    cfg.assoc.hetero_inc_ref_cos = float(np.clip(args.assoc_hetero_inc_ref_cos, 1e-3, 1.0))
+    cfg.assoc.hetero_depth_ref_m = float(max(1e-3, args.assoc_hetero_depth_ref_m))
+    cfg.assoc.hetero_normal_ref = float(max(1e-4, args.assoc_hetero_normal_ref))
+    cfg.assoc.hetero_k_inc = float(max(0.0, args.assoc_hetero_k_inc))
+    cfg.assoc.hetero_k_depth = float(max(0.0, args.assoc_hetero_k_depth))
+    cfg.assoc.hetero_k_normal = float(max(0.0, args.assoc_hetero_k_normal))
+    cfg.assoc.hetero_good_cos = float(np.clip(args.assoc_hetero_good_cos, 0.0, 1.0))
+    cfg.assoc.hetero_good_bonus = float(np.clip(args.assoc_hetero_good_bonus, 0.0, 0.9))
+    cfg.assoc.hetero_sigma_d_min_scale = float(max(1e-3, args.assoc_hetero_sigma_d_min_scale))
+    cfg.assoc.hetero_sigma_d_max_scale = float(max(cfg.assoc.hetero_sigma_d_min_scale, args.assoc_hetero_sigma_d_max_scale))
+    cfg.assoc.hetero_sigma_n_min_scale = float(max(1e-3, args.assoc_hetero_sigma_n_min_scale))
+    cfg.assoc.hetero_sigma_n_max_scale = float(max(cfg.assoc.hetero_sigma_n_min_scale, args.assoc_hetero_sigma_n_max_scale))
     cfg.assoc.huber_delta_n = float(args.huber_delta_n)
     cfg.assoc.seed_fallback_enable = bool(args.assoc_seed_fallback_enable)
     cfg.assoc.seed_fallback_low_support_scale = float(max(0.0, args.assoc_seed_fallback_low_support_scale))
@@ -320,7 +403,32 @@ def main():
     cfg.update.dyn_d2_ref = float(args.dyn_d2_ref)
     cfg.update.dscore_ema = float(args.dscore_ema)
     cfg.update.residual_score_weight = float(args.residual_score_weight)
-    cfg.update.integration_radius_scale = float(np.clip(args.integration_radius_scale, 0.45, 1.0))
+    cfg.update.integration_radius_scale = float(np.clip(args.integration_radius_scale, 0.20, 1.0))
+    cfg.update.integration_min_radius_vox = float(max(0.6, args.integration_min_radius_vox))
+    cfg.update.decay_interval_frames = int(max(1, args.decay_interval_frames))
+    cfg.update.lzcd_enable = bool(args.lzcd_enable)
+    cfg.update.lzcd_interval = int(max(1, args.lzcd_interval))
+    cfg.update.lzcd_radius_cells = int(max(1, args.lzcd_radius_cells))
+    cfg.update.lzcd_min_neighbors = int(max(3, args.lzcd_min_neighbors))
+    cfg.update.lzcd_min_phi_w = float(max(0.0, args.lzcd_min_phi_w))
+    cfg.update.lzcd_min_rho = float(max(0.0, args.lzcd_min_rho))
+    cfg.update.lzcd_max_dscore = float(np.clip(args.lzcd_max_dscore, 0.0, 1.0))
+    cfg.update.lzcd_neighbor_phi_gate = float(max(1e-4, args.lzcd_neighbor_phi_gate))
+    cfg.update.lzcd_normal_cos_min = float(np.clip(args.lzcd_normal_cos_min, 0.0, 1.0))
+    cfg.update.lzcd_bias_alpha = float(np.clip(args.lzcd_bias_alpha, 0.01, 0.95))
+    cfg.update.lzcd_correction_gain = float(np.clip(args.lzcd_correction_gain, 0.0, 1.0))
+    cfg.update.lzcd_max_bias = float(max(1e-4, args.lzcd_max_bias))
+    cfg.update.lzcd_max_step = float(max(1e-4, args.lzcd_max_step))
+    cfg.update.lzcd_trim_quantile = float(np.clip(args.lzcd_trim_quantile, 0.55, 1.0))
+    cfg.update.lzcd_use_geo_channel = bool(args.lzcd_use_geo_channel)
+    cfg.update.stcg_enable = bool(args.stcg_enable)
+    cfg.update.stcg_alpha = float(np.clip(args.stcg_alpha, 0.01, 0.95))
+    cfg.update.stcg_conflict_weight = float(max(0.0, args.stcg_conflict_weight))
+    cfg.update.stcg_residual_weight = float(max(0.0, args.stcg_residual_weight))
+    cfg.update.stcg_osc_weight = float(max(0.0, args.stcg_osc_weight))
+    cfg.update.stcg_free_ratio_ref = float(max(1e-6, args.stcg_free_ratio_ref))
+    cfg.update.stcg_on_thresh = float(np.clip(args.stcg_on_thresh, 0.05, 0.95))
+    cfg.update.stcg_off_thresh = float(np.clip(args.stcg_off_thresh, 0.01, 0.90))
     cfg.update.raycast_clear_gain = float(args.raycast_clear_gain)
     cfg.update.raycast_step_scale = float(args.raycast_step_scale)
     cfg.update.raycast_end_margin = float(args.raycast_end_margin)
@@ -369,17 +477,30 @@ def main():
     odom_rmse: List[float] = []
     odom_valid: List[float] = []
     rng = np.random.default_rng(int(args.seed))
+    run_wall_t0 = time.perf_counter()
+    step_total_sec = 0.0
+    step_predict_sec = 0.0
+    step_assoc_sec = 0.0
+    step_update_sec = 0.0
+    step_map_refine_sec = 0.0
 
     total = len(stream)
     print(f"[run] sequence={seq_dir.name} frames={total}")
     for i, frame in enumerate(stream):
+        t_step0 = time.perf_counter()
         stat = model.step(frame, use_gt_pose=args.use_gt_pose)
+        t_step1 = time.perf_counter()
         assoc_ratios.append(float(stat["assoc_ratio"]))
         touched_voxels.append(float(stat["touched_voxels"]))
         dyn_scores.append(float(stat.get("dynamic_score", 0.0)))
         odom_fitness.append(float(stat.get("odom_fitness", 0.0)))
         odom_rmse.append(float(stat.get("odom_rmse", 0.0)))
         odom_valid.append(float(stat.get("odom_valid", 0.0)))
+        step_total_sec += float(stat.get("step_total_sec", t_step1 - t_step0))
+        step_predict_sec += float(stat.get("predict_sec", 0.0))
+        step_assoc_sec += float(stat.get("associate_sec", 0.0))
+        step_update_sec += float(stat.get("update_sec", 0.0))
+        step_map_refine_sec += float(stat.get("map_refine_sec", 0.0))
 
         ref = frame.points_world
         ref_n = frame.normals_world
@@ -400,9 +521,12 @@ def main():
                 f"odom={stat.get('odom_valid', 0.0):.0f}/{stat.get('odom_fitness', 0.0):.2f}"
             )
 
+    t_extract0 = time.perf_counter()
     pred_points, pred_normals = model.extract_surface_points()
+    extract_total_sec = float(time.perf_counter() - t_extract0)
     gt_points = np.vstack(gt_refs) if gt_refs else np.zeros((0, 3), dtype=float)
     gt_normals = np.vstack(gt_norm_refs) if gt_norm_refs else np.zeros((0, 3), dtype=float)
+    t_eval0 = time.perf_counter()
     metrics = compute_reconstruction_metrics(
         pred_points,
         gt_points,
@@ -410,7 +534,9 @@ def main():
         pred_normals=pred_normals,
         gt_normals=gt_normals,
     )
+    eval_recon_sec = float(time.perf_counter() - t_eval0)
 
+    t_io0 = time.perf_counter()
     save_point_cloud(out_dir / "surface_points.ply", pred_points, pred_normals)
     save_point_cloud(out_dir / "reference_points.ply", gt_points, gt_normals)
     mesh_min_points = int(max(0, args.mesh_min_points))
@@ -436,6 +562,7 @@ def main():
             voxel_size=float(cfg.map3d.voxel_size),
             depth=int(cfg.surface.poisson_depth),
         )
+    io_mesh_sec = float(time.perf_counter() - t_io0)
 
     if args.save_dscore_map:
         (
@@ -474,14 +601,20 @@ def main():
 
     trajectory = model.get_trajectory()
     gt_trajectory = np.asarray(gt_traj, dtype=float) if gt_traj else np.zeros((0, 4, 4), dtype=float)
+    t_eval_traj0 = time.perf_counter()
     traj_metrics = compute_trajectory_metrics(
         pred_poses=trajectory,
         gt_poses=gt_trajectory,
         step=1,
         align_first=True,
     )
+    eval_traj_sec = float(time.perf_counter() - t_eval_traj0)
+    t_io_traj0 = time.perf_counter()
     np.save(out_dir / "trajectory.npy", trajectory)
     np.save(out_dir / "gt_trajectory.npy", gt_trajectory)
+    io_traj_sec = float(time.perf_counter() - t_io_traj0)
+    runtime_model = model.get_runtime_stats()
+    wall_total_sec = float(time.perf_counter() - run_wall_t0)
 
     summary = {
         "sequence": seq_dir.name,
@@ -494,7 +627,21 @@ def main():
         "rho_decay": float(cfg.map3d.rho_decay),
         "phi_w_decay": float(cfg.map3d.phi_w_decay),
         "sigma_n0": float(cfg.assoc.sigma_n0),
+        "assoc_hetero_enable": bool(cfg.assoc.hetero_enable),
+        "assoc_hetero_inc_ref_cos": float(cfg.assoc.hetero_inc_ref_cos),
+        "assoc_hetero_depth_ref_m": float(cfg.assoc.hetero_depth_ref_m),
+        "assoc_hetero_normal_ref": float(cfg.assoc.hetero_normal_ref),
+        "assoc_hetero_k_inc": float(cfg.assoc.hetero_k_inc),
+        "assoc_hetero_k_depth": float(cfg.assoc.hetero_k_depth),
+        "assoc_hetero_k_normal": float(cfg.assoc.hetero_k_normal),
+        "assoc_hetero_good_cos": float(cfg.assoc.hetero_good_cos),
+        "assoc_hetero_good_bonus": float(cfg.assoc.hetero_good_bonus),
+        "assoc_hetero_sigma_d_min_scale": float(cfg.assoc.hetero_sigma_d_min_scale),
+        "assoc_hetero_sigma_d_max_scale": float(cfg.assoc.hetero_sigma_d_max_scale),
+        "assoc_hetero_sigma_n_min_scale": float(cfg.assoc.hetero_sigma_n_min_scale),
+        "assoc_hetero_sigma_n_max_scale": float(cfg.assoc.hetero_sigma_n_max_scale),
         "assoc_gate_threshold": float(cfg.assoc.gate_threshold),
+        "assoc_search_radius_cells": int(cfg.assoc.search_radius_cells),
         "assoc_strict_surface_weight": float(cfg.assoc.strict_surface_weight),
         "surface_max_dscore": float(cfg.surface.max_d_score),
         "surface_max_age_frames": int(cfg.surface.max_age_frames),
@@ -503,6 +650,7 @@ def main():
         "surface_prune_residual_min": float(cfg.surface.prune_residual_min),
         "surface_max_clear_hits": float(cfg.surface.max_clear_hits),
         "surface_use_zero_crossing": bool(cfg.surface.use_zero_crossing),
+        "surface_use_phi_geo_channel": bool(cfg.surface.use_phi_geo_channel),
         "surface_zero_crossing_max_offset": float(cfg.surface.zero_crossing_max_offset),
         "surface_zero_crossing_phi_gate": float(cfg.surface.zero_crossing_phi_gate),
         "surface_consistency_enable": bool(cfg.surface.consistency_enable),
@@ -537,6 +685,16 @@ def main():
         "surface_adaptive_phi_max_scale": float(cfg.surface.adaptive_phi_max_scale),
         "surface_adaptive_min_weight_gain": float(cfg.surface.adaptive_min_weight_gain),
         "surface_adaptive_free_ratio_gain": float(cfg.surface.adaptive_free_ratio_gain),
+        "surface_lzcd_apply_in_extraction": bool(cfg.surface.lzcd_apply_in_extraction),
+        "surface_lzcd_bias_scale": float(cfg.surface.lzcd_bias_scale),
+        "surface_stcg_enable": bool(cfg.surface.stcg_enable),
+        "surface_stcg_min_score": float(cfg.surface.stcg_min_score),
+        "surface_stcg_rho_ref": float(cfg.surface.stcg_rho_ref),
+        "surface_stcg_free_shrink": float(cfg.surface.stcg_free_shrink),
+        "surface_stcg_phi_shrink": float(cfg.surface.stcg_phi_shrink),
+        "surface_stcg_dscore_shrink": float(cfg.surface.stcg_dscore_shrink),
+        "surface_stcg_weight_gain": float(cfg.surface.stcg_weight_gain),
+        "surface_stcg_static_protect": float(cfg.surface.stcg_static_protect),
         "huber_delta_n": float(cfg.assoc.huber_delta_n),
         "poisson_iters": int(cfg.update.poisson_iters),
         "poisson_lr": float(cfg.update.poisson_lr),
@@ -553,6 +711,31 @@ def main():
         "dscore_ema": float(cfg.update.dscore_ema),
         "residual_score_weight": float(cfg.update.residual_score_weight),
         "integration_radius_scale": float(cfg.update.integration_radius_scale),
+        "integration_min_radius_vox": float(cfg.update.integration_min_radius_vox),
+        "decay_interval_frames": int(cfg.update.decay_interval_frames),
+        "lzcd_enable": bool(cfg.update.lzcd_enable),
+        "lzcd_interval": int(cfg.update.lzcd_interval),
+        "lzcd_radius_cells": int(cfg.update.lzcd_radius_cells),
+        "lzcd_min_neighbors": int(cfg.update.lzcd_min_neighbors),
+        "lzcd_min_phi_w": float(cfg.update.lzcd_min_phi_w),
+        "lzcd_min_rho": float(cfg.update.lzcd_min_rho),
+        "lzcd_max_dscore": float(cfg.update.lzcd_max_dscore),
+        "lzcd_neighbor_phi_gate": float(cfg.update.lzcd_neighbor_phi_gate),
+        "lzcd_normal_cos_min": float(cfg.update.lzcd_normal_cos_min),
+        "lzcd_bias_alpha": float(cfg.update.lzcd_bias_alpha),
+        "lzcd_correction_gain": float(cfg.update.lzcd_correction_gain),
+        "lzcd_max_bias": float(cfg.update.lzcd_max_bias),
+        "lzcd_max_step": float(cfg.update.lzcd_max_step),
+        "lzcd_trim_quantile": float(cfg.update.lzcd_trim_quantile),
+        "lzcd_use_geo_channel": bool(cfg.update.lzcd_use_geo_channel),
+        "stcg_enable": bool(cfg.update.stcg_enable),
+        "stcg_alpha": float(cfg.update.stcg_alpha),
+        "stcg_conflict_weight": float(cfg.update.stcg_conflict_weight),
+        "stcg_residual_weight": float(cfg.update.stcg_residual_weight),
+        "stcg_osc_weight": float(cfg.update.stcg_osc_weight),
+        "stcg_free_ratio_ref": float(cfg.update.stcg_free_ratio_ref),
+        "stcg_on_thresh": float(cfg.update.stcg_on_thresh),
+        "stcg_off_thresh": float(cfg.update.stcg_off_thresh),
         "raycast_clear_gain": float(cfg.update.raycast_clear_gain),
         "raycast_step_scale": float(cfg.update.raycast_step_scale),
         "raycast_end_margin": float(cfg.update.raycast_end_margin),
@@ -582,6 +765,22 @@ def main():
         "odom_fitness_mean": float(np.mean(odom_fitness)) if odom_fitness else 0.0,
         "odom_rmse_mean": float(np.mean(odom_rmse)) if odom_rmse else 0.0,
         "odom_valid_ratio": float(np.mean(odom_valid)) if odom_valid else 0.0,
+        "runtime": {
+            "wall_total_sec": float(wall_total_sec),
+            "mapping_step_total_sec": float(step_total_sec),
+            "mapping_step_mean_sec": float(step_total_sec / max(1, int(total))),
+            "mapping_fps": float(total / step_total_sec) if step_total_sec > 1e-9 else 0.0,
+            "extract_total_sec": float(extract_total_sec),
+            "eval_recon_sec": float(eval_recon_sec),
+            "eval_traj_sec": float(eval_traj_sec),
+            "io_mesh_sec": float(io_mesh_sec),
+            "io_traj_sec": float(io_traj_sec),
+            "stage_predict_sec": float(step_predict_sec),
+            "stage_associate_sec": float(step_assoc_sec),
+            "stage_update_sec": float(step_update_sec),
+            "stage_map_refine_sec": float(step_map_refine_sec),
+            "model_runtime_stats": runtime_model,
+        },
         "trajectory_metrics": {
             "ate_rmse": float(traj_metrics.ate_rmse),
             "ate_mean": float(traj_metrics.ate_mean),

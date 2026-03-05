@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Dict, Tuple
 
 import numpy as np
@@ -38,6 +39,13 @@ class EGFDHMap3D:
         )
         self.last_delta_cam: np.ndarray = np.eye(4, dtype=float)
         self.odom_valid_ratio: float = 0.0
+        self.runtime_totals: Dict[str, float] = {
+            "step_total_sec": 0.0,
+            "predict_sec": 0.0,
+            "map_refine_sec": 0.0,
+            "associate_sec": 0.0,
+            "update_sec": 0.0,
+        }
 
     def _delta_from_gt(self, t_wc: np.ndarray) -> np.ndarray:
         if self.prev_gt_pose is None:
@@ -209,6 +217,7 @@ class EGFDHMap3D:
             prune_free_min=self.cfg.surface.prune_free_min,
             prune_residual_min=self.cfg.surface.prune_residual_min,
             max_clear_hits=self.cfg.surface.max_clear_hits,
+            use_phi_geo_channel=bool(self.cfg.surface.use_phi_geo_channel),
             snef_local_enable=bool(self.cfg.surface.snef_local_enable),
             snef_block_size_cells=int(self.cfg.surface.snef_block_size_cells),
             snef_dscore_quantile=float(self.cfg.surface.snef_dscore_quantile),
@@ -236,6 +245,16 @@ class EGFDHMap3D:
             adaptive_phi_max_scale=float(self.cfg.surface.adaptive_phi_max_scale),
             adaptive_min_weight_gain=float(self.cfg.surface.adaptive_min_weight_gain),
             adaptive_free_ratio_gain=float(self.cfg.surface.adaptive_free_ratio_gain),
+            lzcd_apply_in_extraction=bool(self.cfg.surface.lzcd_apply_in_extraction),
+            lzcd_bias_scale=float(self.cfg.surface.lzcd_bias_scale),
+            stcg_enable=bool(self.cfg.surface.stcg_enable),
+            stcg_min_score=float(self.cfg.surface.stcg_min_score),
+            stcg_rho_ref=float(self.cfg.surface.stcg_rho_ref),
+            stcg_free_shrink=float(self.cfg.surface.stcg_free_shrink),
+            stcg_phi_shrink=float(self.cfg.surface.stcg_phi_shrink),
+            stcg_dscore_shrink=float(self.cfg.surface.stcg_dscore_shrink),
+            stcg_weight_gain=float(self.cfg.surface.stcg_weight_gain),
+            stcg_static_protect=float(self.cfg.surface.stcg_static_protect),
         )
         if map_pts.shape[0] < 1200:
             return {"map_refine_applied": 0.0, "map_refine_fitness": 0.0, "map_refine_rmse": 0.0}
@@ -278,6 +297,7 @@ class EGFDHMap3D:
         return {"map_refine_applied": 1.0, "map_refine_fitness": fit, "map_refine_rmse": rmse}
 
     def step(self, frame: TUMFrame3D, use_gt_pose: bool = True) -> Dict[str, float]:
+        t_step0 = time.perf_counter()
         odom_stats: Dict[str, float] = {}
         if use_gt_pose:
             delta = self._delta_from_gt(frame.pose_w_c)
@@ -310,21 +330,31 @@ class EGFDHMap3D:
                     delta, odom_stats = self._delta_from_icp(frame.points_cam, frame.normals_cam)
             self.predictor.predict(delta_t=delta, dt=frame.dt)
 
+        t_predict0 = time.perf_counter()
         self.predictor.apply_field_prediction(self.voxel_map, dynamic_score=self.dynamic_score)
+        t_predict1 = time.perf_counter()
+        map_refine_sec = 0.0
         if (not use_gt_pose) and (not bool(self.cfg.predict.slam_use_gt_delta_odom)):
+            t_ref0 = time.perf_counter()
             odom_stats.update(self._refine_pose_with_map(frame.points_cam, frame.normals_cam))
+            map_refine_sec = float(time.perf_counter() - t_ref0)
 
         if use_gt_pose:
             points_world = frame.points_world
             normals_world = frame.normals_world
-        else:
-            points_world, normals_world = self._transform_from_current_pose(frame.points_cam, frame.normals_cam)
-
-        accepted, rejected, assoc_stats = self.associator.associate(self.voxel_map, points_world, normals_world)
-        if use_gt_pose:
             sensor_origin = frame.pose_w_c[:3, 3]
         else:
+            points_world, normals_world = self._transform_from_current_pose(frame.points_cam, frame.normals_cam)
             sensor_origin = self.predictor.pose.as_matrix()[:3, 3]
+        t_assoc0 = time.perf_counter()
+        accepted, rejected, assoc_stats = self.associator.associate(
+            self.voxel_map,
+            points_world,
+            normals_world,
+            sensor_origin=sensor_origin,
+        )
+        t_assoc1 = time.perf_counter()
+        t_upd0 = time.perf_counter()
         update_stats = self.updater.update(
             self.voxel_map,
             accepted,
@@ -332,6 +362,7 @@ class EGFDHMap3D:
             sensor_origin=sensor_origin,
             frame_id=self.frame_counter,
         )
+        t_upd1 = time.perf_counter()
 
         # Global dynamic score (used only in legacy global forgetting mode + debug).
         alpha = float(np.clip(self.cfg.update.dyn_score_alpha, 0.01, 0.5))
@@ -356,6 +387,20 @@ class EGFDHMap3D:
         out["odom_valid_ratio"] = float(self.odom_valid_ratio)
         out["rejected"] = float(len(rejected))
         out["dynamic_score"] = float(self.dynamic_score)
+        step_total_sec = float(time.perf_counter() - t_step0)
+        predict_sec = float(t_predict1 - t_predict0)
+        assoc_sec = float(t_assoc1 - t_assoc0)
+        update_sec = float(t_upd1 - t_upd0)
+        self.runtime_totals["step_total_sec"] += step_total_sec
+        self.runtime_totals["predict_sec"] += predict_sec
+        self.runtime_totals["map_refine_sec"] += float(map_refine_sec)
+        self.runtime_totals["associate_sec"] += assoc_sec
+        self.runtime_totals["update_sec"] += update_sec
+        out["step_total_sec"] = step_total_sec
+        out["predict_sec"] = predict_sec
+        out["map_refine_sec"] = float(map_refine_sec)
+        out["associate_sec"] = assoc_sec
+        out["update_sec"] = update_sec
         return out
 
     def extract_surface_points(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -373,6 +418,7 @@ class EGFDHMap3D:
             use_zero_crossing=bool(self.cfg.surface.use_zero_crossing),
             zero_crossing_max_offset=float(self.cfg.surface.zero_crossing_max_offset),
             zero_crossing_phi_gate=float(self.cfg.surface.zero_crossing_phi_gate),
+            use_phi_geo_channel=bool(self.cfg.surface.use_phi_geo_channel),
             consistency_enable=bool(self.cfg.surface.consistency_enable),
             consistency_radius=int(self.cfg.surface.consistency_radius),
             consistency_min_neighbors=int(self.cfg.surface.consistency_min_neighbors),
@@ -405,6 +451,16 @@ class EGFDHMap3D:
             adaptive_phi_max_scale=float(self.cfg.surface.adaptive_phi_max_scale),
             adaptive_min_weight_gain=float(self.cfg.surface.adaptive_min_weight_gain),
             adaptive_free_ratio_gain=float(self.cfg.surface.adaptive_free_ratio_gain),
+            lzcd_apply_in_extraction=bool(self.cfg.surface.lzcd_apply_in_extraction),
+            lzcd_bias_scale=float(self.cfg.surface.lzcd_bias_scale),
+            stcg_enable=bool(self.cfg.surface.stcg_enable),
+            stcg_min_score=float(self.cfg.surface.stcg_min_score),
+            stcg_rho_ref=float(self.cfg.surface.stcg_rho_ref),
+            stcg_free_shrink=float(self.cfg.surface.stcg_free_shrink),
+            stcg_phi_shrink=float(self.cfg.surface.stcg_phi_shrink),
+            stcg_dscore_shrink=float(self.cfg.surface.stcg_dscore_shrink),
+            stcg_weight_gain=float(self.cfg.surface.stcg_weight_gain),
+            stcg_static_protect=float(self.cfg.surface.stcg_static_protect),
         )
 
     def save_surface_pointcloud(self, out_path: str | Path) -> int:
@@ -455,6 +511,21 @@ class EGFDHMap3D:
         if not self.trajectory:
             return np.zeros((0, 4, 4), dtype=float)
         return np.asarray(self.trajectory, dtype=float)
+
+    def get_runtime_stats(self) -> Dict[str, float]:
+        frames = max(0, int(self.frame_counter))
+        step_total = float(self.runtime_totals.get("step_total_sec", 0.0))
+        fps = float(frames / step_total) if step_total > 1e-9 else 0.0
+        return {
+            "frames": float(frames),
+            "step_total_sec": step_total,
+            "step_mean_sec": float(step_total / frames) if frames > 0 else 0.0,
+            "mapping_fps": fps,
+            "predict_sec": float(self.runtime_totals.get("predict_sec", 0.0)),
+            "map_refine_sec": float(self.runtime_totals.get("map_refine_sec", 0.0)),
+            "associate_sec": float(self.runtime_totals.get("associate_sec", 0.0)),
+            "update_sec": float(self.runtime_totals.get("update_sec", 0.0)),
+        }
 
     def export_dynamic_voxel_map(self, min_phi_w: float = 0.2):
         return self.voxel_map.export_voxel_arrays(min_phi_w=min_phi_w)

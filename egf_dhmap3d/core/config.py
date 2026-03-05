@@ -25,6 +25,8 @@ class Map3DConfig:
     max_cov: float = 5.0
     rho_decay: float = 0.992
     phi_w_decay: float = 0.992
+    # Geometry-channel confidence decay (kept milder than dynamic channel by default).
+    phi_geo_w_decay: float = 0.996
     cov_inflation: float = 1.004
 
 
@@ -46,6 +48,20 @@ class Assoc3DConfig:
     seed_fallback_enable: bool = True
     seed_fallback_low_support_scale: float = 0.7
     seed_fallback_frontier_scale: float = 0.7
+    # Heteroscedastic noise model (incidence/depth/normal residual aware).
+    hetero_enable: bool = False
+    hetero_inc_ref_cos: float = 0.65
+    hetero_depth_ref_m: float = 2.5
+    hetero_normal_ref: float = 0.20
+    hetero_k_inc: float = 0.45
+    hetero_k_depth: float = 0.12
+    hetero_k_normal: float = 0.55
+    hetero_good_cos: float = 0.90
+    hetero_good_bonus: float = 0.20
+    hetero_sigma_d_min_scale: float = 0.75
+    hetero_sigma_d_max_scale: float = 1.75
+    hetero_sigma_n_min_scale: float = 0.70
+    hetero_sigma_n_max_scale: float = 2.20
 
 
 @dataclass
@@ -68,6 +84,9 @@ class Update3DConfig:
     dscore_ema: float = 0.12
     residual_score_weight: float = 0.25
     integration_radius_scale: float = 1.0
+    integration_min_radius_vox: float = 1.2
+    # Apply decay every N frames with mathematically equivalent compounded factors.
+    decay_interval_frames: int = 1
     # Optional free-space clearing along sensor rays.
     raycast_clear_gain: float = 0.0
     raycast_step_scale: float = 1.0
@@ -76,6 +95,43 @@ class Update3DConfig:
     raycast_rho_max: float = 5.0
     raycast_phiw_max: float = 40.0
     raycast_dyn_boost: float = 0.25
+    # LZCD: local zero-crossing debias (online local phi bias correction).
+    lzcd_enable: bool = False
+    lzcd_interval: int = 2
+    lzcd_radius_cells: int = 1
+    lzcd_min_neighbors: int = 6
+    lzcd_min_phi_w: float = 0.40
+    lzcd_min_rho: float = 0.05
+    lzcd_max_dscore: float = 0.85
+    lzcd_neighbor_phi_gate: float = 0.25
+    lzcd_normal_cos_min: float = 0.45
+    lzcd_bias_alpha: float = 0.18
+    lzcd_correction_gain: float = 0.35
+    lzcd_max_bias: float = 0.06
+    lzcd_max_step: float = 0.02
+    # Robust trimming ratio for local zero-crossing debias (A-stage: Acc de-bias).
+    lzcd_trim_quantile: float = 0.75
+    # Prefer geometry-only SDF channel in debias estimation when available.
+    lzcd_use_geo_channel: bool = True
+    # STCG: spatio-temporal contradiction accumulation.
+    stcg_enable: bool = False
+    stcg_alpha: float = 0.12
+    stcg_conflict_weight: float = 0.60
+    stcg_residual_weight: float = 0.25
+    stcg_osc_weight: float = 0.15
+    stcg_free_ratio_ref: float = 0.9
+    # Contradiction shell accumulation:
+    # add free-space contradiction evidence in a wider shell around uncertain
+    # observations without changing phi integration support.
+    stcg_shell_enable: bool = False
+    stcg_shell_min_radius_vox: float = 2.0
+    stcg_shell_max_radius_m: float = 0.12
+    stcg_shell_residual_gain: float = 0.9
+    stcg_shell_free_weight: float = 0.45
+    stcg_shell_clear_boost: float = 0.10
+    # Hysteresis thresholds for contradiction gate stabilization.
+    stcg_on_thresh: float = 0.58
+    stcg_off_thresh: float = 0.42
     enable_evidence: bool = True
     enable_gradient_fusion: bool = True
 
@@ -85,7 +141,8 @@ class Predict3DConfig:
     process_noise_trans: float = 0.01
     process_noise_rot: float = 0.01
     slam_anchor_with_first_gt: bool = True
-    slam_use_gt_delta_odom: bool = True
+    # Fairness default: SLAM front-end should not consume GT motion increments.
+    slam_use_gt_delta_odom: bool = False
     icp_voxel_size: float = 0.04
     icp_max_corr: float = 0.12
     icp_max_iters: int = 30
@@ -112,6 +169,8 @@ class Surface3DConfig:
     use_zero_crossing: bool = True
     zero_crossing_max_offset: float = 0.06
     zero_crossing_phi_gate: float = 0.05
+    # Use geometry-only SDF channel for surface extraction (dual-channel decoupling).
+    use_phi_geo_channel: bool = False
     # Local surface-consistency gate (mainly for static denoising).
     consistency_enable: bool = False
     consistency_radius: int = 1
@@ -154,6 +213,18 @@ class Surface3DConfig:
     adaptive_phi_max_scale: float = 1.15
     adaptive_min_weight_gain: float = 0.8
     adaptive_free_ratio_gain: float = 0.5
+    # LZCD surface-time debias application.
+    lzcd_apply_in_extraction: bool = False
+    lzcd_bias_scale: float = 1.0
+    # STCG soft gating in extraction.
+    stcg_enable: bool = False
+    stcg_min_score: float = 0.35
+    stcg_rho_ref: float = 1.8
+    stcg_free_shrink: float = 0.45
+    stcg_phi_shrink: float = 0.25
+    stcg_dscore_shrink: float = 0.30
+    stcg_weight_gain: float = 0.50
+    stcg_static_protect: float = 0.70
 
 
 @dataclass

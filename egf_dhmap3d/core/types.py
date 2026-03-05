@@ -9,6 +9,9 @@ import numpy as np
 class VoxelCell3D:
     phi: float = 0.0
     phi_w: float = 0.0
+    # Geometry-only SDF channel (decoupled from dynamic suppression channel).
+    phi_geo: float = 0.0
+    phi_geo_w: float = 0.0
     rho: float = 0.0
     g_mean: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=float))
     g_cov: np.ndarray = field(default_factory=lambda: np.eye(3, dtype=float))
@@ -18,6 +21,14 @@ class VoxelCell3D:
     surf_evidence: float = 0.0
     free_evidence: float = 0.0
     residual_evidence: float = 0.0
+    # Local zero-crossing debias estimate (EMA of signed phi bias).
+    phi_bias: float = 0.0
+    # Geometry-channel local debias estimate (EMA of signed phi_geo bias).
+    phi_geo_bias: float = 0.0
+    # Spatio-temporal contradiction score (free/surface inconsistency).
+    stcg_score: float = 0.0
+    # Hysteresis gate state for contradiction activation.
+    stcg_active: float = 0.0
     rho_prev: float = 0.0
     rho_osc: float = 0.0
     clear_hits: float = 0.0

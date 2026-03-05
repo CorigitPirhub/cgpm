@@ -49,6 +49,8 @@ class VoxelHashMap3D:
         cell = VoxelCell3D(
             phi=0.0,
             phi_w=0.0,
+            phi_geo=0.0,
+            phi_geo_w=0.0,
             rho=0.0,
             g_mean=np.zeros(3, dtype=float),
             g_cov=np.eye(3, dtype=float) * self.cfg.map3d.init_grad_cov,
@@ -57,6 +59,8 @@ class VoxelHashMap3D:
             surf_evidence=0.0,
             free_evidence=0.0,
             residual_evidence=0.0,
+            phi_geo_bias=0.0,
+            stcg_active=0.0,
             rho_prev=0.0,
             rho_osc=0.0,
             clear_hits=0.0,
@@ -86,42 +90,90 @@ class VoxelHashMap3D:
     def iter_cells(self) -> Iterable[Tuple[VoxelIndex, VoxelCell3D]]:
         return self.cells.items()
 
-    def decay_fields(self, mode: str = "local", global_dynamic_score: float = 0.0, dyn_forget_gain: float = 0.0) -> None:
+    def decay_fields(
+        self,
+        mode: str = "local",
+        global_dynamic_score: float = 0.0,
+        dyn_forget_gain: float = 0.0,
+        decay_steps: int = 1,
+    ) -> None:
         cfg = self.cfg.map3d
         ucfg = self.cfg.update
         mode = str(mode).lower()
         dyn_gain = max(0.0, float(dyn_forget_gain))
         glob_dyn = float(np.clip(global_dynamic_score, 0.0, 1.0))
+        steps = max(1, int(decay_steps))
+        evidence_decay_pow = float(ucfg.evidence_decay ** steps)
+        frontier_decay_pow = float(ucfg.frontier_decay ** steps)
+        cov_inflation_pow = float(cfg.cov_inflation ** steps)
+        clear_decay_pow = float(0.98 ** steps)
+        geo_decay_pow = float(np.clip(cfg.phi_geo_w_decay, 0.55, 1.0) ** steps)
         to_delete: List[VoxelIndex] = []
-        for idx, cell in self.cells.items():
-            local_dyn = float(np.clip(cell.d_score, 0.0, 1.0))
-            if dyn_gain <= 1e-9 or mode == "off":
-                dyn_coeff = 0.0
-            elif mode == "global":
-                dyn_coeff = glob_dyn
-            else:
-                dyn_coeff = local_dyn
 
-            # Dynamic-selective exponential forgetting:
-            # keep static cells near base decay, but aggressively down-weight dynamic cells.
-            forget_strength = float(max(0.0, dyn_gain * dyn_coeff))
+        global_decay_only = bool(dyn_gain <= 1e-9 or mode == "off" or mode == "global")
+        if global_decay_only:
+            if dyn_gain <= 1e-9 or mode == "off":
+                dyn_coeff_const = 0.0
+            else:
+                dyn_coeff_const = glob_dyn
+            forget_strength = float(max(0.0, dyn_gain * dyn_coeff_const))
             rho_decay_eff = float(np.clip(cfg.rho_decay * np.exp(-1.8 * forget_strength), 0.55, 1.0))
             phi_decay_eff = float(np.clip(cfg.phi_w_decay * np.exp(-2.4 * forget_strength), 0.45, 1.0))
-            cell.rho *= rho_decay_eff
-            cell.phi_w *= phi_decay_eff
-            cell.g_cov *= cfg.cov_inflation
-            cell.g_cov = np.clip(cell.g_cov, cfg.min_cov, cfg.max_cov)
-            cell.surf_evidence *= ucfg.evidence_decay
-            cell.free_evidence *= ucfg.evidence_decay
-            cell.residual_evidence *= ucfg.evidence_decay
-            cell.clear_hits *= 0.98
-            cell.frontier_score *= ucfg.frontier_decay
-            if self.cfg.update.enable_evidence:
-                stale = bool(cell.phi_w < 1e-3 and cell.rho < 1e-4 and cell.frontier_score < 0.05)
-            else:
-                stale = bool(cell.phi_w < 1e-3 and cell.frontier_score < 0.05)
-            if stale:
-                to_delete.append(idx)
+            rho_decay_pow = float(rho_decay_eff ** steps)
+            phi_decay_pow = float(phi_decay_eff ** steps)
+            for idx, cell in self.cells.items():
+                cell.rho *= rho_decay_pow
+                cell.phi_w *= phi_decay_pow
+                cell.phi_geo_w *= geo_decay_pow
+                cell.g_cov *= cov_inflation_pow
+                cell.g_cov = np.clip(cell.g_cov, cfg.min_cov, cfg.max_cov)
+                cell.surf_evidence *= evidence_decay_pow
+                cell.free_evidence *= evidence_decay_pow
+                cell.residual_evidence *= evidence_decay_pow
+                cell.clear_hits *= clear_decay_pow
+                cell.frontier_score *= frontier_decay_pow
+                if self.cfg.update.enable_evidence:
+                    stale = bool(
+                        cell.phi_w < 1e-3
+                        and cell.phi_geo_w < 1e-3
+                        and cell.rho < 1e-4
+                        and cell.frontier_score < 0.05
+                    )
+                else:
+                    stale = bool(cell.phi_w < 1e-3 and cell.phi_geo_w < 1e-3 and cell.frontier_score < 0.05)
+                if stale:
+                    to_delete.append(idx)
+        else:
+            for idx, cell in self.cells.items():
+                local_dyn = float(np.clip(cell.d_score, 0.0, 1.0))
+                dyn_coeff = local_dyn
+                # Dynamic-selective exponential forgetting:
+                # keep static cells near base decay, but aggressively down-weight dynamic cells.
+                forget_strength = float(max(0.0, dyn_gain * dyn_coeff))
+                rho_decay_eff = float(np.clip(cfg.rho_decay * np.exp(-1.8 * forget_strength), 0.55, 1.0))
+                phi_decay_eff = float(np.clip(cfg.phi_w_decay * np.exp(-2.4 * forget_strength), 0.45, 1.0))
+                cell.rho *= float(rho_decay_eff ** steps)
+                cell.phi_w *= float(phi_decay_eff ** steps)
+                cell.phi_geo_w *= geo_decay_pow
+                cell.g_cov *= cov_inflation_pow
+                cell.g_cov = np.clip(cell.g_cov, cfg.min_cov, cfg.max_cov)
+                cell.surf_evidence *= evidence_decay_pow
+                cell.free_evidence *= evidence_decay_pow
+                cell.residual_evidence *= evidence_decay_pow
+                cell.clear_hits *= clear_decay_pow
+                cell.frontier_score *= frontier_decay_pow
+                if self.cfg.update.enable_evidence:
+                    stale = bool(
+                        cell.phi_w < 1e-3
+                        and cell.phi_geo_w < 1e-3
+                        and cell.rho < 1e-4
+                        and cell.frontier_score < 0.05
+                    )
+                else:
+                    stale = bool(cell.phi_w < 1e-3 and cell.phi_geo_w < 1e-3 and cell.frontier_score < 0.05)
+                if stale:
+                    to_delete.append(idx)
+
         for idx in to_delete:
             self.cells.pop(idx, None)
 
@@ -140,6 +192,7 @@ class VoxelHashMap3D:
         use_zero_crossing: bool = True,
         zero_crossing_max_offset: float = 0.06,
         zero_crossing_phi_gate: float = 0.05,
+        use_phi_geo_channel: bool = False,
         consistency_enable: bool = False,
         consistency_radius: int = 1,
         consistency_min_neighbors: int = 4,
@@ -172,13 +225,34 @@ class VoxelHashMap3D:
         adaptive_phi_max_scale: float = 1.15,
         adaptive_min_weight_gain: float = 0.8,
         adaptive_free_ratio_gain: float = 0.5,
+        lzcd_apply_in_extraction: bool = False,
+        lzcd_bias_scale: float = 1.0,
+        stcg_enable: bool = False,
+        stcg_min_score: float = 0.35,
+        stcg_rho_ref: float = 1.8,
+        stcg_free_shrink: float = 0.45,
+        stcg_phi_shrink: float = 0.25,
+        stcg_dscore_shrink: float = 0.30,
+        stcg_weight_gain: float = 0.50,
+        stcg_static_protect: float = 0.70,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        candidates: List[Tuple[VoxelIndex, VoxelCell3D, np.ndarray, np.ndarray, float]] = []
+        candidates: List[Tuple[VoxelIndex, VoxelCell3D, np.ndarray, np.ndarray, float, float]] = []
         geom_margin = float(max(0.0, two_stage_geom_margin))
         for idx, cell in self.cells.items():
             phi_thr = float(phi_thresh)
             min_w = float(min_weight)
+            max_d_eff = float(max_d_score)
             max_free = float(max_free_ratio)
+            if bool(use_phi_geo_channel) and float(cell.phi_geo_w) > 1e-8:
+                phi_eff = float(cell.phi_geo)
+                weight_eff = float(cell.phi_geo_w)
+                bias_eff = float(cell.phi_geo_bias)
+            else:
+                phi_eff = float(cell.phi)
+                weight_eff = float(cell.phi_w)
+                bias_eff = float(cell.phi_bias)
+            if bool(lzcd_apply_in_extraction):
+                phi_eff = float(phi_eff - float(lzcd_bias_scale) * bias_eff)
             if adaptive_enable:
                 # Bonn adaptive extraction:
                 # high-rho + low-dscore cells get looser phi gate;
@@ -197,18 +271,31 @@ class VoxelHashMap3D:
                 phi_thr = max(1e-4, float(phi_thresh) * phi_scale)
                 min_w = max(0.0, float(min_weight) * (1.0 + adaptive_min_weight_gain * d_n))
                 max_free = max(1e-6, float(max_free_ratio) * (1.0 - adaptive_free_ratio_gain * d_n))
+            if stcg_enable:
+                stcg = float(np.clip(cell.stcg_score, 0.0, 1.0))
+                if float(cell.stcg_active) >= 0.5:
+                    # Hysteresis-held active state keeps suppression stable.
+                    stcg = max(stcg, float(stcg_min_score) + 0.08)
+                rho_n = float(np.clip(cell.rho / max(1e-6, stcg_rho_ref), 0.0, 2.0))
+                static_factor = float(np.clip(rho_n * stcg_static_protect, 0.0, 1.0))
+                dyn_act = float(np.clip(stcg - float(stcg_min_score), 0.0, 1.0) * (1.0 - static_factor))
+                if dyn_act > 1e-6:
+                    phi_thr = max(1e-4, phi_thr * (1.0 - float(stcg_phi_shrink) * dyn_act))
+                    max_free = max(1e-6, max_free * (1.0 - float(stcg_free_shrink) * dyn_act))
+                    min_w = max(0.0, min_w * (1.0 + float(stcg_weight_gain) * dyn_act))
+                    max_d_eff = max(0.0, max_d_eff - float(stcg_dscore_shrink) * dyn_act)
             if two_stage_enable:
                 phi_thr = max(phi_thr, phi_thr + geom_margin)
                 min_w = max(0.0, min_w * 0.85)
                 max_free = max(max_free, float(max_free_ratio) * 1.15)
 
-            if abs(cell.phi) > phi_thr:
+            if abs(phi_eff) > phi_thr:
                 continue
             if cell.rho < rho_thresh:
                 continue
-            if cell.phi_w < min_w:
+            if weight_eff < min_w:
                 continue
-            if cell.d_score > max_d_score:
+            if cell.d_score > max_d_eff:
                 continue
             if (int(current_step) - int(cell.last_seen)) > int(max_age_frames):
                 continue
@@ -223,15 +310,15 @@ class VoxelHashMap3D:
             gn = np.linalg.norm(g)
             if gn < 1e-7:
                 continue
-            candidates.append((idx, cell, self.index_to_center(idx), g / gn, free_ratio))
+            candidates.append((idx, cell, self.index_to_center(idx), g / gn, free_ratio, phi_eff))
         if not candidates:
             return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
 
         accepted_idx: set[VoxelIndex]
         if not consistency_enable:
-            accepted_idx = {idx for idx, _, _, _, _ in candidates}
+            accepted_idx = {idx for idx, _, _, _, _, _ in candidates}
         else:
-            cand_map = {idx: (cell, n) for idx, cell, _, n, _ in candidates}
+            cand_map = {idx: (cell, n, phi_eff) for idx, cell, _, n, _, phi_eff in candidates}
             accepted_idx = set()
             r = max(1, int(consistency_radius))
             min_n = max(0, int(consistency_min_neighbors))
@@ -241,7 +328,7 @@ class VoxelHashMap3D:
                 min_n = max(0, min_n - 2)
                 cos_th = max(0.0, cos_th - 0.10)
                 phi_th = max(1e-4, phi_th + geom_margin)
-            for idx, cell, _, n_i, _ in candidates:
+            for idx, cell, _, n_i, _, phi_i_eff in candidates:
                 consistent = 0
                 for nidx in self.neighbor_indices(idx, r):
                     if nidx == idx:
@@ -249,8 +336,8 @@ class VoxelHashMap3D:
                     other = cand_map.get(nidx)
                     if other is None:
                         continue
-                    c_j, n_j = other
-                    if abs(float(c_j.phi) - float(cell.phi)) > phi_th:
+                    _c_j, n_j, phi_j_eff = other
+                    if abs(float(phi_j_eff) - float(phi_i_eff)) > phi_th:
                         continue
                     if abs(float(np.dot(n_i, n_j))) < cos_th:
                         continue
@@ -273,12 +360,12 @@ class VoxelHashMap3D:
             anchor_d_q = float(np.clip(snef_anchor_dscore_quantile, 0.0, 1.0))
             anchor_min = max(0, int(snef_anchor_min_per_block))
 
-            groups: Dict[VoxelIndex, List[Tuple[VoxelIndex, VoxelCell3D, float]]] = {}
-            for idx, cell, _, _, free_ratio in candidates:
+            groups: Dict[VoxelIndex, List[Tuple[VoxelIndex, VoxelCell3D, float, float]]] = {}
+            for idx, cell, _, _, free_ratio, phi_eff in candidates:
                 if idx not in accepted_idx:
                     continue
                 bidx = (idx[0] // block_size, idx[1] // block_size, idx[2] // block_size)
-                groups.setdefault(bidx, []).append((idx, cell, float(max(0.0, free_ratio))))
+                groups.setdefault(bidx, []).append((idx, cell, float(max(0.0, free_ratio)), float(phi_eff)))
 
             snef_keep: set[VoxelIndex] = set()
             dyn_block_d_thr = 1.0
@@ -287,16 +374,16 @@ class VoxelHashMap3D:
             dyn_block_osc_thr = 1.0
             if two_stage_enable and groups:
                 all_d_vals = np.asarray(
-                    [float(np.clip(cell.d_score, 0.0, 1.0)) for entries in groups.values() for _, cell, _ in entries],
+                    [float(np.clip(cell.d_score, 0.0, 1.0)) for entries in groups.values() for _, cell, _, _ in entries],
                     dtype=float,
                 )
-                all_f_vals = np.asarray([float(fr) for entries in groups.values() for _, _, fr in entries], dtype=float)
+                all_f_vals = np.asarray([float(fr) for entries in groups.values() for _, _, fr, _ in entries], dtype=float)
                 all_rho_vals = np.asarray(
-                    [float(max(0.0, cell.rho)) for entries in groups.values() for _, cell, _ in entries],
+                    [float(max(0.0, cell.rho)) for entries in groups.values() for _, cell, _, _ in entries],
                     dtype=float,
                 )
                 all_osc_vals = np.asarray(
-                    [float(max(0.0, cell.rho_osc)) for entries in groups.values() for _, cell, _ in entries],
+                    [float(max(0.0, cell.rho_osc)) for entries in groups.values() for _, cell, _, _ in entries],
                     dtype=float,
                 )
                 if all_d_vals.size > 0:
@@ -313,14 +400,14 @@ class VoxelHashMap3D:
             for entries in groups.values():
                 n_entries = len(entries)
                 if n_entries <= min_candidates:
-                    snef_keep.update([idx for idx, _, _ in entries])
+                    snef_keep.update([idx for idx, _, _, _ in entries])
                     continue
 
-                d_vals = np.asarray([float(np.clip(c.d_score, 0.0, 1.0)) for _, c, _ in entries], dtype=float)
-                f_vals = np.asarray([float(fr) for _, _, fr in entries], dtype=float)
-                p_vals = np.asarray([abs(float(c.phi)) for _, c, _ in entries], dtype=float)
-                rho_vals = np.asarray([float(max(0.0, c.rho)) for _, c, _ in entries], dtype=float)
-                osc_vals = np.asarray([float(max(0.0, c.rho_osc)) for _, c, _ in entries], dtype=float)
+                d_vals = np.asarray([float(np.clip(c.d_score, 0.0, 1.0)) for _, c, _, _ in entries], dtype=float)
+                f_vals = np.asarray([float(fr) for _, _, fr, _ in entries], dtype=float)
+                p_vals = np.asarray([abs(float(phi_eff)) for _, _, _, phi_eff in entries], dtype=float)
+                rho_vals = np.asarray([float(max(0.0, c.rho)) for _, c, _, _ in entries], dtype=float)
+                osc_vals = np.asarray([float(max(0.0, c.rho_osc)) for _, c, _, _ in entries], dtype=float)
 
                 block_dyn = False
                 if two_stage_enable:
@@ -334,7 +421,7 @@ class VoxelHashMap3D:
                     else:
                         block_dyn = bool(hi_dyn or low_rho or high_osc)
                     if not block_dyn:
-                        snef_keep.update([idx for idx, _, _ in entries])
+                        snef_keep.update([idx for idx, _, _, _ in entries])
                         continue
 
                 d_thr = float(np.quantile(d_vals, q_d) + m_d)
@@ -430,12 +517,12 @@ class VoxelHashMap3D:
         nrm: List[np.ndarray] = []
         max_off = float(max(0.0, zero_crossing_max_offset))
         phi_gate = float(max(1e-4, zero_crossing_phi_gate))
-        for idx, cell, center, n_i, _ in candidates:
+        for idx, _cell, center, n_i, _free_ratio, phi_eff in candidates:
             if idx not in accepted_idx:
                 continue
             p = center
-            if use_zero_crossing and abs(float(cell.phi)) <= phi_gate:
-                off = -float(cell.phi) * n_i
+            if use_zero_crossing and abs(float(phi_eff)) <= phi_gate:
+                off = -float(phi_eff) * n_i
                 off_norm = float(np.linalg.norm(off))
                 if max_off > 0.0 and off_norm > max_off:
                     off = off * (max_off / max(off_norm, 1e-9))

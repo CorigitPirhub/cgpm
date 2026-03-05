@@ -20,6 +20,23 @@ class Updater3D:
             return np.zeros_like(v)
         return v / n
 
+    @staticmethod
+    def _weighted_median(values: np.ndarray, weights: np.ndarray) -> float:
+        if values.size == 0:
+            return 0.0
+        if weights.size != values.size:
+            return float(np.median(values))
+        order = np.argsort(values)
+        v = values[order]
+        w = np.clip(weights[order], 0.0, None)
+        sw = float(np.sum(w))
+        if sw <= 1e-12:
+            return float(np.median(values))
+        cdf = np.cumsum(w) / sw
+        i = int(np.searchsorted(cdf, 0.5, side="left"))
+        i = int(np.clip(i, 0, v.size - 1))
+        return float(v[i])
+
     def _integrate_measurement(
         self,
         voxel_map: VoxelHashMap3D,
@@ -33,16 +50,18 @@ class Updater3D:
             return
 
         trunc = float(self.cfg.map3d.truncation)
-        trunc_scale = float(np.clip(self.cfg.update.integration_radius_scale, 0.45, 1.0))
+        trunc_scale = float(np.clip(self.cfg.update.integration_radius_scale, 0.20, 1.0))
+        min_radius_vox = float(max(0.6, self.cfg.update.integration_min_radius_vox))
+        min_trunc = float(min_radius_vox * voxel_map.voxel_size)
         rho_sigma = max(1e-4, float(self.cfg.update.rho_sigma))
         gate = float(self.cfg.assoc.gate_threshold)
         weight_assoc = np.exp(-0.5 * min(measurement.d2, gate))
         if measurement.seed:
             weight_assoc *= 0.55
-            trunc_eff = max(1.2 * voxel_map.voxel_size, 0.06)
+            trunc_eff = max(min_trunc, 0.06)
             neighbor_iter = [measurement.voxel_index]
         else:
-            trunc_eff = max(1.2 * voxel_map.voxel_size, trunc * trunc_scale)
+            trunc_eff = max(min_trunc, trunc * trunc_scale)
             neighbor_iter = voxel_map.neighbor_indices_for_point(p, radius_m=trunc_eff)
         surf_band = float(np.clip(self.cfg.update.surf_band_ratio, 0.1, 0.9)) * trunc_eff
 
@@ -67,6 +86,17 @@ class Updater3D:
                 continue
             cell.phi = float((cell.phi_w * cell.phi + w_obs * d_signed) / w_new)
             cell.phi_w = float(min(5000.0, w_new))
+            # Geometry-only channel: integrate near-surface observations only,
+            # decoupled from dynamic suppression / free-space contradiction updates.
+            geo_band = float(max(0.6 * voxel_map.voxel_size, 0.35 * trunc_eff))
+            if abs(d_signed) <= geo_band:
+                w_geo = float(w_obs * np.exp(-0.5 * (d_signed / max(1e-6, geo_band)) ** 2))
+                if measurement.seed:
+                    w_geo *= 0.55
+                w_geo_new = cell.phi_geo_w + w_geo
+                if w_geo_new > 1e-9:
+                    cell.phi_geo = float((cell.phi_geo_w * cell.phi_geo + w_geo * d_signed) / w_geo_new)
+                    cell.phi_geo_w = float(min(5000.0, w_geo_new))
             # Update local dynamic evidence (surface vs free-space observation consistency).
             if self.cfg.update.enable_evidence and abs(d_signed) <= surf_band:
                 cell.surf_evidence += w_obs
@@ -106,6 +136,72 @@ class Updater3D:
                 cell.g_cov = np.eye(3, dtype=float) * self.cfg.map3d.max_cov
             cell.frontier_score *= 0.75
             cell.last_seen = int(frame_id)
+            touched.add(nidx)
+
+        # STCG contradiction shell:
+        # For uncertain measurements, accumulate free-space contradiction
+        # in a wider local shell (existing voxels only) to improve dynamic
+        # discrimination without widening phi integration support.
+        self._accumulate_contradiction_shell(
+            voxel_map=voxel_map,
+            measurement=measurement,
+            touched=touched,
+            trunc_eff=trunc_eff,
+            surf_band=surf_band,
+        )
+
+    def _accumulate_contradiction_shell(
+        self,
+        voxel_map: VoxelHashMap3D,
+        measurement: AssocMeasurement3D,
+        touched: Set[VoxelIndex],
+        trunc_eff: float,
+        surf_band: float,
+    ) -> None:
+        if not bool(self.cfg.update.stcg_shell_enable):
+            return
+        if not bool(self.cfg.update.enable_evidence):
+            return
+        n = self._normalize(measurement.normal_world)
+        if float(np.linalg.norm(n)) < 1e-8:
+            return
+
+        d2_ref = float(max(1e-6, self.cfg.update.dyn_d2_ref))
+        res_n = float(np.clip(measurement.d2 / d2_ref, 0.0, 1.0))
+        if res_n <= 0.12:
+            return
+
+        min_r = float(max(0.8 * voxel_map.voxel_size, self.cfg.update.stcg_shell_min_radius_vox * voxel_map.voxel_size))
+        max_r = float(max(min_r, self.cfg.update.stcg_shell_max_radius_m))
+        shell_r = float(
+            np.clip(
+                trunc_eff * (1.0 + self.cfg.update.stcg_shell_residual_gain * res_n),
+                min_r,
+                max_r,
+            )
+        )
+        if shell_r <= surf_band * 1.02:
+            return
+
+        p = measurement.point_world
+        band = float(max(1e-6, shell_r - surf_band))
+        w_base = float(max(0.0, self.cfg.update.stcg_shell_free_weight))
+        clear_boost = float(max(0.0, self.cfg.update.stcg_shell_clear_boost))
+        for nidx in voxel_map.neighbor_indices_for_point(p, radius_m=shell_r):
+            cell = voxel_map.get_cell(nidx)
+            if cell is None:
+                continue
+            center = voxel_map.index_to_center(nidx)
+            ad = abs(float(np.dot(center - p, n)))
+            if ad <= surf_band * 1.02 or ad > shell_r:
+                continue
+            t = float(np.clip((ad - surf_band) / band, 0.0, 1.5))
+            w_shell = float(w_base * res_n * np.exp(-1.8 * t * t))
+            if w_shell <= 1e-8:
+                continue
+            cell.free_evidence += w_shell
+            cell.clear_hits += clear_boost * w_shell
+            cell.residual_evidence = float(np.clip(0.9 * cell.residual_evidence + 0.1 * res_n, 0.0, 1.0))
             touched.add(nidx)
 
     def _refresh_evidence_gradient(self, voxel_map: VoxelHashMap3D, touched: Iterable[VoxelIndex]) -> None:
@@ -162,6 +258,158 @@ class Updater3D:
                 c.d_score *= 0.90
             elif c.surf_evidence > 1.3 * c.free_evidence:
                 c.d_score *= 0.95
+
+            # STCG: spatio-temporal contradiction accumulation.
+            if bool(self.cfg.update.stcg_enable) and self.cfg.update.enable_evidence:
+                surf = float(max(1e-6, c.surf_evidence))
+                free = float(max(0.0, c.free_evidence))
+                # Bounded conflict: high only when free and surface evidence co-exist.
+                conflict = float(4.0 * free * surf / max(1e-6, (free + surf) * (free + surf)))
+                free_ratio = float(free / surf)
+                fr_ref = float(max(1e-6, self.cfg.update.stcg_free_ratio_ref))
+                free_boost = float(np.clip(free_ratio / fr_ref, 0.0, 2.0))
+                conflict = float(np.clip(conflict * (0.55 + 0.45 * free_boost), 0.0, 1.0))
+                residual_n = float(np.clip(c.residual_evidence, 0.0, 1.0))
+                osc_n = float(np.clip(c.rho_osc / max(1e-6, self.cfg.update.rho_osc_ref), 0.0, 1.0))
+                wc = float(np.clip(self.cfg.update.stcg_conflict_weight, 0.0, 1.0))
+                wr = float(np.clip(self.cfg.update.stcg_residual_weight, 0.0, 1.0))
+                wo = float(np.clip(self.cfg.update.stcg_osc_weight, 0.0, 1.0))
+                ws = max(1e-6, wc + wr + wo)
+                stcg_obs = float((wc * conflict + wr * residual_n + wo * osc_n) / ws)
+                stcg_alpha = float(np.clip(self.cfg.update.stcg_alpha, 0.01, 0.6))
+                c.stcg_score = float(np.clip((1.0 - stcg_alpha) * c.stcg_score + stcg_alpha * stcg_obs, 0.0, 1.0))
+                # Hysteresis gate to avoid rapid toggling in borderline regions.
+                on_th = float(np.clip(self.cfg.update.stcg_on_thresh, 0.05, 0.95))
+                off_th = float(np.clip(self.cfg.update.stcg_off_thresh, 0.01, 0.90))
+                if off_th > on_th:
+                    off_th = max(0.01, 0.85 * on_th)
+                if c.stcg_active >= 0.5:
+                    if c.stcg_score <= off_th:
+                        c.stcg_active = 0.0
+                    else:
+                        c.stcg_active = 1.0
+                else:
+                    if c.stcg_score >= on_th:
+                        c.stcg_active = 1.0
+                # Static anchor suppression: stable high-rho support suppresses contradiction.
+                if c.surf_evidence > 1.8 * c.free_evidence and rho_now > 0.9:
+                    c.stcg_score *= 0.88
+            else:
+                c.stcg_score *= 0.98
+                c.stcg_active *= 0.95
+
+    def _local_zero_crossing_debias(
+        self,
+        voxel_map: VoxelHashMap3D,
+        touched: Iterable[VoxelIndex],
+        frame_id: int,
+    ) -> None:
+        if not bool(self.cfg.update.lzcd_enable):
+            return
+        interval = max(1, int(self.cfg.update.lzcd_interval))
+        if (int(frame_id) % interval) != 0:
+            return
+
+        radius = max(1, int(self.cfg.update.lzcd_radius_cells))
+        min_n = max(3, int(self.cfg.update.lzcd_min_neighbors))
+        min_w = float(max(0.0, self.cfg.update.lzcd_min_phi_w))
+        min_rho = float(max(0.0, self.cfg.update.lzcd_min_rho))
+        max_d = float(np.clip(self.cfg.update.lzcd_max_dscore, 0.0, 1.0))
+        cos_min = float(np.clip(self.cfg.update.lzcd_normal_cos_min, 0.0, 1.0))
+        phi_gate = float(max(1e-4, self.cfg.update.lzcd_neighbor_phi_gate))
+        bias_alpha = float(np.clip(self.cfg.update.lzcd_bias_alpha, 0.01, 0.8))
+        corr_gain = float(np.clip(self.cfg.update.lzcd_correction_gain, 0.0, 1.0))
+        max_bias = float(max(1e-4, self.cfg.update.lzcd_max_bias))
+        max_step = float(max(1e-4, self.cfg.update.lzcd_max_step))
+        trim_q = float(np.clip(self.cfg.update.lzcd_trim_quantile, 0.55, 1.0))
+        use_geo = bool(self.cfg.update.lzcd_use_geo_channel)
+
+        touched_ext: Set[VoxelIndex] = set()
+        for idx in touched:
+            touched_ext.add(idx)
+            touched_ext.update(voxel_map.neighbor_indices(idx, radius))
+
+        for idx in touched_ext:
+            c = voxel_map.get_cell(idx)
+            if c is None:
+                continue
+            if c.rho < min_rho or c.d_score > max_d:
+                continue
+            if use_geo and c.phi_geo_w >= min_w:
+                phi_i = float(c.phi_geo)
+                w_i = float(c.phi_geo_w)
+            else:
+                phi_i = float(c.phi)
+                w_i = float(c.phi_w)
+            if w_i < min_w:
+                continue
+            n_i = self._normalize(np.asarray(c.g_mean, dtype=float))
+            if float(np.linalg.norm(n_i)) < 1e-8:
+                continue
+            center_i = voxel_map.index_to_center(idx)
+            est_vals: List[float] = []
+            est_w: List[float] = []
+            for nidx in voxel_map.neighbor_indices(idx, radius):
+                if nidx == idx:
+                    continue
+                cj = voxel_map.get_cell(nidx)
+                if cj is None:
+                    continue
+                if use_geo and cj.phi_geo_w >= min_w:
+                    phi_j = float(cj.phi_geo)
+                    w_j = float(cj.phi_geo_w)
+                else:
+                    phi_j = float(cj.phi)
+                    w_j = float(cj.phi_w)
+                if w_j < min_w:
+                    continue
+                if abs(phi_j) > phi_gate:
+                    continue
+                n_j = self._normalize(np.asarray(cj.g_mean, dtype=float))
+                if float(np.linalg.norm(n_j)) < 1e-8:
+                    continue
+                cos_ij = float(abs(np.dot(n_i, n_j)))
+                if cos_ij < cos_min:
+                    continue
+                center_j = voxel_map.index_to_center(nidx)
+                phi_est = float(phi_j - np.dot(n_i, center_j - center_i))
+                # Confidence uses neighbor weight/rho and normal consistency.
+                w = float(min(w_j, 5.0) * (0.2 + 0.8 * cos_ij) * (0.35 + 0.65 * np.clip(cj.rho, 0.0, 1.0)))
+                est_vals.append(phi_est)
+                est_w.append(w)
+            if len(est_vals) < min_n:
+                continue
+            vals = np.asarray(est_vals, dtype=float)
+            ws = np.asarray(est_w, dtype=float)
+            phi_ref0 = self._weighted_median(vals, ws)
+            abs_res = np.abs(vals - phi_ref0)
+            if trim_q < 0.999:
+                thr = float(np.quantile(abs_res, trim_q))
+                mask = abs_res <= max(1e-6, thr)
+                if int(np.count_nonzero(mask)) >= min_n:
+                    vals = vals[mask]
+                    ws = ws[mask]
+                    abs_res = abs_res[mask]
+            # Huber-like attenuation for outliers.
+            scale = float(max(1e-4, 1.4826 * np.median(abs_res)))
+            huber = 1.0 / (1.0 + (abs_res / scale) ** 2)
+            ws = ws * huber
+            phi_ref = self._weighted_median(vals, ws)
+            bias_obs = float(np.clip(phi_i - phi_ref, -max_bias, max_bias))
+            if use_geo and c.phi_geo_w >= min_w:
+                c.phi_geo_bias = float((1.0 - bias_alpha) * c.phi_geo_bias + bias_alpha * bias_obs)
+                corr = float(np.clip(corr_gain * c.phi_geo_bias, -max_step, max_step))
+            else:
+                c.phi_bias = float((1.0 - bias_alpha) * c.phi_bias + bias_alpha * bias_obs)
+                corr = float(np.clip(corr_gain * c.phi_bias, -max_step, max_step))
+            if abs(corr) <= 1e-7:
+                continue
+            if use_geo and c.phi_geo_w >= min_w:
+                c.phi_geo = float(np.clip(c.phi_geo - corr, -0.8, 0.8))
+                # Keep projection channel partially aligned with corrected geometry.
+                c.phi = float(np.clip(c.phi - 0.35 * corr, -0.8, 0.8))
+            else:
+                c.phi = float(np.clip(c.phi - corr, -0.8, 0.8))
 
     def _raycast_clear(
         self,
@@ -324,6 +572,7 @@ class Updater3D:
                 c = voxel_map.get_or_create(nidx)
                 c.frontier_score = float(min(10.0, c.frontier_score + frontier_boost))
         self._refresh_evidence_gradient(voxel_map, touched)
+        self._local_zero_crossing_debias(voxel_map, touched, frame_id=frame_id)
         self._poisson_refine(voxel_map, touched)
         return {
             "accepted": float(len(accepted)),

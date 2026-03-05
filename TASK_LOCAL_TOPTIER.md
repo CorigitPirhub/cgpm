@@ -1,6 +1,38 @@
 # EGF-DHMap 局部建图顶刊任务书（执行版）
 
-## 执行状态（2026-03-01）
+## 执行状态（2026-03-04，审计修订）
+
+### 审计结论（强约束口径）
+
+本次按强约束口径完成审计后，以下风险被确认为高影响：
+1. 历史部分 `slam` 结果使用了 `slam_use_gt_delta_odom=true`，不满足“真 SLAM（no-GT-delta）”约束。
+2. `summary_tables` 存在历史旧表与新字段并存，需防止旧口径（单口径 ghost、混协议来源）继续进入主结论。
+3. P12/P13 的历史执行目录包含上述风险输入，需按同一严格口径重跑后再判定通过。
+
+### 任务状态降级（必须重跑）
+
+- [x] **P0-R（必须）**：口径锁定重跑  
+  - 目标：重建 `tum_*_slam.csv` 的严格来源（`--egf_slam_no_gt_delta_odom` + 双协议隔离 + 双口径 ghost 并行输出）。
+  - 建议输出根目录：`output/post_cleanup/p0_true_slam_v3_final/`，并同步到 `output/post_cleanup/p3_tum_expanded/slam/tables/`。
+- [x] **P12-R（必须）**：真实外部基线重跑  
+  - 目标：仅保留真实 runner 输出（`tsdf,dynaslam,neural_implicit`），统一链路下刷新对照表。
+  - 建议输出根目录：`output/post_cleanup/p12_external_native_final/`。
+- [x] **P13-R（必须）**：双协议 5-seed + 显著性重跑  
+  - 目标：TUM oracle + Bonn slam（no-GT-delta）重新生成主表与显著性，覆盖当前投稿主结论。
+  - 建议输出根目录：`output/post_cleanup/p4_multiseed_tum_final_v2/` 与 `output/post_cleanup/p5_multiseed_bonn_all3/`。
+
+### 审计重跑回写（2026-03-04）
+
+- `P0-R`：已确认 `output/post_cleanup/p0_true_slam_v3_final/slam/**/egf/summary.json` 全部 `slam_use_gt_delta_odom=false`，并保留双口径 ghost 字段（`ghost_ratio_pred_denom` / `ghost_ratio_dyn_ref_denom`、`ghost_tail_ratio_pred_denom` / `ghost_tail_ratio_ref_denom`）。
+- `P12-R`：已重建原生外部基线表并修复健康检查逻辑（外部 runner 非零返回码但真实输出完整时允许通过）；最终保留方法为 `tsdf,dynaslam,neural_implicit`。
+- `P13-R`：Bonn `slam` 已完成 `5-seed` 严格 `no-GT-delta` 重跑（`40-44`）；并基于 `TUM oracle + Bonn slam` 刷新显著性与双协议主表。
+
+### 建议复核（非阻断）
+
+- [ ] **P1-Check（建议）**：统一参数在严格 `slam` 下复核一次（walking 三序列）。
+- [ ] **P2-Check（建议）**：时间机理图补充双口径 ghost 指标并行展示（避免审稿口径争议）。
+
+## 执行状态（2026-03-01，历史存档）
 
 - [x] P0 已完成（协议分离 + 固定序列 + 固定 seed + 双次复验 + 汇总固化）
   - 执行脚本：`scripts/run_p0_protocol_lock.py`
@@ -676,6 +708,76 @@
   - `snef_mild/snef_balanced`：可进一步压低 ghost，但 `Comp-R` 显著塌陷（`<20%`），不可作为主线配置。
 - 结论：`P10` **硬验收未通过**，但已完成“最优可达封板（best-achievable）”。当前版本不再继续强行压 `Acc`，避免破坏完整性与动态鲁棒性主卖点；后续仅作为独立研究分支推进。
 
+#### 追加冲线执行记录（2026-03-04，按 A/B/C 清单逐步执行）
+- A 阶段（LZCD 去偏）：
+  - 命令：
+    - `/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_a,lzcd_only_b --frames 40 --stride 3 --max_points_per_frame 900 --out_root output/post_cleanup/p10_lzcd_v2 --summary_csv output/summary_tables/p10_lzcd_v2.csv --figure assets/p10_lzcd_v2.png --force`
+  - 产物：
+    - `output/summary_tables/p10_lzcd_v2.csv`
+    - `assets/p10_lzcd_v2.png`
+  - 结果（最佳 `lzcd_only_b`）：
+    - `tum_acc_cm=2.7893`，`tum_comp_r_5cm=99.8046`
+    - `bonn_acc_cm=3.4254`，`bonn_comp_r_5cm=100.0`
+    - `ghost_red_min=0.1298`
+  - 判定：`pass_all=False`
+
+- B 阶段（STCG 局部门控）：
+  - 说明：`run_p10_precision_profile.py` 在当前环境下会触发 TSDF 子流程异常告警（Open3D: mesh has 0 vertices），为避免基线噪声干扰，改为直接运行 `run_benchmark.py` 的 EGF-only，并复用 A 阶段健康 TSDF 参考做统一判分。
+  - 命令：
+    - `python scripts/run_benchmark.py --dataset_kind tum ... --out_root output/post_cleanup/p10_stcg_direct/01_lzcd_stcg_hetero_c/tum_oracle ... --methods egf ... --force`
+    - `python scripts/run_benchmark.py --dataset_kind bonn ... --out_root output/post_cleanup/p10_stcg_direct/01_lzcd_stcg_hetero_c/bonn_slam ... --methods egf ... --force`
+  - 产物：
+    - `output/post_cleanup/p10_stcg_direct/01_lzcd_stcg_hetero_c/tum_oracle/oracle/tables/reconstruction_metrics.csv`
+    - `output/post_cleanup/p10_stcg_direct/01_lzcd_stcg_hetero_c/tum_oracle/oracle/tables/dynamic_metrics.csv`
+    - `output/post_cleanup/p10_stcg_direct/01_lzcd_stcg_hetero_c/bonn_slam/slam/tables/reconstruction_metrics.csv`
+    - `output/post_cleanup/p10_stcg_direct/01_lzcd_stcg_hetero_c/bonn_slam/slam/tables/dynamic_metrics.csv`
+  - 结果：
+    - `tum_acc_cm=2.8260`，`bonn_acc_cm=3.4888`
+    - `tum_comp_r_5cm=99.7157`，`bonn_comp_r_5cm=100.0`
+    - `ghost_red_min=0.1541`
+  - 判定：`pass_all=False`
+
+- C 阶段（双通道 + 软门控）：
+  - 命令：
+    - `python scripts/run_benchmark.py --dataset_kind tum ... --out_root output/post_cleanup/p10_dualch_direct/01_dualch_c/tum_oracle ... --methods egf ... --force`
+    - `python scripts/run_benchmark.py --dataset_kind bonn ... --out_root output/post_cleanup/p10_dualch_direct/01_dualch_c/bonn_slam ... --methods egf ... --force`
+  - 产物：
+    - `output/post_cleanup/p10_dualch_direct/01_dualch_c/tum_oracle/oracle/tables/reconstruction_metrics.csv`
+    - `output/post_cleanup/p10_dualch_direct/01_dualch_c/tum_oracle/oracle/tables/dynamic_metrics.csv`
+    - `output/post_cleanup/p10_dualch_direct/01_dualch_c/bonn_slam/slam/tables/reconstruction_metrics.csv`
+    - `output/post_cleanup/p10_dualch_direct/01_dualch_c/bonn_slam/slam/tables/dynamic_metrics.csv`
+  - 结果：
+    - `tum_acc_cm=2.8850`，`bonn_acc_cm=3.3495`
+    - `tum_comp_r_5cm=99.9981`，`bonn_comp_r_5cm=100.0`
+    - `ghost_red_min=0.0716`
+  - 判定：`pass_all=False`
+
+- A/B/C 汇总与封板：
+  - 汇总表：`output/summary_tables/p10_abc_eval.csv`
+  - 同步主表：`output/summary_tables/local_mapping_precision_profile.csv`
+  - 图：`assets/acc_comp_tradeoff.png`
+  - 结论：
+    - A/B/C 三阶段均未满足 `Acc` 硬门槛（TUM<=1.8cm, Bonn<=2.6cm）。
+    - 当前最优仍为 `lzcd_only_b`，在不破坏 `Comp-R` 的前提下，`Acc` 与 `ghost_red_min` 未进一步过线。
+    - `P10` 状态维持为 **未过线（best-achievable under current operators）**。
+
+#### 追加冲线执行记录（2026-03-04，Bonn 动态抑制专项）
+- 背景：
+  - 采用当前代码口径重新建立 Bonn 参考：`output/post_cleanup/p10_route_bonn_tsdf_ref/slam/tables/dynamic_metrics.csv`
+  - TSDF 基线：`ghost_ratio=0.9110`
+- 路线：
+  - 保持高精度主干（`truncation=0.06`, `integration_radius_scale=0.55`），逐步增强局部动态抑制（`c2 -> c2s -> c2xx -> c2hard`）。
+  - 统一产物汇总：`output/summary_tables/p10_bonn_route_sweep.csv`
+- 结果（Bonn all3, slam, EGF）：
+  - `c2`：`acc_cm=1.6547`, `comp_r_5cm=99.9265`, `ghost=0.7085`, `ghost_reduction_vs_tsdf=22.23%`
+  - `c2s`：`acc_cm=1.6580`, `comp_r_5cm=99.1867`, `ghost=0.6860`, `ghost_reduction_vs_tsdf=24.70%`
+  - `c2xx`：`acc_cm=1.6668`, `comp_r_5cm=97.8545`, `ghost=0.6738`, `ghost_reduction_vs_tsdf=26.04%`
+  - `c2hard`：`acc_cm=1.6764`, `comp_r_5cm=96.1802`, `ghost=0.6621`, `ghost_reduction_vs_tsdf=27.32%`（本轮最佳）
+- 结论：
+  - 纯参数强化可持续压低 ghost，但在当前算子下已出现明显边际递减（`22.23% -> 27.32%`），仍未达到 P10 要求的 `>=35%`。
+  - 本轮新增实验分支：`STCG contradiction shell`（代码位于 `egf_dhmap3d/modules/updater.py`，配置位于 `egf_dhmap3d/core/config.py`）。
+  - 该分支当前未封板：在极端配置上显著拉长单序列运行时间，需先做算子级复杂度约束（采样触发/半径裁剪）再进入下一轮验收；当前已设为默认关闭（`stcg_shell_enable=False`）。
+
 ### P11. 效率封板（从可用到可投）
 
 #### 目标
@@ -699,7 +801,7 @@
 2. `HQ` 档：`fps >= 1.0` 且相对最佳质量点 `ΔF-score >= -0.015`。  
 3. `memory_vs_tsdf <= 3.0`。
 
-#### 执行状态（2026-03-03）
+#### 执行状态（2026-03-04，P12-R 已完成）
 - 新增脚本：`scripts/run_p11_efficiency_final.py`（RT/HQ 双档自动选择 + 内存比对 + 图表输出）。
 - 运行时优化已落地：
   - `scripts/run_egf_3d_tum.py`：移除重复表面提取（避免 mesh 导出阶段二次全图扫描）。
@@ -750,7 +852,7 @@
 2. 每个外部方法都可追溯到真实输出路径 + runner 命令。  
 3. 主结论表仅使用通过健康度检查的方法条目。
 
-#### 执行状态（2026-03-03）
+#### 执行状态（历史结果，待严格口径重跑）
 - 三序列真实外部基线已重跑（`slam`）：
   - 运行命令：  
     - `python scripts/run_p8_native_external.py --dataset_root data/tum --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere --protocol slam --frames 40 --stride 3 --max_points_per_frame 900 --voxel_size 0.02 --eval_thresh 0.05 --seed 42 --methods tsdf,dynaslam,neural_implicit --out_root output/post_cleanup/p12_external_native_final --out_recon_csv output/summary_tables/external_baselines_native_reconstruction_final.csv --out_dynamic_csv output/summary_tables/external_baselines_native_dynamic_final.csv --out_runtime_csv output/summary_tables/external_baselines_native_runtime_final.csv --force`
@@ -759,10 +861,11 @@
   - `neural_implicit` 的 `walking_halfsphere` 输出已由 NICE-SLAM 快速配置生成并落盘到 `output/external/neural_mesh/rgbd_dataset_freiburg3_walking_halfsphere/mesh.ply`。
 - 健康度审计与主表筛选：
   - 新增脚本：`scripts/build_p12_external_healthcheck.py`
+  - 已在 `P12-R` 中更新健康检查规则：外部 runner 若真实输出完整，允许 `runtime returncode!=0` 但记录为 soft-pass（避免误删 `dynaslam/neural_implicit`）。
   - 审计文档：`output/post_cleanup/external_audit/BASELINE_HEALTHCHECK.md`
   - 审计表：`output/summary_tables/external_baselines_native_healthcheck_final.csv`
   - 通过健康检查并保留到主结论表的方法：`tsdf`, `dynaslam`, `neural_implicit`
-- 结论：`P12` 硬验收通过。
+- 审计状态：`P12-R` 已完成并回写主表。
 
 ### P13. 双协议主表 + 显著性封板
 
@@ -788,7 +891,7 @@
 2. 至少一个协议上，EGF 的 `F-score` 均值不低于 TSDF。  
 3. 报告中的所有数字都可追溯到上述 CSV。
 
-#### 执行状态（2026-03-04）
+#### 执行状态（2026-03-04，P13-R 已完成）
 - 已完成双协议 5-seed 复现实验：
   - TUM `oracle`（walking3）  
     - `python scripts/run_benchmark.py --dataset_kind tum --dataset_root data/tum --protocol oracle --static_sequences "" --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere --methods egf,tsdf --frames 40 --stride 3 --max_points_per_frame 900 --voxel_size 0.02 --eval_thresh 0.05 --seeds 40,41,42,43,44 --egf_poisson_iters 0 --out_root output/post_cleanup/p13_tum_oracle_5seed_fast --force`
@@ -802,16 +905,18 @@
     - `output/summary_tables/local_mapping_significance_dual_protocol.csv`
     - `output/summary_tables/local_mapping_mean_std_dual_protocol.csv`
 - 汇总命令：
-  - `python scripts/build_dual_protocol_multiseed_summary.py --summary_root output/summary_tables --oracle_tables_root output/post_cleanup/p13_tum_oracle_5seed_fast/oracle/tables --slam_tables_root output/post_cleanup/p13_bonn_slam_5seed_fast/slam/tables --oracle_tag p13_tum_oracle_5seed_fast --slam_tag p13_bonn_slam_5seed_fast`
+  - `python scripts/build_dual_protocol_multiseed_summary.py --summary_root output/summary_tables --oracle_tables_root output/post_cleanup/p4_multiseed_tum_final_v2/oracle/tables --slam_tables_root output/post_cleanup/p5_multiseed_bonn_all3/slam/tables --oracle_tag p4_multiseed_tum_final_v2 --slam_tag p5_multiseed_bonn_all3`
+- 严格口径补跑：
+  - `python scripts/run_benchmark.py --dataset_kind bonn --dataset_root data/bonn --protocol slam --static_sequences "" --dynamic_sequences rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2 --methods egf,tsdf --frames 40 --stride 3 --max_points_per_frame 900 --voxel_size 0.02 --eval_thresh 0.05 --seeds 40,41,42,43,44 --egf_poisson_iters 0 --egf_slam_no_gt_delta_odom --out_root output/post_cleanup/p5_multiseed_bonn_all3 --force`
 - 验收结果：
   - `n_seeds`：所有 `(protocol, sequence, method)` 均满足 `n_recon=5` 且 `n_dynamic=5`。
   - 显著性（EGF vs TSDF，dynamic）：
     - `oracle`: `recall_5cm p_t=1.99e-17, p_w=6.10e-05`; `ghost_ratio p_t=1.72e-24, p_w=6.10e-05`
-    - `slam`: `recall_5cm p_t=4.40e-26, p_w=6.10e-05`; `ghost_ratio p_t=9.92e-03, p_w=1.25e-02`
+    - `slam`: `recall_5cm p_t=4.03e-16, p_w=6.10e-05`; `ghost_ratio p_t=5.35e-05, p_w=1.22e-04`
   - `F-score` 均值：
     - `oracle`: `EGF=0.7903 > TSDF=0.4137`
-    - `slam`: `EGF=0.8741 > TSDF=0.0697`
-- 结论：`P13` 硬验收通过。
+    - `slam`: `EGF=0.6463 > TSDF=0.0697`
+- 审计状态：`P13-R` 已完成并回写主表。
 
 ### P14. 边界鲁棒性终稿封板
 
@@ -867,13 +972,65 @@
   - 失效边界：已在 `FAILURE_CASES_FINAL.md` 给出 3 条（点预算、遮挡缺失、高运动）与可执行规避策略。
   - 最终判定：`P14` 通过。
 
+### P15. 实时化冲刺封板（10 FPS 保底，15 FPS 目标）
+
+#### 目标
+在不牺牲当前主结论质量的前提下，把 EGF 局部建图从“可用”推进到“实时可部署”区间。
+
+#### 动作
+1. 以 `P11-HQ`（`mpp400`）和 `P11-RT`（`mpp140`）作为质量锚点，新增 `RT10` 与 `RT15` 两档搜索。  
+2. 优先做“等价加速”而非“降质提速”：
+   - 增量提取节流（`surface_extract_every_n`）；
+   - touched-block 局部重建与缓存复用；
+   - 体素邻域访问向量化/批量化；
+   - 必要时引入轻量并行（不改算法语义）。
+3. 统一在同硬件、同输入口径（`walking_xyz`, 40 帧, stride=3）下给出 `quality-speed` 曲线与内存比。  
+4. 若 `RT15` 无法满足质量约束，至少保证 `RT10` 通过并解释瓶颈热点。
+
+#### 产物
+- `output/summary_tables/local_mapping_efficiency_realtime.csv`  
+- `output/summary_tables/local_mapping_efficiency_realtime.json`  
+- `assets/quality_speed_tradeoff_realtime.png`  
+- `output/post_cleanup/p15_realtime/PROFILE.md`
+
+#### 硬验收
+1. **保底通过线（必须）**：`RT10` 档 `fps >= 10.0`。  
+2. **冲刺目标（建议）**：`RT15` 档 `fps >= 15.0`。  
+3. **质量不回退（相对 P11-HQ 锚点）**：  
+   - `ΔF-score >= -0.015`；  
+   - `Δghost_ratio <= +0.03`。  
+4. **资源约束**：`memory_vs_tsdf <= 3.0`，并给出热点分解（投影/融合/提取）。
+
+#### 执行状态（2026-03-04）
+- 已完成 `surface_max_free_ratio` 维度接入与完整 sweep（95 组）：
+  - 命令：
+    - `python scripts/run_p15_realtime.py --dataset_root data/tum --sequence rgbd_dataset_freiburg3_walking_xyz --frames 40 --stride 3 --max_points_list 400,360,320 --decay_interval_list 1,2,3,4 --assoc_radius_list 2,1 --integration_radius_list 0.45,0.35,0.30,0.25,0.20 --integration_min_radius_vox_list 1.2,1.0,0.8 --surface_max_free_ratio_list 1000000000,0.25,0.20,0.16,0.12 --max_runs 95 --out_root output/post_cleanup/p15_realtime --out_csv output/summary_tables/local_mapping_efficiency_realtime.csv --out_json output/summary_tables/local_mapping_efficiency_realtime.json --plot_png assets/quality_speed_tradeoff_realtime.png --profile_md output/post_cleanup/p15_realtime/PROFILE.md --force`
+- 锚点（Anchor）：
+  - `mpp400_d1_r2_ir0.45_mr1.20_frINF`
+  - `mapping_fps=2.1884`, `fscore=0.9824`, `ghost_ratio=0.4020`
+- 入选实时档（RT10/RT15）：
+  - `mpp320_d3_r1_ir0.20_mr0.80_fr0.16`
+  - `mapping_fps=22.0942`, `fscore=1.0000`, `ghost_ratio=0.4314`
+  - `delta_fscore_vs_anchor=+0.0176`, `delta_ghost_vs_anchor=+0.0294`, `memory_vs_tsdf=0.9257`
+- 验收结论：
+  - `RT10`：通过（`22.09 >= 10.0`）
+  - `RT15`：通过（`22.09 >= 15.0`）
+  - 质量约束：通过（`ΔF=+0.0176 >= -0.015`, `Δghost=+0.0294 <= +0.03`）
+  - 资源约束：通过（`0.9257 <= 3.0`）
+  - 最终判定：`P15` 通过。
+
 ### 7.4 最终封板判定（全部满足才算完成）
 
 满足以下全部条件即判定“局部建图顶刊标准已达成（无保留）”：
-1. P10-P14 全部硬验收通过；  
-2. `scripts/update_summary_tables.py --prefer_p4_final --verbose` 一条命令可刷新全部终版表；  
-3. `BENCHMARK_REPORT.md` 主结论仅引用终版封板产物；  
-4. 无 “placeholder baseline” 与无 “口径混表” 条目进入主结论。
+1. P10-P15 全部硬验收通过；  
+2. `P0-R / P12-R / P13-R` 三项审计重跑通过并回写主表；  
+3. `slam` 口径主结论仅来自 `--egf_slam_no_gt_delta_odom` 结果；  
+4. 主表同时包含协议分离与双口径 ghost 字段（或在伴随表明确给出）；  
+5. 无 “placeholder baseline” 与无 “口径混表” 条目进入主结论；  
+6. `scripts/update_summary_tables.py --prefer_p4_final --verbose` 一条命令可刷新全部终版表；  
+7. `BENCHMARK_REPORT.md` 主结论仅引用终版封板产物。
+
+> 当前状态（2026-03-04）：审计阻断项已解除（`P0-R/P12-R/P13-R` 完成并回写）；是否最终封板按第 7.4 条其余条件继续判定。
 
 ### 7.5 完成后允许的结论措辞（固定）
 

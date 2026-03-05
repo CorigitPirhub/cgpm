@@ -323,6 +323,10 @@ def compute_dynamic_metrics(
     pred = np.asarray(pred_points, dtype=float)
     stable_bg = np.asarray(stable_bg_points, dtype=float)
     tail = np.asarray(tail_points, dtype=float)
+    pred_count = float(pred.shape[0])
+    tail_count = float(tail.shape[0])
+    dynamic_region_count = float(len(dynamic_region)) if dynamic_region else 0.0
+
     if pred.shape[0] == 0:
         return {
             "ghost_count": 0.0,
@@ -331,17 +335,27 @@ def compute_dynamic_metrics(
             "roi_ghost_ratio": 0.0,
             "ghost_tail_count": 0.0,
             "ghost_tail_ratio": 0.0,
+            "ghost_ratio_pred_denom": 0.0,
+            "ghost_ratio_dyn_ref_denom": 0.0,
+            "ghost_tail_ratio_pred_denom": 0.0,
+            "ghost_tail_ratio_ref_denom": 0.0,
+            "pred_points_count": 0.0,
+            "tail_points_count": 0.0,
+            "dynamic_region_count": dynamic_region_count,
             "background_recovery": 0.0,
             "roi_background_recovery": 0.0,
         }
     if tail.shape[0] == 0:
         ghost_count = float(pred.shape[0])
-        ghost_ratio = 1.0
+        ghost_tail_ratio_pred = 1.0
+        # If tail reference is unavailable, use a conservative sentinel ratio.
+        ghost_tail_ratio_ref = 1.0
     else:
         tail_tree = cKDTree(tail)
         d_tail, _ = tail_tree.query(pred, k=1)
         ghost_count = float(np.count_nonzero(d_tail > float(ghost_thresh)))
-        ghost_ratio = ghost_count / max(1.0, float(pred.shape[0]))
+        ghost_tail_ratio_pred = ghost_count / max(1.0, pred_count)
+        ghost_tail_ratio_ref = ghost_count / max(1.0, tail_count)
 
     if dynamic_region:
         idx = np.floor(pred / float(dynamic_voxel)).astype(np.int32)
@@ -350,15 +364,17 @@ def compute_dynamic_metrics(
             if (int(v[0]), int(v[1]), int(v[2])) in dynamic_region:
                 dyn_hits += 1
         ghost_count_dyn = float(dyn_hits)
-        ghost_ratio_dyn = ghost_count_dyn / max(1.0, float(pred.shape[0]))
+        ghost_ratio_dyn = ghost_count_dyn / max(1.0, pred_count)
+        ghost_ratio_dyn_ref = ghost_count_dyn / max(1.0, dynamic_region_count)
         pred_voxels = {(int(v[0]), int(v[1]), int(v[2])) for v in idx}
         ghost_roi_hits = float(len(pred_voxels.intersection(dynamic_region)))
         ghost_roi_ratio = ghost_roi_hits / max(1.0, float(len(dynamic_region)))
     else:
         ghost_count_dyn = ghost_count
-        ghost_ratio_dyn = ghost_ratio
+        ghost_ratio_dyn = ghost_tail_ratio_pred
+        ghost_ratio_dyn_ref = ghost_tail_ratio_ref
         ghost_roi_hits = ghost_count
-        ghost_roi_ratio = ghost_ratio
+        ghost_roi_ratio = ghost_tail_ratio_pred
 
     if stable_bg.shape[0] == 0:
         bg_recovery = 0.0
@@ -379,7 +395,17 @@ def compute_dynamic_metrics(
         "roi_ghost_count": ghost_roi_hits,
         "roi_ghost_ratio": ghost_roi_ratio,
         "ghost_tail_count": ghost_count,
-        "ghost_tail_ratio": ghost_ratio,
+        "ghost_tail_ratio": ghost_tail_ratio_pred,
+        # Dual-caliber reporting:
+        # 1) pred-denominator ratio (density-sensitive, legacy-compatible);
+        # 2) reference-denominator ratio (coverage-normalized).
+        "ghost_ratio_pred_denom": ghost_ratio_dyn,
+        "ghost_ratio_dyn_ref_denom": ghost_ratio_dyn_ref,
+        "ghost_tail_ratio_pred_denom": ghost_tail_ratio_pred,
+        "ghost_tail_ratio_ref_denom": ghost_tail_ratio_ref,
+        "pred_points_count": pred_count,
+        "tail_points_count": tail_count,
+        "dynamic_region_count": dynamic_region_count,
         "background_recovery": bg_recovery,
         "roi_background_recovery": bg_recovery_roi,
     }
@@ -599,6 +625,19 @@ def run_method(
     force: bool,
     dry_run: bool,
     egf_sigma_n0: float,
+    egf_assoc_hetero_enable: bool,
+    egf_assoc_hetero_inc_ref_cos: float,
+    egf_assoc_hetero_depth_ref_m: float,
+    egf_assoc_hetero_normal_ref: float,
+    egf_assoc_hetero_k_inc: float,
+    egf_assoc_hetero_k_depth: float,
+    egf_assoc_hetero_k_normal: float,
+    egf_assoc_hetero_good_cos: float,
+    egf_assoc_hetero_good_bonus: float,
+    egf_assoc_hetero_sigma_d_min_scale: float,
+    egf_assoc_hetero_sigma_d_max_scale: float,
+    egf_assoc_hetero_sigma_n_min_scale: float,
+    egf_assoc_hetero_sigma_n_max_scale: float,
     egf_truncation: float,
     egf_static_truncation: float,
     egf_rho_decay: float,
@@ -610,6 +649,29 @@ def run_method(
     egf_dscore_ema: float,
     egf_residual_score_weight: float,
     egf_integration_radius_scale: float,
+    egf_lzcd_enable: bool,
+    egf_lzcd_interval: int,
+    egf_lzcd_radius_cells: int,
+    egf_lzcd_min_neighbors: int,
+    egf_lzcd_min_phi_w: float,
+    egf_lzcd_min_rho: float,
+    egf_lzcd_max_dscore: float,
+    egf_lzcd_neighbor_phi_gate: float,
+    egf_lzcd_normal_cos_min: float,
+    egf_lzcd_bias_alpha: float,
+    egf_lzcd_correction_gain: float,
+    egf_lzcd_max_bias: float,
+    egf_lzcd_max_step: float,
+    egf_lzcd_trim_quantile: float,
+    egf_lzcd_use_geo_channel: bool,
+    egf_stcg_enable: bool,
+    egf_stcg_alpha: float,
+    egf_stcg_conflict_weight: float,
+    egf_stcg_residual_weight: float,
+    egf_stcg_osc_weight: float,
+    egf_stcg_free_ratio_ref: float,
+    egf_stcg_on_thresh: float,
+    egf_stcg_off_thresh: float,
     egf_raycast_clear_gain: float,
     egf_raycast_step_scale: float,
     egf_raycast_end_margin: float,
@@ -638,6 +700,7 @@ def run_method(
     egf_surface_prune_residual_min: float,
     egf_surface_max_clear_hits: float,
     egf_surface_use_zero_crossing: bool,
+    egf_surface_use_phi_geo_channel: bool,
     egf_surface_zero_crossing_max_offset: float,
     egf_surface_zero_crossing_phi_gate: float,
     egf_surface_consistency_enable: bool,
@@ -672,6 +735,16 @@ def run_method(
     egf_surface_adaptive_phi_max_scale: float,
     egf_surface_adaptive_min_weight_gain: float,
     egf_surface_adaptive_free_ratio_gain: float,
+    egf_surface_lzcd_apply_in_extraction: bool,
+    egf_surface_lzcd_bias_scale: float,
+    egf_surface_stcg_enable: bool,
+    egf_surface_stcg_min_score: float,
+    egf_surface_stcg_rho_ref: float,
+    egf_surface_stcg_free_shrink: float,
+    egf_surface_stcg_phi_shrink: float,
+    egf_surface_stcg_dscore_shrink: float,
+    egf_surface_stcg_weight_gain: float,
+    egf_surface_stcg_static_protect: float,
     egf_bonn_surface_adaptive_enable: bool,
     egf_bonn_surface_adaptive_rho_ref: float,
     egf_bonn_surface_adaptive_phi_min_scale: float,
@@ -825,6 +898,30 @@ def run_method(
                 str(float(max(1.5 * voxel_size, egf_truncation))),
                 "--sigma_n0",
                 str(float(egf_sigma_n0)),
+                "--assoc_hetero_inc_ref_cos",
+                str(float(np.clip(egf_assoc_hetero_inc_ref_cos, 1e-3, 1.0))),
+                "--assoc_hetero_depth_ref_m",
+                str(float(max(1e-3, egf_assoc_hetero_depth_ref_m))),
+                "--assoc_hetero_normal_ref",
+                str(float(max(1e-4, egf_assoc_hetero_normal_ref))),
+                "--assoc_hetero_k_inc",
+                str(float(max(0.0, egf_assoc_hetero_k_inc))),
+                "--assoc_hetero_k_depth",
+                str(float(max(0.0, egf_assoc_hetero_k_depth))),
+                "--assoc_hetero_k_normal",
+                str(float(max(0.0, egf_assoc_hetero_k_normal))),
+                "--assoc_hetero_good_cos",
+                str(float(np.clip(egf_assoc_hetero_good_cos, 0.0, 1.0))),
+                "--assoc_hetero_good_bonus",
+                str(float(np.clip(egf_assoc_hetero_good_bonus, 0.0, 0.9))),
+                "--assoc_hetero_sigma_d_min_scale",
+                str(float(max(1e-3, egf_assoc_hetero_sigma_d_min_scale))),
+                "--assoc_hetero_sigma_d_max_scale",
+                str(float(max(egf_assoc_hetero_sigma_d_min_scale, egf_assoc_hetero_sigma_d_max_scale))),
+                "--assoc_hetero_sigma_n_min_scale",
+                str(float(max(1e-3, egf_assoc_hetero_sigma_n_min_scale))),
+                "--assoc_hetero_sigma_n_max_scale",
+                str(float(max(egf_assoc_hetero_sigma_n_min_scale, egf_assoc_hetero_sigma_n_max_scale))),
                 "--rho_decay",
                 str(float(egf_rho_decay)),
                 "--phi_w_decay",
@@ -844,6 +941,46 @@ def run_method(
                 str(float(egf_residual_score_weight)),
                 "--integration_radius_scale",
                 str(float(np.clip(egf_integration_radius_scale, 0.45, 1.0))),
+                "--lzcd_interval",
+                str(int(max(1, egf_lzcd_interval))),
+                "--lzcd_radius_cells",
+                str(int(max(1, egf_lzcd_radius_cells))),
+                "--lzcd_min_neighbors",
+                str(int(max(3, egf_lzcd_min_neighbors))),
+                "--lzcd_min_phi_w",
+                str(float(max(0.0, egf_lzcd_min_phi_w))),
+                "--lzcd_min_rho",
+                str(float(max(0.0, egf_lzcd_min_rho))),
+                "--lzcd_max_dscore",
+                str(float(np.clip(egf_lzcd_max_dscore, 0.0, 1.0))),
+                "--lzcd_neighbor_phi_gate",
+                str(float(max(1e-4, egf_lzcd_neighbor_phi_gate))),
+                "--lzcd_normal_cos_min",
+                str(float(np.clip(egf_lzcd_normal_cos_min, 0.0, 1.0))),
+                "--lzcd_bias_alpha",
+                str(float(np.clip(egf_lzcd_bias_alpha, 0.01, 0.95))),
+                "--lzcd_correction_gain",
+                str(float(np.clip(egf_lzcd_correction_gain, 0.0, 1.0))),
+                "--lzcd_max_bias",
+                str(float(max(1e-4, egf_lzcd_max_bias))),
+                "--lzcd_max_step",
+                str(float(max(1e-4, egf_lzcd_max_step))),
+                "--lzcd_trim_quantile",
+                str(float(np.clip(egf_lzcd_trim_quantile, 0.55, 1.0))),
+                "--stcg_alpha",
+                str(float(np.clip(egf_stcg_alpha, 0.01, 0.95))),
+                "--stcg_conflict_weight",
+                str(float(max(0.0, egf_stcg_conflict_weight))),
+                "--stcg_residual_weight",
+                str(float(max(0.0, egf_stcg_residual_weight))),
+                "--stcg_osc_weight",
+                str(float(max(0.0, egf_stcg_osc_weight))),
+                "--stcg_free_ratio_ref",
+                str(float(max(1e-6, egf_stcg_free_ratio_ref))),
+                "--stcg_on_thresh",
+                str(float(np.clip(egf_stcg_on_thresh, 0.05, 0.95))),
+                "--stcg_off_thresh",
+                str(float(np.clip(egf_stcg_off_thresh, 0.01, 0.90))),
                 "--raycast_clear_gain",
                 str(float(egf_raycast_clear_gain)),
                 "--raycast_step_scale",
@@ -890,13 +1027,49 @@ def run_method(
                 str(float(max(0.0, adaptive_min_weight_gain))),
                 "--surface_adaptive_free_ratio_gain",
                 str(float(np.clip(adaptive_free_ratio_gain, 0.0, 0.99))),
+                "--surface_lzcd_bias_scale",
+                str(float(max(0.0, egf_surface_lzcd_bias_scale))),
+                "--surface_stcg_min_score",
+                str(float(np.clip(egf_surface_stcg_min_score, 0.0, 1.0))),
+                "--surface_stcg_rho_ref",
+                str(float(max(1e-6, egf_surface_stcg_rho_ref))),
+                "--surface_stcg_free_shrink",
+                str(float(np.clip(egf_surface_stcg_free_shrink, 0.0, 1.0))),
+                "--surface_stcg_phi_shrink",
+                str(float(np.clip(egf_surface_stcg_phi_shrink, 0.0, 1.0))),
+                "--surface_stcg_dscore_shrink",
+                str(float(np.clip(egf_surface_stcg_dscore_shrink, 0.0, 1.0))),
+                "--surface_stcg_weight_gain",
+                str(float(max(0.0, egf_surface_stcg_weight_gain))),
+                "--surface_stcg_static_protect",
+                str(float(np.clip(egf_surface_stcg_static_protect, 0.0, 1.0))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
+            if bool(egf_lzcd_enable):
+                cmd.append("--lzcd_enable")
+            if bool(egf_lzcd_use_geo_channel):
+                cmd.append("--lzcd_use_geo_channel")
+            else:
+                cmd.append("--lzcd_no_geo_channel")
+            if bool(egf_stcg_enable):
+                cmd.append("--stcg_enable")
+            if bool(egf_assoc_hetero_enable):
+                cmd.append("--assoc_hetero_enable")
+            else:
+                cmd.append("--assoc_hetero_disable")
             if bool(egf_surface_use_zero_crossing):
                 cmd.append("--surface_use_zero_crossing")
             else:
                 cmd.append("--surface_no_zero_crossing")
+            if bool(egf_surface_use_phi_geo_channel):
+                cmd.append("--surface_use_phi_geo_channel")
+            else:
+                cmd.append("--surface_no_phi_geo_channel")
+            if bool(egf_surface_lzcd_apply_in_extraction):
+                cmd.append("--surface_lzcd_apply_in_extraction")
+            if bool(egf_surface_stcg_enable):
+                cmd.append("--surface_stcg_enable")
             if bool(egf_surface_consistency_enable):
                 cmd += [
                     "--surface_consistency_enable",
@@ -969,6 +1142,30 @@ def run_method(
                 str(float(max(1.5 * voxel_size, egf_static_truncation))),
                 "--sigma_n0",
                 str(float(egf_static_sigma_n0)),
+                "--assoc_hetero_inc_ref_cos",
+                str(float(np.clip(egf_assoc_hetero_inc_ref_cos, 1e-3, 1.0))),
+                "--assoc_hetero_depth_ref_m",
+                str(float(max(1e-3, egf_assoc_hetero_depth_ref_m))),
+                "--assoc_hetero_normal_ref",
+                str(float(max(1e-4, egf_assoc_hetero_normal_ref))),
+                "--assoc_hetero_k_inc",
+                str(float(max(0.0, egf_assoc_hetero_k_inc))),
+                "--assoc_hetero_k_depth",
+                str(float(max(0.0, egf_assoc_hetero_k_depth))),
+                "--assoc_hetero_k_normal",
+                str(float(max(0.0, egf_assoc_hetero_k_normal))),
+                "--assoc_hetero_good_cos",
+                str(float(np.clip(egf_assoc_hetero_good_cos, 0.0, 1.0))),
+                "--assoc_hetero_good_bonus",
+                str(float(np.clip(egf_assoc_hetero_good_bonus, 0.0, 0.9))),
+                "--assoc_hetero_sigma_d_min_scale",
+                str(float(max(1e-3, egf_assoc_hetero_sigma_d_min_scale))),
+                "--assoc_hetero_sigma_d_max_scale",
+                str(float(max(egf_assoc_hetero_sigma_d_min_scale, egf_assoc_hetero_sigma_d_max_scale))),
+                "--assoc_hetero_sigma_n_min_scale",
+                str(float(max(1e-3, egf_assoc_hetero_sigma_n_min_scale))),
+                "--assoc_hetero_sigma_n_max_scale",
+                str(float(max(egf_assoc_hetero_sigma_n_min_scale, egf_assoc_hetero_sigma_n_max_scale))),
                 "--rho_decay",
                 str(float(egf_rho_decay)),
                 "--phi_w_decay",
@@ -1016,9 +1213,67 @@ def run_method(
                 str(float(max(0.0, egf_static_assoc_seed_fallback_frontier_scale))),
                 "--integration_radius_scale",
                 str(float(np.clip(egf_static_integration_radius_scale, 0.45, 1.0))),
+                "--lzcd_interval",
+                str(int(max(1, egf_lzcd_interval))),
+                "--lzcd_radius_cells",
+                str(int(max(1, egf_lzcd_radius_cells))),
+                "--lzcd_min_neighbors",
+                str(int(max(3, egf_lzcd_min_neighbors))),
+                "--lzcd_min_phi_w",
+                str(float(max(0.0, egf_lzcd_min_phi_w))),
+                "--lzcd_min_rho",
+                str(float(max(0.0, egf_lzcd_min_rho))),
+                "--lzcd_max_dscore",
+                str(float(np.clip(egf_lzcd_max_dscore, 0.0, 1.0))),
+                "--lzcd_neighbor_phi_gate",
+                str(float(max(1e-4, egf_lzcd_neighbor_phi_gate))),
+                "--lzcd_normal_cos_min",
+                str(float(np.clip(egf_lzcd_normal_cos_min, 0.0, 1.0))),
+                "--lzcd_bias_alpha",
+                str(float(np.clip(egf_lzcd_bias_alpha, 0.01, 0.95))),
+                "--lzcd_correction_gain",
+                str(float(np.clip(egf_lzcd_correction_gain, 0.0, 1.0))),
+                "--lzcd_max_bias",
+                str(float(max(1e-4, egf_lzcd_max_bias))),
+                "--lzcd_max_step",
+                str(float(max(1e-4, egf_lzcd_max_step))),
+                "--stcg_alpha",
+                str(float(np.clip(egf_stcg_alpha, 0.01, 0.95))),
+                "--stcg_conflict_weight",
+                str(float(max(0.0, egf_stcg_conflict_weight))),
+                "--stcg_residual_weight",
+                str(float(max(0.0, egf_stcg_residual_weight))),
+                "--stcg_osc_weight",
+                str(float(max(0.0, egf_stcg_osc_weight))),
+                "--stcg_free_ratio_ref",
+                str(float(max(1e-6, egf_stcg_free_ratio_ref))),
+                "--surface_lzcd_bias_scale",
+                str(float(max(0.0, egf_surface_lzcd_bias_scale))),
+                "--surface_stcg_min_score",
+                str(float(np.clip(egf_surface_stcg_min_score, 0.0, 1.0))),
+                "--surface_stcg_rho_ref",
+                str(float(max(1e-6, egf_surface_stcg_rho_ref))),
+                "--surface_stcg_free_shrink",
+                str(float(np.clip(egf_surface_stcg_free_shrink, 0.0, 1.0))),
+                "--surface_stcg_phi_shrink",
+                str(float(np.clip(egf_surface_stcg_phi_shrink, 0.0, 1.0))),
+                "--surface_stcg_dscore_shrink",
+                str(float(np.clip(egf_surface_stcg_dscore_shrink, 0.0, 1.0))),
+                "--surface_stcg_weight_gain",
+                str(float(max(0.0, egf_surface_stcg_weight_gain))),
+                "--surface_stcg_static_protect",
+                str(float(np.clip(egf_surface_stcg_static_protect, 0.0, 1.0))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
+            if bool(egf_lzcd_enable):
+                cmd.append("--lzcd_enable")
+            if bool(egf_stcg_enable):
+                cmd.append("--stcg_enable")
+            if bool(egf_assoc_hetero_enable):
+                cmd.append("--assoc_hetero_enable")
+            else:
+                cmd.append("--assoc_hetero_disable")
             if adaptive_enable:
                 cmd.append("--surface_adaptive_enable")
             if bool(egf_static_assoc_seed_fallback_enable):
@@ -1029,6 +1284,10 @@ def run_method(
                 cmd.append("--surface_use_zero_crossing")
             else:
                 cmd.append("--surface_no_zero_crossing")
+            if bool(egf_surface_lzcd_apply_in_extraction):
+                cmd.append("--surface_lzcd_apply_in_extraction")
+            if bool(egf_surface_stcg_enable):
+                cmd.append("--surface_stcg_enable")
             if bool(egf_static_surface_consistency_enable):
                 cmd += [
                     "--surface_consistency_enable",
@@ -1301,6 +1560,19 @@ def main():
     parser.add_argument("--dry_run", action="store_true")
     parser.add_argument("--methods", type=str, default="egf,tsdf,simple_removal")
     parser.add_argument("--egf_sigma_n0", type=float, default=0.26)
+    parser.add_argument("--egf_assoc_hetero_enable", action="store_true")
+    parser.add_argument("--egf_assoc_hetero_inc_ref_cos", type=float, default=0.65)
+    parser.add_argument("--egf_assoc_hetero_depth_ref_m", type=float, default=2.5)
+    parser.add_argument("--egf_assoc_hetero_normal_ref", type=float, default=0.20)
+    parser.add_argument("--egf_assoc_hetero_k_inc", type=float, default=0.45)
+    parser.add_argument("--egf_assoc_hetero_k_depth", type=float, default=0.12)
+    parser.add_argument("--egf_assoc_hetero_k_normal", type=float, default=0.55)
+    parser.add_argument("--egf_assoc_hetero_good_cos", type=float, default=0.90)
+    parser.add_argument("--egf_assoc_hetero_good_bonus", type=float, default=0.20)
+    parser.add_argument("--egf_assoc_hetero_sigma_d_min_scale", type=float, default=0.75)
+    parser.add_argument("--egf_assoc_hetero_sigma_d_max_scale", type=float, default=1.75)
+    parser.add_argument("--egf_assoc_hetero_sigma_n_min_scale", type=float, default=0.70)
+    parser.add_argument("--egf_assoc_hetero_sigma_n_max_scale", type=float, default=2.20)
     parser.add_argument("--egf_truncation", type=float, default=0.08)
     parser.add_argument("--egf_static_truncation", type=float, default=0.08)
     parser.add_argument("--egf_rho_decay", type=float, default=0.998)
@@ -1312,6 +1584,31 @@ def main():
     parser.add_argument("--egf_dscore_ema", type=float, default=0.12)
     parser.add_argument("--egf_residual_score_weight", type=float, default=0.25)
     parser.add_argument("--egf_integration_radius_scale", type=float, default=1.0)
+    parser.add_argument("--egf_lzcd_enable", action="store_true")
+    parser.add_argument("--egf_lzcd_interval", type=int, default=2)
+    parser.add_argument("--egf_lzcd_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_lzcd_min_neighbors", type=int, default=6)
+    parser.add_argument("--egf_lzcd_min_phi_w", type=float, default=0.40)
+    parser.add_argument("--egf_lzcd_min_rho", type=float, default=0.05)
+    parser.add_argument("--egf_lzcd_max_dscore", type=float, default=0.85)
+    parser.add_argument("--egf_lzcd_neighbor_phi_gate", type=float, default=0.25)
+    parser.add_argument("--egf_lzcd_normal_cos_min", type=float, default=0.45)
+    parser.add_argument("--egf_lzcd_bias_alpha", type=float, default=0.18)
+    parser.add_argument("--egf_lzcd_correction_gain", type=float, default=0.35)
+    parser.add_argument("--egf_lzcd_max_bias", type=float, default=0.06)
+    parser.add_argument("--egf_lzcd_max_step", type=float, default=0.02)
+    parser.add_argument("--egf_lzcd_trim_quantile", type=float, default=0.75)
+    parser.add_argument("--egf_lzcd_use_geo_channel", dest="egf_lzcd_use_geo_channel", action="store_true")
+    parser.add_argument("--egf_lzcd_no_geo_channel", dest="egf_lzcd_use_geo_channel", action="store_false")
+    parser.set_defaults(egf_lzcd_use_geo_channel=True)
+    parser.add_argument("--egf_stcg_enable", action="store_true")
+    parser.add_argument("--egf_stcg_alpha", type=float, default=0.12)
+    parser.add_argument("--egf_stcg_conflict_weight", type=float, default=0.60)
+    parser.add_argument("--egf_stcg_residual_weight", type=float, default=0.25)
+    parser.add_argument("--egf_stcg_osc_weight", type=float, default=0.15)
+    parser.add_argument("--egf_stcg_free_ratio_ref", type=float, default=0.90)
+    parser.add_argument("--egf_stcg_on_thresh", type=float, default=0.58)
+    parser.add_argument("--egf_stcg_off_thresh", type=float, default=0.42)
     parser.add_argument("--egf_raycast_clear_gain", type=float, default=0.0)
     parser.add_argument("--egf_raycast_step_scale", type=float, default=0.75)
     parser.add_argument("--egf_raycast_end_margin", type=float, default=0.16)
@@ -1329,8 +1626,19 @@ def main():
     parser.add_argument("--egf_poisson_iters", type=int, default=1)
     parser.add_argument("--egf_poisson_lr", type=float, default=0.08)
     parser.add_argument("--egf_eikonal_lambda", type=float, default=0.02)
-    parser.add_argument("--egf_slam_use_gt_delta_odom", action="store_true", default=True)
-    parser.add_argument("--egf_slam_no_gt_delta_odom", action="store_true")
+    egf_slam_delta_group = parser.add_mutually_exclusive_group()
+    egf_slam_delta_group.add_argument(
+        "--egf_slam_use_gt_delta_odom",
+        dest="egf_slam_use_gt_delta_odom",
+        action="store_true",
+    )
+    egf_slam_delta_group.add_argument(
+        "--egf_slam_no_gt_delta_odom",
+        dest="egf_slam_use_gt_delta_odom",
+        action="store_false",
+    )
+    # Fairness default: no GT-delta odometry in SLAM mode.
+    parser.set_defaults(egf_slam_use_gt_delta_odom=False)
     parser.add_argument("--egf_surface_phi_thresh", type=float, default=0.80)
     parser.add_argument("--egf_surface_rho_thresh", type=float, default=0.0)
     parser.add_argument("--egf_surface_min_weight", type=float, default=0.0)
@@ -1343,6 +1651,17 @@ def main():
     parser.add_argument("--egf_surface_use_zero_crossing", dest="egf_surface_use_zero_crossing", action="store_true")
     parser.add_argument("--egf_surface_no_zero_crossing", dest="egf_surface_use_zero_crossing", action="store_false")
     parser.set_defaults(egf_surface_use_zero_crossing=True)
+    parser.add_argument(
+        "--egf_surface_use_phi_geo_channel",
+        dest="egf_surface_use_phi_geo_channel",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_no_phi_geo_channel",
+        dest="egf_surface_use_phi_geo_channel",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_use_phi_geo_channel=False)
     parser.add_argument("--egf_surface_zero_crossing_max_offset", type=float, default=0.06)
     parser.add_argument("--egf_surface_zero_crossing_phi_gate", type=float, default=0.05)
     parser.add_argument("--egf_surface_consistency_enable", action="store_true")
@@ -1387,6 +1706,16 @@ def main():
     parser.add_argument("--egf_surface_adaptive_phi_max_scale", type=float, default=1.15)
     parser.add_argument("--egf_surface_adaptive_min_weight_gain", type=float, default=0.8)
     parser.add_argument("--egf_surface_adaptive_free_ratio_gain", type=float, default=0.5)
+    parser.add_argument("--egf_surface_lzcd_apply_in_extraction", action="store_true")
+    parser.add_argument("--egf_surface_lzcd_bias_scale", type=float, default=1.0)
+    parser.add_argument("--egf_surface_stcg_enable", action="store_true")
+    parser.add_argument("--egf_surface_stcg_min_score", type=float, default=0.35)
+    parser.add_argument("--egf_surface_stcg_rho_ref", type=float, default=1.8)
+    parser.add_argument("--egf_surface_stcg_free_shrink", type=float, default=0.45)
+    parser.add_argument("--egf_surface_stcg_phi_shrink", type=float, default=0.25)
+    parser.add_argument("--egf_surface_stcg_dscore_shrink", type=float, default=0.30)
+    parser.add_argument("--egf_surface_stcg_weight_gain", type=float, default=0.50)
+    parser.add_argument("--egf_surface_stcg_static_protect", type=float, default=0.70)
     parser.add_argument("--egf_bonn_surface_adaptive_enable", dest="egf_bonn_surface_adaptive_enable", action="store_true")
     parser.add_argument("--egf_bonn_surface_no_adaptive", dest="egf_bonn_surface_adaptive_enable", action="store_false")
     parser.set_defaults(egf_bonn_surface_adaptive_enable=True)
@@ -1470,9 +1799,6 @@ def main():
     parser.add_argument("--external_allow_missing", action="store_true")
     parser.add_argument("--external_require_real", action="store_true")
     args = parser.parse_args()
-    if bool(args.egf_slam_no_gt_delta_odom):
-        args.egf_slam_use_gt_delta_odom = False
-
     # Bonn short-command preset: avoid repeating long dynamic sequence lists.
     # Example: --dataset_kind bonn --dataset_root data/bonn --out_root ...  (no explicit sequences)
     if str(args.dataset_kind).lower() == "bonn":
@@ -1562,6 +1888,19 @@ def main():
                     force=args.force,
                     dry_run=args.dry_run,
                     egf_sigma_n0=args.egf_sigma_n0,
+                    egf_assoc_hetero_enable=bool(args.egf_assoc_hetero_enable),
+                    egf_assoc_hetero_inc_ref_cos=args.egf_assoc_hetero_inc_ref_cos,
+                    egf_assoc_hetero_depth_ref_m=args.egf_assoc_hetero_depth_ref_m,
+                    egf_assoc_hetero_normal_ref=args.egf_assoc_hetero_normal_ref,
+                    egf_assoc_hetero_k_inc=args.egf_assoc_hetero_k_inc,
+                    egf_assoc_hetero_k_depth=args.egf_assoc_hetero_k_depth,
+                    egf_assoc_hetero_k_normal=args.egf_assoc_hetero_k_normal,
+                    egf_assoc_hetero_good_cos=args.egf_assoc_hetero_good_cos,
+                    egf_assoc_hetero_good_bonus=args.egf_assoc_hetero_good_bonus,
+                    egf_assoc_hetero_sigma_d_min_scale=args.egf_assoc_hetero_sigma_d_min_scale,
+                    egf_assoc_hetero_sigma_d_max_scale=args.egf_assoc_hetero_sigma_d_max_scale,
+                    egf_assoc_hetero_sigma_n_min_scale=args.egf_assoc_hetero_sigma_n_min_scale,
+                    egf_assoc_hetero_sigma_n_max_scale=args.egf_assoc_hetero_sigma_n_max_scale,
                     egf_truncation=args.egf_truncation,
                     egf_static_truncation=args.egf_static_truncation,
                     egf_rho_decay=args.egf_rho_decay,
@@ -1573,6 +1912,29 @@ def main():
                     egf_dscore_ema=args.egf_dscore_ema,
                     egf_residual_score_weight=args.egf_residual_score_weight,
                     egf_integration_radius_scale=args.egf_integration_radius_scale,
+                    egf_lzcd_enable=bool(args.egf_lzcd_enable),
+                    egf_lzcd_interval=args.egf_lzcd_interval,
+                    egf_lzcd_radius_cells=args.egf_lzcd_radius_cells,
+                    egf_lzcd_min_neighbors=args.egf_lzcd_min_neighbors,
+                    egf_lzcd_min_phi_w=args.egf_lzcd_min_phi_w,
+                    egf_lzcd_min_rho=args.egf_lzcd_min_rho,
+                    egf_lzcd_max_dscore=args.egf_lzcd_max_dscore,
+                    egf_lzcd_neighbor_phi_gate=args.egf_lzcd_neighbor_phi_gate,
+                    egf_lzcd_normal_cos_min=args.egf_lzcd_normal_cos_min,
+                    egf_lzcd_bias_alpha=args.egf_lzcd_bias_alpha,
+                    egf_lzcd_correction_gain=args.egf_lzcd_correction_gain,
+                    egf_lzcd_max_bias=args.egf_lzcd_max_bias,
+                    egf_lzcd_max_step=args.egf_lzcd_max_step,
+                    egf_lzcd_trim_quantile=args.egf_lzcd_trim_quantile,
+                    egf_lzcd_use_geo_channel=bool(args.egf_lzcd_use_geo_channel),
+                    egf_stcg_enable=bool(args.egf_stcg_enable),
+                    egf_stcg_alpha=args.egf_stcg_alpha,
+                    egf_stcg_conflict_weight=args.egf_stcg_conflict_weight,
+                    egf_stcg_residual_weight=args.egf_stcg_residual_weight,
+                    egf_stcg_osc_weight=args.egf_stcg_osc_weight,
+                    egf_stcg_free_ratio_ref=args.egf_stcg_free_ratio_ref,
+                    egf_stcg_on_thresh=args.egf_stcg_on_thresh,
+                    egf_stcg_off_thresh=args.egf_stcg_off_thresh,
                     egf_raycast_clear_gain=args.egf_raycast_clear_gain,
                     egf_raycast_step_scale=args.egf_raycast_step_scale,
                     egf_raycast_end_margin=args.egf_raycast_end_margin,
@@ -1601,6 +1963,7 @@ def main():
                     egf_surface_prune_residual_min=args.egf_surface_prune_residual_min,
                     egf_surface_max_clear_hits=args.egf_surface_max_clear_hits,
                     egf_surface_use_zero_crossing=args.egf_surface_use_zero_crossing,
+                    egf_surface_use_phi_geo_channel=bool(args.egf_surface_use_phi_geo_channel),
                     egf_surface_zero_crossing_max_offset=args.egf_surface_zero_crossing_max_offset,
                     egf_surface_zero_crossing_phi_gate=args.egf_surface_zero_crossing_phi_gate,
                     egf_surface_consistency_enable=args.egf_surface_consistency_enable,
@@ -1635,6 +1998,16 @@ def main():
                     egf_surface_adaptive_phi_max_scale=args.egf_surface_adaptive_phi_max_scale,
                     egf_surface_adaptive_min_weight_gain=args.egf_surface_adaptive_min_weight_gain,
                     egf_surface_adaptive_free_ratio_gain=args.egf_surface_adaptive_free_ratio_gain,
+                    egf_surface_lzcd_apply_in_extraction=bool(args.egf_surface_lzcd_apply_in_extraction),
+                    egf_surface_lzcd_bias_scale=args.egf_surface_lzcd_bias_scale,
+                    egf_surface_stcg_enable=bool(args.egf_surface_stcg_enable),
+                    egf_surface_stcg_min_score=args.egf_surface_stcg_min_score,
+                    egf_surface_stcg_rho_ref=args.egf_surface_stcg_rho_ref,
+                    egf_surface_stcg_free_shrink=args.egf_surface_stcg_free_shrink,
+                    egf_surface_stcg_phi_shrink=args.egf_surface_stcg_phi_shrink,
+                    egf_surface_stcg_dscore_shrink=args.egf_surface_stcg_dscore_shrink,
+                    egf_surface_stcg_weight_gain=args.egf_surface_stcg_weight_gain,
+                    egf_surface_stcg_static_protect=args.egf_surface_stcg_static_protect,
                     egf_bonn_surface_adaptive_enable=bool(args.egf_bonn_surface_adaptive_enable),
                     egf_bonn_surface_adaptive_rho_ref=args.egf_bonn_surface_adaptive_rho_ref,
                     egf_bonn_surface_adaptive_phi_min_scale=args.egf_bonn_surface_adaptive_phi_min_scale,
@@ -1814,6 +2187,13 @@ def main():
                     "roi_ghost_ratio": dyn["roi_ghost_ratio"],
                     "ghost_tail_count": dyn["ghost_tail_count"],
                     "ghost_tail_ratio": dyn["ghost_tail_ratio"],
+                    "ghost_ratio_pred_denom": dyn["ghost_ratio_pred_denom"],
+                    "ghost_ratio_dyn_ref_denom": dyn["ghost_ratio_dyn_ref_denom"],
+                    "ghost_tail_ratio_pred_denom": dyn["ghost_tail_ratio_pred_denom"],
+                    "ghost_tail_ratio_ref_denom": dyn["ghost_tail_ratio_ref_denom"],
+                    "pred_points_count": dyn["pred_points_count"],
+                    "tail_points_count": dyn["tail_points_count"],
+                    "dynamic_region_count": dyn["dynamic_region_count"],
                     "background_recovery": dyn["background_recovery"],
                     "roi_background_recovery": dyn["roi_background_recovery"],
                     "ate_rmse": float(traj.get("ate_rmse", np.nan)),
@@ -1854,6 +2234,13 @@ def main():
                         "roi_ghost_ratio": dyn["roi_ghost_ratio"],
                         "ghost_tail_count": dyn["ghost_tail_count"],
                         "ghost_tail_ratio": dyn["ghost_tail_ratio"],
+                        "ghost_ratio_pred_denom": dyn["ghost_ratio_pred_denom"],
+                        "ghost_ratio_dyn_ref_denom": dyn["ghost_ratio_dyn_ref_denom"],
+                        "ghost_tail_ratio_pred_denom": dyn["ghost_tail_ratio_pred_denom"],
+                        "ghost_tail_ratio_ref_denom": dyn["ghost_tail_ratio_ref_denom"],
+                        "pred_points_count": dyn["pred_points_count"],
+                        "tail_points_count": dyn["tail_points_count"],
+                        "dynamic_region_count": dyn["dynamic_region_count"],
                         "background_recovery": dyn["background_recovery"],
                         "roi_background_recovery": dyn["roi_background_recovery"],
                         "normal_consistency": recon["normal_consistency"],
@@ -1931,6 +2318,13 @@ def main():
             "roi_ghost_ratio",
             "ghost_tail_count",
             "ghost_tail_ratio",
+            "ghost_ratio_pred_denom",
+            "ghost_ratio_dyn_ref_denom",
+            "ghost_tail_ratio_pred_denom",
+            "ghost_tail_ratio_ref_denom",
+            "pred_points_count",
+            "tail_points_count",
+            "dynamic_region_count",
             "background_recovery",
             "roi_background_recovery",
             "ate_rmse",
@@ -1963,6 +2357,13 @@ def main():
             "roi_ghost_ratio",
             "ghost_tail_count",
             "ghost_tail_ratio",
+            "ghost_ratio_pred_denom",
+            "ghost_ratio_dyn_ref_denom",
+            "ghost_tail_ratio_pred_denom",
+            "ghost_tail_ratio_ref_denom",
+            "pred_points_count",
+            "tail_points_count",
+            "dynamic_region_count",
             "background_recovery",
             "roi_background_recovery",
             "normal_consistency",
