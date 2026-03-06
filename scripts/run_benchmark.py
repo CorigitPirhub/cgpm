@@ -638,6 +638,15 @@ def run_method(
     egf_assoc_hetero_sigma_d_max_scale: float,
     egf_assoc_hetero_sigma_n_min_scale: float,
     egf_assoc_hetero_sigma_n_max_scale: float,
+    egf_assoc_contra_gate_enable: bool,
+    egf_assoc_contra_stmem_weight: float,
+    egf_assoc_contra_visibility_weight: float,
+    egf_assoc_contra_residual_weight: float,
+    egf_assoc_contra_free_ratio_ref: float,
+    egf_assoc_contra_rho_ref: float,
+    egf_assoc_contra_static_guard: float,
+    egf_assoc_contra_rho_guard: float,
+    egf_assoc_contra_d2_boost_max: float,
     egf_truncation: float,
     egf_static_truncation: float,
     egf_rho_decay: float,
@@ -649,6 +658,39 @@ def run_method(
     egf_dscore_ema: float,
     egf_residual_score_weight: float,
     egf_integration_radius_scale: float,
+    egf_dual_state_enable: bool,
+    egf_dual_state_assoc_weight: float,
+    egf_dual_state_free_weight: float,
+    egf_dual_state_residual_weight: float,
+    egf_dual_state_osc_weight: float,
+    egf_dual_state_pose_weight: float,
+    egf_dual_state_bias: float,
+    egf_dual_state_temp: float,
+    egf_dual_pose_var_ref: float,
+    egf_dual_state_static_ema: float,
+    egf_dual_state_min_static_ratio: float,
+    egf_dual_state_commit_thresh: float,
+    egf_dual_state_rollback_thresh: float,
+    egf_dual_state_commit_gain: float,
+    egf_dual_state_rollback_gain: float,
+    egf_dual_state_static_protect_rho: float,
+    egf_dual_state_static_protect_ratio: float,
+    egf_dual_state_static_decay_mult: float,
+    egf_dual_state_transient_decay_mult: float,
+    egf_ptdsf_enable: bool,
+    egf_ptdsf_rho_alpha: float,
+    egf_ptdsf_static_blend: float,
+    egf_ptdsf_commit_age_ref: float,
+    egf_ptdsf_commit_bonus: float,
+    egf_ptdsf_rollback_bonus: float,
+    egf_wod_enable: bool,
+    egf_rps_enable: bool,
+    egf_rps_hard_commit_enable: bool,
+    egf_rps_surface_bank_enable: bool,
+    egf_wdsg_enable: bool,
+    egf_wdsg_route_enable: bool,
+    egf_spg_enable: bool,
+    egf_otv_enable: bool,
     egf_lzcd_enable: bool,
     egf_lzcd_interval: int,
     egf_lzcd_radius_cells: int,
@@ -663,8 +705,37 @@ def run_method(
     egf_lzcd_max_bias: float,
     egf_lzcd_max_step: float,
     egf_lzcd_trim_quantile: float,
+    egf_lzcd_solver_iters: int,
+    egf_lzcd_solver_lambda_smooth: float,
+    egf_lzcd_solver_step: float,
+    egf_lzcd_solver_tol: float,
+    egf_lzcd_residual_anchor_weight: float,
+    egf_lzcd_residual_alpha: float,
+    egf_lzcd_residual_hit_ref: float,
+    egf_lzcd_residual_max_abs: float,
+    egf_lzcd_max_candidates: int,
+    egf_zcbf_enable: bool,
+    egf_zcbf_block_size_cells: int,
+    egf_zcbf_min_rho: float,
+    egf_zcbf_min_phi_w: float,
+    egf_zcbf_max_dscore: float,
+    egf_zcbf_alpha: float,
+    egf_zcbf_trim_quantile: float,
+    egf_zcbf_apply_gain: float,
+    egf_zcbf_max_bias: float,
+    egf_zcbf_static_rho_ref: float,
     egf_lzcd_use_geo_channel: bool,
     egf_stcg_enable: bool,
+    egf_dccm_enable: bool,
+    egf_dccm_alpha: float,
+    egf_dccm_age_gain: float,
+    egf_dccm_age_decay: float,
+    egf_dccm_commit_thresh: float,
+    egf_dccm_free_weight: float,
+    egf_dccm_rear_weight: float,
+    egf_dccm_age_weight: float,
+    egf_dccm_surface_weight: float,
+    egf_dccm_rho_weight: float,
     egf_stcg_alpha: float,
     egf_stcg_conflict_weight: float,
     egf_stcg_residual_weight: float,
@@ -672,6 +743,16 @@ def run_method(
     egf_stcg_free_ratio_ref: float,
     egf_stcg_on_thresh: float,
     egf_stcg_off_thresh: float,
+    egf_zdyn_enable: bool,
+    egf_zdyn_alpha_up: float,
+    egf_zdyn_alpha_down: float,
+    egf_zdyn_decay: float,
+    egf_zdyn_conflict_weight: float,
+    egf_zdyn_visibility_weight: float,
+    egf_zdyn_residual_weight: float,
+    egf_zdyn_osc_weight: float,
+    egf_zdyn_free_ratio_weight: float,
+    egf_zdyn_free_ratio_ref: float,
     egf_raycast_clear_gain: float,
     egf_raycast_step_scale: float,
     egf_raycast_end_margin: float,
@@ -701,6 +782,39 @@ def run_method(
     egf_surface_max_clear_hits: float,
     egf_surface_use_zero_crossing: bool,
     egf_surface_use_phi_geo_channel: bool,
+    egf_surface_use_dual_static_channel: bool,
+    egf_surface_dual_p_static_min: float,
+    egf_surface_structural_decouple_enable: bool,
+    egf_surface_decouple_min_geo_weight_ratio: float,
+    egf_surface_decouple_dyn_drop_thresh: float,
+    egf_surface_decouple_dyn_rho_guard: float,
+    egf_surface_decouple_dyn_free_ratio_thresh: float,
+    egf_surface_decouple_channel_div_enable: bool,
+    egf_surface_decouple_channel_div_thresh: float,
+    egf_surface_decouple_channel_div_weight: float,
+    egf_surface_decouple_channel_div_static_guard: float,
+    egf_surface_dual_layer_extract_enable: bool,
+    egf_surface_dual_layer_geo_min_weight_ratio: float,
+    egf_surface_dual_layer_dyn_use_zdyn: bool,
+    egf_surface_dual_layer_dyn_prob_weight: float,
+    egf_surface_dual_layer_dyn_stmem_weight: float,
+    egf_surface_dual_layer_dyn_contra_weight: float,
+    egf_surface_dual_layer_dyn_transient_weight: float,
+    egf_surface_dual_layer_dyn_phi_div_weight: float,
+    egf_surface_dual_layer_dyn_phi_ratio_weight: float,
+    egf_surface_dual_layer_dyn_phi_div_ref: float,
+    egf_surface_dual_layer_dyn_use_phi_dyn: bool,
+    egf_surface_dual_layer_compete_enable: bool,
+    egf_surface_dual_layer_compete_margin: float,
+    egf_surface_dual_layer_compete_geo_weight: float,
+    egf_surface_dual_layer_compete_dyn_mix_weight: float,
+    egf_surface_dual_layer_compete_dyn_conf_weight: float,
+    egf_surface_dual_layer_dyn_drop_thresh: float,
+    egf_surface_dual_layer_dyn_free_ratio_min: float,
+    egf_surface_dual_layer_static_anchor_rho: float,
+    egf_surface_dual_layer_static_anchor_p: float,
+    egf_surface_dual_layer_static_anchor_ratio: float,
+    egf_surface_omhs_enable: bool,
     egf_surface_zero_crossing_max_offset: float,
     egf_surface_zero_crossing_phi_gate: float,
     egf_surface_consistency_enable: bool,
@@ -737,7 +851,16 @@ def run_method(
     egf_surface_adaptive_free_ratio_gain: float,
     egf_surface_lzcd_apply_in_extraction: bool,
     egf_surface_lzcd_bias_scale: float,
+    egf_surface_ptdsf_persistent_only_enable: bool,
+    egf_surface_ptdsf_persistent_min_rho: float,
+    egf_surface_ptdsf_static_rho_weight: float,
+    egf_surface_zcbf_apply_in_extraction: bool,
+    egf_surface_zcbf_bias_scale: float,
     egf_surface_stcg_enable: bool,
+    egf_surface_dccm_enable: bool,
+    egf_surface_dccm_commit_weight: float,
+    egf_surface_dccm_static_guard: float,
+    egf_surface_dccm_drop_gain: float,
     egf_surface_stcg_min_score: float,
     egf_surface_stcg_rho_ref: float,
     egf_surface_stcg_free_shrink: float,
@@ -745,6 +868,12 @@ def run_method(
     egf_surface_stcg_dscore_shrink: float,
     egf_surface_stcg_weight_gain: float,
     egf_surface_stcg_static_protect: float,
+    egf_sse_em_enable: bool,
+    egf_lbr_enable: bool,
+    egf_vcr_enable: bool,
+    egf_rbi_enable: bool,
+    egf_surface_ebcut_enable: bool,
+    egf_surface_mopc_enable: bool,
     egf_bonn_surface_adaptive_enable: bool,
     egf_bonn_surface_adaptive_rho_ref: float,
     egf_bonn_surface_adaptive_phi_min_scale: float,
@@ -922,6 +1051,22 @@ def run_method(
                 str(float(max(1e-3, egf_assoc_hetero_sigma_n_min_scale))),
                 "--assoc_hetero_sigma_n_max_scale",
                 str(float(max(egf_assoc_hetero_sigma_n_min_scale, egf_assoc_hetero_sigma_n_max_scale))),
+                "--assoc_contra_stmem_weight",
+                str(float(max(0.0, egf_assoc_contra_stmem_weight))),
+                "--assoc_contra_visibility_weight",
+                str(float(max(0.0, egf_assoc_contra_visibility_weight))),
+                "--assoc_contra_residual_weight",
+                str(float(max(0.0, egf_assoc_contra_residual_weight))),
+                "--assoc_contra_free_ratio_ref",
+                str(float(max(1e-6, egf_assoc_contra_free_ratio_ref))),
+                "--assoc_contra_rho_ref",
+                str(float(max(1e-6, egf_assoc_contra_rho_ref))),
+                "--assoc_contra_static_guard",
+                str(float(np.clip(egf_assoc_contra_static_guard, 0.0, 1.0))),
+                "--assoc_contra_rho_guard",
+                str(float(np.clip(egf_assoc_contra_rho_guard, 0.0, 1.0))),
+                "--assoc_contra_d2_boost_max",
+                str(float(max(1.0, egf_assoc_contra_d2_boost_max))),
                 "--rho_decay",
                 str(float(egf_rho_decay)),
                 "--phi_w_decay",
@@ -941,6 +1086,54 @@ def run_method(
                 str(float(egf_residual_score_weight)),
                 "--integration_radius_scale",
                 str(float(np.clip(egf_integration_radius_scale, 0.45, 1.0))),
+                "--dual_state_assoc_weight",
+                str(float(max(0.0, egf_dual_state_assoc_weight))),
+                "--dual_state_free_weight",
+                str(float(max(0.0, egf_dual_state_free_weight))),
+                "--dual_state_residual_weight",
+                str(float(max(0.0, egf_dual_state_residual_weight))),
+                "--dual_state_osc_weight",
+                str(float(max(0.0, egf_dual_state_osc_weight))),
+                "--dual_state_pose_weight",
+                str(float(max(0.0, egf_dual_state_pose_weight))),
+                "--dual_state_bias",
+                str(float(np.clip(egf_dual_state_bias, 0.0, 1.0))),
+                "--dual_state_temp",
+                str(float(max(1e-3, egf_dual_state_temp))),
+                "--dual_pose_var_ref",
+                str(float(max(1e-6, egf_dual_pose_var_ref))),
+                "--dual_state_static_ema",
+                str(float(np.clip(egf_dual_state_static_ema, 0.01, 0.95))),
+                "--dual_state_min_static_ratio",
+                str(float(np.clip(egf_dual_state_min_static_ratio, 0.0, 0.5))),
+                "--dual_state_commit_thresh",
+                str(float(np.clip(egf_dual_state_commit_thresh, 0.0, 1.0))),
+                "--dual_state_rollback_thresh",
+                str(float(np.clip(egf_dual_state_rollback_thresh, 0.0, 1.0))),
+                "--dual_state_commit_gain",
+                str(float(np.clip(egf_dual_state_commit_gain, 0.0, 1.0))),
+                "--dual_state_rollback_gain",
+                str(float(np.clip(egf_dual_state_rollback_gain, 0.0, 1.0))),
+                "--dual_state_static_protect_rho",
+                str(float(max(0.0, egf_dual_state_static_protect_rho))),
+                "--dual_state_static_protect_ratio",
+                str(float(max(1e-6, egf_dual_state_static_protect_ratio))),
+                "--dual_state_static_decay_mult",
+                str(float(max(0.2, egf_dual_state_static_decay_mult))),
+                "--dual_state_transient_decay_mult",
+                str(float(max(0.2, egf_dual_state_transient_decay_mult))),
+                "--ptdsf_rho_alpha",
+                str(float(np.clip(egf_ptdsf_rho_alpha, 0.01, 1.0))),
+                "--ptdsf_static_blend",
+                str(float(np.clip(egf_ptdsf_static_blend, 0.0, 1.0))),
+                "--ptdsf_commit_age_ref",
+                str(float(max(1.0, egf_ptdsf_commit_age_ref))),
+                "--ptdsf_commit_bonus",
+                str(float(max(0.0, egf_ptdsf_commit_bonus))),
+                "--ptdsf_rollback_bonus",
+                str(float(max(0.0, egf_ptdsf_rollback_bonus))),
+                "--surface_dual_p_static_min",
+                str(float(max(0.0, egf_surface_dual_p_static_min))),
                 "--lzcd_interval",
                 str(int(max(1, egf_lzcd_interval))),
                 "--lzcd_radius_cells",
@@ -967,6 +1160,60 @@ def run_method(
                 str(float(max(1e-4, egf_lzcd_max_step))),
                 "--lzcd_trim_quantile",
                 str(float(np.clip(egf_lzcd_trim_quantile, 0.55, 1.0))),
+                "--lzcd_solver_iters",
+                str(int(max(1, egf_lzcd_solver_iters))),
+                "--lzcd_solver_lambda_smooth",
+                str(float(max(0.0, egf_lzcd_solver_lambda_smooth))),
+                "--lzcd_solver_step",
+                str(float(np.clip(egf_lzcd_solver_step, 0.10, 1.0))),
+                "--lzcd_solver_tol",
+                str(float(max(1e-6, egf_lzcd_solver_tol))),
+                "--lzcd_residual_anchor_weight",
+                str(float(np.clip(egf_lzcd_residual_anchor_weight, 0.0, 0.95))),
+                "--lzcd_residual_alpha",
+                str(float(np.clip(egf_lzcd_residual_alpha, 0.01, 0.95))),
+                "--lzcd_residual_hit_ref",
+                str(float(max(1.0, egf_lzcd_residual_hit_ref))),
+                "--lzcd_residual_max_abs",
+                str(float(max(1e-4, egf_lzcd_residual_max_abs))),
+                "--lzcd_max_candidates",
+                str(int(max(0, egf_lzcd_max_candidates))),
+                "--zcbf_block_size_cells",
+                str(int(max(1, egf_zcbf_block_size_cells))),
+                "--zcbf_min_rho",
+                str(float(max(0.0, egf_zcbf_min_rho))),
+                "--zcbf_min_phi_w",
+                str(float(max(0.0, egf_zcbf_min_phi_w))),
+                "--zcbf_max_dscore",
+                str(float(np.clip(egf_zcbf_max_dscore, 0.0, 1.0))),
+                "--zcbf_alpha",
+                str(float(np.clip(egf_zcbf_alpha, 0.01, 0.95))),
+                "--zcbf_trim_quantile",
+                str(float(np.clip(egf_zcbf_trim_quantile, 0.55, 1.0))),
+                "--zcbf_apply_gain",
+                str(float(np.clip(egf_zcbf_apply_gain, 0.0, 1.0))),
+                "--zcbf_max_bias",
+                str(float(max(1e-5, egf_zcbf_max_bias))),
+                "--zcbf_static_rho_ref",
+                str(float(max(1e-6, egf_zcbf_static_rho_ref))),
+                "--dccm_alpha",
+                str(float(np.clip(egf_dccm_alpha, 0.01, 0.95))),
+                "--dccm_age_gain",
+                str(float(max(0.0, egf_dccm_age_gain))),
+                "--dccm_age_decay",
+                str(float(np.clip(egf_dccm_age_decay, 0.70, 1.0))),
+                "--dccm_commit_thresh",
+                str(float(np.clip(egf_dccm_commit_thresh, 0.0, 1.0))),
+                "--dccm_free_weight",
+                str(float(max(0.0, egf_dccm_free_weight))),
+                "--dccm_rear_weight",
+                str(float(max(0.0, egf_dccm_rear_weight))),
+                "--dccm_age_weight",
+                str(float(max(0.0, egf_dccm_age_weight))),
+                "--dccm_surface_weight",
+                str(float(max(0.0, egf_dccm_surface_weight))),
+                "--dccm_rho_weight",
+                str(float(max(0.0, egf_dccm_rho_weight))),
                 "--stcg_alpha",
                 str(float(np.clip(egf_stcg_alpha, 0.01, 0.95))),
                 "--stcg_conflict_weight",
@@ -981,6 +1228,24 @@ def run_method(
                 str(float(np.clip(egf_stcg_on_thresh, 0.05, 0.95))),
                 "--stcg_off_thresh",
                 str(float(np.clip(egf_stcg_off_thresh, 0.01, 0.90))),
+                "--zdyn_alpha_up",
+                str(float(np.clip(egf_zdyn_alpha_up, 0.01, 0.95))),
+                "--zdyn_alpha_down",
+                str(float(np.clip(egf_zdyn_alpha_down, 0.01, 0.95))),
+                "--zdyn_decay",
+                str(float(np.clip(egf_zdyn_decay, 0.80, 1.0))),
+                "--zdyn_conflict_weight",
+                str(float(max(0.0, egf_zdyn_conflict_weight))),
+                "--zdyn_visibility_weight",
+                str(float(max(0.0, egf_zdyn_visibility_weight))),
+                "--zdyn_residual_weight",
+                str(float(max(0.0, egf_zdyn_residual_weight))),
+                "--zdyn_osc_weight",
+                str(float(max(0.0, egf_zdyn_osc_weight))),
+                "--zdyn_free_ratio_weight",
+                str(float(max(0.0, egf_zdyn_free_ratio_weight))),
+                "--zdyn_free_ratio_ref",
+                str(float(max(1e-6, egf_zdyn_free_ratio_ref))),
                 "--raycast_clear_gain",
                 str(float(egf_raycast_clear_gain)),
                 "--raycast_step_scale",
@@ -1029,6 +1294,12 @@ def run_method(
                 str(float(np.clip(adaptive_free_ratio_gain, 0.0, 0.99))),
                 "--surface_lzcd_bias_scale",
                 str(float(max(0.0, egf_surface_lzcd_bias_scale))),
+                "--surface_ptdsf_persistent_min_rho",
+                str(float(max(0.0, egf_surface_ptdsf_persistent_min_rho))),
+                "--surface_ptdsf_static_rho_weight",
+                str(float(max(0.0, egf_surface_ptdsf_static_rho_weight))),
+                "--surface_zcbf_bias_scale",
+                str(float(max(0.0, egf_surface_zcbf_bias_scale))),
                 "--surface_stcg_min_score",
                 str(float(np.clip(egf_surface_stcg_min_score, 0.0, 1.0))),
                 "--surface_stcg_rho_ref",
@@ -1043,21 +1314,107 @@ def run_method(
                 str(float(max(0.0, egf_surface_stcg_weight_gain))),
                 "--surface_stcg_static_protect",
                 str(float(np.clip(egf_surface_stcg_static_protect, 0.0, 1.0))),
+                "--surface_dccm_commit_weight",
+                str(float(max(0.0, egf_surface_dccm_commit_weight))),
+                "--surface_dccm_static_guard",
+                str(float(np.clip(egf_surface_dccm_static_guard, 0.0, 1.0))),
+                "--surface_dccm_drop_gain",
+                str(float(np.clip(egf_surface_dccm_drop_gain, 0.0, 1.0))),
+                "--surface_decouple_min_geo_weight_ratio",
+                str(float(max(1e-6, egf_surface_decouple_min_geo_weight_ratio))),
+                "--surface_decouple_dyn_drop_thresh",
+                str(float(np.clip(egf_surface_decouple_dyn_drop_thresh, 0.0, 1.5))),
+                "--surface_decouple_dyn_rho_guard",
+                str(float(max(0.0, egf_surface_decouple_dyn_rho_guard))),
+                "--surface_decouple_dyn_free_ratio_thresh",
+                str(float(max(0.0, egf_surface_decouple_dyn_free_ratio_thresh))),
+                "--surface_decouple_channel_div_thresh",
+                str(float(max(1e-6, egf_surface_decouple_channel_div_thresh))),
+                "--surface_decouple_channel_div_weight",
+                str(float(max(0.0, egf_surface_decouple_channel_div_weight))),
+                "--surface_decouple_channel_div_static_guard",
+                str(float(np.clip(egf_surface_decouple_channel_div_static_guard, 0.0, 1.0))),
+                "--surface_dual_layer_geo_min_weight_ratio",
+                str(float(np.clip(egf_surface_dual_layer_geo_min_weight_ratio, 0.0, 1.0))),
+                "--surface_dual_layer_dyn_prob_weight",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_prob_weight))),
+                "--surface_dual_layer_dyn_stmem_weight",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_stmem_weight))),
+                "--surface_dual_layer_dyn_contra_weight",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_contra_weight))),
+                "--surface_dual_layer_dyn_transient_weight",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_transient_weight))),
+                "--surface_dual_layer_dyn_phi_div_weight",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_phi_div_weight))),
+                "--surface_dual_layer_dyn_phi_ratio_weight",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_phi_ratio_weight))),
+                "--surface_dual_layer_dyn_phi_div_ref",
+                str(float(max(1e-6, egf_surface_dual_layer_dyn_phi_div_ref))),
+                "--surface_dual_layer_compete_margin",
+                str(float(max(0.0, egf_surface_dual_layer_compete_margin))),
+                "--surface_dual_layer_compete_geo_weight",
+                str(float(np.clip(egf_surface_dual_layer_compete_geo_weight, 0.0, 1.0))),
+                "--surface_dual_layer_compete_dyn_mix_weight",
+                str(float(np.clip(egf_surface_dual_layer_compete_dyn_mix_weight, 0.0, 1.0))),
+                "--surface_dual_layer_compete_dyn_conf_weight",
+                str(float(np.clip(egf_surface_dual_layer_compete_dyn_conf_weight, 0.0, 1.0))),
+                "--surface_dual_layer_dyn_drop_thresh",
+                str(float(np.clip(egf_surface_dual_layer_dyn_drop_thresh, 0.0, 1.2))),
+                "--surface_dual_layer_dyn_free_ratio_min",
+                str(float(max(0.0, egf_surface_dual_layer_dyn_free_ratio_min))),
+                "--surface_dual_layer_static_anchor_rho",
+                str(float(max(0.0, egf_surface_dual_layer_static_anchor_rho))),
+                "--surface_dual_layer_static_anchor_p",
+                str(float(np.clip(egf_surface_dual_layer_static_anchor_p, 0.0, 1.0))),
+                "--surface_dual_layer_static_anchor_ratio",
+                str(float(max(1e-6, egf_surface_dual_layer_static_anchor_ratio))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
             if bool(egf_lzcd_enable):
                 cmd.append("--lzcd_enable")
+            if bool(egf_dual_state_enable):
+                cmd.append("--dual_state_enable")
+            if bool(egf_ptdsf_enable):
+                cmd.append("--ptdsf_enable")
+            if bool(egf_wod_enable):
+                cmd.append("--wod_enable")
+            if bool(egf_rps_enable):
+                cmd.append("--rps_enable")
+            if bool(egf_rps_hard_commit_enable):
+                cmd.append("--rps_hard_commit_enable")
+            if bool(egf_rps_surface_bank_enable):
+                cmd.append("--rps_surface_bank_enable")
+            if bool(egf_wdsg_enable):
+                cmd.append("--wdsg_enable")
+            if bool(egf_wdsg_route_enable):
+                cmd.append("--wdsg_route_enable")
+            if bool(egf_spg_enable):
+                cmd.append("--spg_enable")
+            if bool(egf_otv_enable):
+                cmd.append("--otv_enable")
+            if bool(egf_surface_omhs_enable):
+                cmd.append("--surface_omhs_enable")
             if bool(egf_lzcd_use_geo_channel):
                 cmd.append("--lzcd_use_geo_channel")
             else:
                 cmd.append("--lzcd_no_geo_channel")
+            if bool(egf_zcbf_enable):
+                cmd.append("--zcbf_enable")
             if bool(egf_stcg_enable):
                 cmd.append("--stcg_enable")
+            if bool(egf_dccm_enable):
+                cmd.append("--dccm_enable")
+            if bool(egf_zdyn_enable):
+                cmd.append("--zdyn_enable")
             if bool(egf_assoc_hetero_enable):
                 cmd.append("--assoc_hetero_enable")
             else:
                 cmd.append("--assoc_hetero_disable")
+            if bool(egf_assoc_contra_gate_enable):
+                cmd.append("--assoc_contra_gate_enable")
+            else:
+                cmd.append("--assoc_contra_gate_disable")
             if bool(egf_surface_use_zero_crossing):
                 cmd.append("--surface_use_zero_crossing")
             else:
@@ -1066,10 +1423,53 @@ def run_method(
                 cmd.append("--surface_use_phi_geo_channel")
             else:
                 cmd.append("--surface_no_phi_geo_channel")
+            if bool(egf_surface_use_dual_static_channel):
+                cmd.append("--surface_use_dual_static_channel")
+            else:
+                cmd.append("--surface_no_dual_static_channel")
+            if bool(egf_surface_structural_decouple_enable):
+                cmd.append("--surface_structural_decouple_enable")
+            else:
+                cmd.append("--surface_structural_decouple_disable")
+            if bool(egf_surface_decouple_channel_div_enable):
+                cmd.append("--surface_decouple_channel_div_enable")
+            if bool(egf_surface_dual_layer_extract_enable):
+                cmd.append("--surface_dual_layer_extract_enable")
+            if bool(egf_surface_dual_layer_dyn_use_zdyn):
+                cmd.append("--surface_dual_layer_dyn_use_zdyn")
+            else:
+                cmd.append("--surface_dual_layer_dyn_no_zdyn")
+            if bool(egf_surface_dual_layer_dyn_use_phi_dyn):
+                cmd.append("--surface_dual_layer_dyn_use_phi_dyn")
+            else:
+                cmd.append("--surface_dual_layer_dyn_no_phi_dyn")
+            if bool(egf_surface_dual_layer_compete_enable):
+                cmd.append("--surface_dual_layer_compete_enable")
+            else:
+                cmd.append("--surface_dual_layer_compete_disable")
             if bool(egf_surface_lzcd_apply_in_extraction):
                 cmd.append("--surface_lzcd_apply_in_extraction")
+            if bool(egf_surface_ptdsf_persistent_only_enable):
+                cmd.append("--surface_ptdsf_persistent_only_enable")
+            if bool(egf_surface_zcbf_apply_in_extraction):
+                cmd.append("--surface_zcbf_apply_in_extraction")
             if bool(egf_surface_stcg_enable):
                 cmd.append("--surface_stcg_enable")
+            if bool(egf_surface_dccm_enable):
+                cmd.append("--surface_dccm_enable")
+                cmd.append("--surface_stcg_enable")
+            if bool(egf_sse_em_enable):
+                cmd.append("--sse_em_enable")
+            if bool(egf_lbr_enable):
+                cmd.append("--lbr_enable")
+            if bool(egf_vcr_enable):
+                cmd.append("--vcr_enable")
+            if bool(egf_rbi_enable):
+                cmd.append("--rbi_enable")
+            if bool(egf_surface_ebcut_enable):
+                cmd.append("--surface_ebcut_enable")
+            if bool(egf_surface_mopc_enable):
+                cmd.append("--surface_mopc_enable")
             if bool(egf_surface_consistency_enable):
                 cmd += [
                     "--surface_consistency_enable",
@@ -1166,6 +1566,22 @@ def run_method(
                 str(float(max(1e-3, egf_assoc_hetero_sigma_n_min_scale))),
                 "--assoc_hetero_sigma_n_max_scale",
                 str(float(max(egf_assoc_hetero_sigma_n_min_scale, egf_assoc_hetero_sigma_n_max_scale))),
+                "--assoc_contra_stmem_weight",
+                str(float(max(0.0, egf_assoc_contra_stmem_weight))),
+                "--assoc_contra_visibility_weight",
+                str(float(max(0.0, egf_assoc_contra_visibility_weight))),
+                "--assoc_contra_residual_weight",
+                str(float(max(0.0, egf_assoc_contra_residual_weight))),
+                "--assoc_contra_free_ratio_ref",
+                str(float(max(1e-6, egf_assoc_contra_free_ratio_ref))),
+                "--assoc_contra_rho_ref",
+                str(float(max(1e-6, egf_assoc_contra_rho_ref))),
+                "--assoc_contra_static_guard",
+                str(float(np.clip(egf_assoc_contra_static_guard, 0.0, 1.0))),
+                "--assoc_contra_rho_guard",
+                str(float(np.clip(egf_assoc_contra_rho_guard, 0.0, 1.0))),
+                "--assoc_contra_d2_boost_max",
+                str(float(max(1.0, egf_assoc_contra_d2_boost_max))),
                 "--rho_decay",
                 str(float(egf_rho_decay)),
                 "--phi_w_decay",
@@ -1213,6 +1629,54 @@ def run_method(
                 str(float(max(0.0, egf_static_assoc_seed_fallback_frontier_scale))),
                 "--integration_radius_scale",
                 str(float(np.clip(egf_static_integration_radius_scale, 0.45, 1.0))),
+                "--dual_state_assoc_weight",
+                str(float(max(0.0, egf_dual_state_assoc_weight))),
+                "--dual_state_free_weight",
+                str(float(max(0.0, egf_dual_state_free_weight))),
+                "--dual_state_residual_weight",
+                str(float(max(0.0, egf_dual_state_residual_weight))),
+                "--dual_state_osc_weight",
+                str(float(max(0.0, egf_dual_state_osc_weight))),
+                "--dual_state_pose_weight",
+                str(float(max(0.0, egf_dual_state_pose_weight))),
+                "--dual_state_bias",
+                str(float(np.clip(egf_dual_state_bias, 0.0, 1.0))),
+                "--dual_state_temp",
+                str(float(max(1e-3, egf_dual_state_temp))),
+                "--dual_pose_var_ref",
+                str(float(max(1e-6, egf_dual_pose_var_ref))),
+                "--dual_state_static_ema",
+                str(float(np.clip(egf_dual_state_static_ema, 0.01, 0.95))),
+                "--dual_state_min_static_ratio",
+                str(float(np.clip(egf_dual_state_min_static_ratio, 0.0, 0.5))),
+                "--dual_state_commit_thresh",
+                str(float(np.clip(egf_dual_state_commit_thresh, 0.0, 1.0))),
+                "--dual_state_rollback_thresh",
+                str(float(np.clip(egf_dual_state_rollback_thresh, 0.0, 1.0))),
+                "--dual_state_commit_gain",
+                str(float(np.clip(egf_dual_state_commit_gain, 0.0, 1.0))),
+                "--dual_state_rollback_gain",
+                str(float(np.clip(egf_dual_state_rollback_gain, 0.0, 1.0))),
+                "--dual_state_static_protect_rho",
+                str(float(max(0.0, egf_dual_state_static_protect_rho))),
+                "--dual_state_static_protect_ratio",
+                str(float(max(1e-6, egf_dual_state_static_protect_ratio))),
+                "--dual_state_static_decay_mult",
+                str(float(max(0.2, egf_dual_state_static_decay_mult))),
+                "--dual_state_transient_decay_mult",
+                str(float(max(0.2, egf_dual_state_transient_decay_mult))),
+                "--ptdsf_rho_alpha",
+                str(float(np.clip(egf_ptdsf_rho_alpha, 0.01, 1.0))),
+                "--ptdsf_static_blend",
+                str(float(np.clip(egf_ptdsf_static_blend, 0.0, 1.0))),
+                "--ptdsf_commit_age_ref",
+                str(float(max(1.0, egf_ptdsf_commit_age_ref))),
+                "--ptdsf_commit_bonus",
+                str(float(max(0.0, egf_ptdsf_commit_bonus))),
+                "--ptdsf_rollback_bonus",
+                str(float(max(0.0, egf_ptdsf_rollback_bonus))),
+                "--surface_dual_p_static_min",
+                str(float(max(0.0, egf_surface_dual_p_static_min))),
                 "--lzcd_interval",
                 str(int(max(1, egf_lzcd_interval))),
                 "--lzcd_radius_cells",
@@ -1237,6 +1701,62 @@ def run_method(
                 str(float(max(1e-4, egf_lzcd_max_bias))),
                 "--lzcd_max_step",
                 str(float(max(1e-4, egf_lzcd_max_step))),
+                "--lzcd_trim_quantile",
+                str(float(np.clip(egf_lzcd_trim_quantile, 0.55, 1.0))),
+                "--lzcd_solver_iters",
+                str(int(max(1, egf_lzcd_solver_iters))),
+                "--lzcd_solver_lambda_smooth",
+                str(float(max(0.0, egf_lzcd_solver_lambda_smooth))),
+                "--lzcd_solver_step",
+                str(float(np.clip(egf_lzcd_solver_step, 0.10, 1.0))),
+                "--lzcd_solver_tol",
+                str(float(max(1e-6, egf_lzcd_solver_tol))),
+                "--lzcd_residual_anchor_weight",
+                str(float(np.clip(egf_lzcd_residual_anchor_weight, 0.0, 0.95))),
+                "--lzcd_residual_alpha",
+                str(float(np.clip(egf_lzcd_residual_alpha, 0.01, 0.95))),
+                "--lzcd_residual_hit_ref",
+                str(float(max(1.0, egf_lzcd_residual_hit_ref))),
+                "--lzcd_residual_max_abs",
+                str(float(max(1e-4, egf_lzcd_residual_max_abs))),
+                "--lzcd_max_candidates",
+                str(int(max(0, egf_lzcd_max_candidates))),
+                "--zcbf_block_size_cells",
+                str(int(max(1, egf_zcbf_block_size_cells))),
+                "--zcbf_min_rho",
+                str(float(max(0.0, egf_zcbf_min_rho))),
+                "--zcbf_min_phi_w",
+                str(float(max(0.0, egf_zcbf_min_phi_w))),
+                "--zcbf_max_dscore",
+                str(float(np.clip(egf_zcbf_max_dscore, 0.0, 1.0))),
+                "--zcbf_alpha",
+                str(float(np.clip(egf_zcbf_alpha, 0.01, 0.95))),
+                "--zcbf_trim_quantile",
+                str(float(np.clip(egf_zcbf_trim_quantile, 0.55, 1.0))),
+                "--zcbf_apply_gain",
+                str(float(np.clip(egf_zcbf_apply_gain, 0.0, 1.0))),
+                "--zcbf_max_bias",
+                str(float(max(1e-5, egf_zcbf_max_bias))),
+                "--zcbf_static_rho_ref",
+                str(float(max(1e-6, egf_zcbf_static_rho_ref))),
+                "--dccm_alpha",
+                str(float(np.clip(egf_dccm_alpha, 0.01, 0.95))),
+                "--dccm_age_gain",
+                str(float(max(0.0, egf_dccm_age_gain))),
+                "--dccm_age_decay",
+                str(float(np.clip(egf_dccm_age_decay, 0.70, 1.0))),
+                "--dccm_commit_thresh",
+                str(float(np.clip(egf_dccm_commit_thresh, 0.0, 1.0))),
+                "--dccm_free_weight",
+                str(float(max(0.0, egf_dccm_free_weight))),
+                "--dccm_rear_weight",
+                str(float(max(0.0, egf_dccm_rear_weight))),
+                "--dccm_age_weight",
+                str(float(max(0.0, egf_dccm_age_weight))),
+                "--dccm_surface_weight",
+                str(float(max(0.0, egf_dccm_surface_weight))),
+                "--dccm_rho_weight",
+                str(float(max(0.0, egf_dccm_rho_weight))),
                 "--stcg_alpha",
                 str(float(np.clip(egf_stcg_alpha, 0.01, 0.95))),
                 "--stcg_conflict_weight",
@@ -1249,6 +1769,12 @@ def run_method(
                 str(float(max(1e-6, egf_stcg_free_ratio_ref))),
                 "--surface_lzcd_bias_scale",
                 str(float(max(0.0, egf_surface_lzcd_bias_scale))),
+                "--surface_ptdsf_persistent_min_rho",
+                str(float(max(0.0, egf_surface_ptdsf_persistent_min_rho))),
+                "--surface_ptdsf_static_rho_weight",
+                str(float(max(0.0, egf_surface_ptdsf_static_rho_weight))),
+                "--surface_zcbf_bias_scale",
+                str(float(max(0.0, egf_surface_zcbf_bias_scale))),
                 "--surface_stcg_min_score",
                 str(float(np.clip(egf_surface_stcg_min_score, 0.0, 1.0))),
                 "--surface_stcg_rho_ref",
@@ -1263,17 +1789,43 @@ def run_method(
                 str(float(max(0.0, egf_surface_stcg_weight_gain))),
                 "--surface_stcg_static_protect",
                 str(float(np.clip(egf_surface_stcg_static_protect, 0.0, 1.0))),
+                "--surface_dccm_commit_weight",
+                str(float(max(0.0, egf_surface_dccm_commit_weight))),
+                "--surface_dccm_static_guard",
+                str(float(np.clip(egf_surface_dccm_static_guard, 0.0, 1.0))),
+                "--surface_dccm_drop_gain",
+                str(float(np.clip(egf_surface_dccm_drop_gain, 0.0, 1.0))),
+                "--surface_decouple_min_geo_weight_ratio",
+                str(float(max(1e-6, egf_surface_decouple_min_geo_weight_ratio))),
+                "--surface_decouple_dyn_drop_thresh",
+                str(float(np.clip(egf_surface_decouple_dyn_drop_thresh, 0.0, 1.5))),
+                "--surface_decouple_dyn_rho_guard",
+                str(float(max(0.0, egf_surface_decouple_dyn_rho_guard))),
+                "--surface_decouple_dyn_free_ratio_thresh",
+                str(float(max(0.0, egf_surface_decouple_dyn_free_ratio_thresh))),
+                "--surface_decouple_channel_div_thresh",
+                str(float(max(1e-6, egf_surface_decouple_channel_div_thresh))),
+                "--surface_decouple_channel_div_weight",
+                str(float(max(0.0, egf_surface_decouple_channel_div_weight))),
+                "--surface_decouple_channel_div_static_guard",
+                str(float(np.clip(egf_surface_decouple_channel_div_static_guard, 0.0, 1.0))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
             if bool(egf_lzcd_enable):
                 cmd.append("--lzcd_enable")
+            if bool(egf_dual_state_enable):
+                cmd.append("--dual_state_enable")
             if bool(egf_stcg_enable):
                 cmd.append("--stcg_enable")
             if bool(egf_assoc_hetero_enable):
                 cmd.append("--assoc_hetero_enable")
             else:
                 cmd.append("--assoc_hetero_disable")
+            if bool(egf_assoc_contra_gate_enable):
+                cmd.append("--assoc_contra_gate_enable")
+            else:
+                cmd.append("--assoc_contra_gate_disable")
             if adaptive_enable:
                 cmd.append("--surface_adaptive_enable")
             if bool(egf_static_assoc_seed_fallback_enable):
@@ -1284,10 +1836,39 @@ def run_method(
                 cmd.append("--surface_use_zero_crossing")
             else:
                 cmd.append("--surface_no_zero_crossing")
+            if bool(egf_surface_use_dual_static_channel):
+                cmd.append("--surface_use_dual_static_channel")
+            else:
+                cmd.append("--surface_no_dual_static_channel")
+            if bool(egf_surface_structural_decouple_enable):
+                cmd.append("--surface_structural_decouple_enable")
+            else:
+                cmd.append("--surface_structural_decouple_disable")
+            if bool(egf_surface_decouple_channel_div_enable):
+                cmd.append("--surface_decouple_channel_div_enable")
             if bool(egf_surface_lzcd_apply_in_extraction):
                 cmd.append("--surface_lzcd_apply_in_extraction")
+            if bool(egf_surface_ptdsf_persistent_only_enable):
+                cmd.append("--surface_ptdsf_persistent_only_enable")
+            if bool(egf_surface_zcbf_apply_in_extraction):
+                cmd.append("--surface_zcbf_apply_in_extraction")
             if bool(egf_surface_stcg_enable):
                 cmd.append("--surface_stcg_enable")
+            if bool(egf_surface_dccm_enable):
+                cmd.append("--surface_dccm_enable")
+                cmd.append("--surface_stcg_enable")
+            if bool(egf_sse_em_enable):
+                cmd.append("--sse_em_enable")
+            if bool(egf_lbr_enable):
+                cmd.append("--lbr_enable")
+            if bool(egf_vcr_enable):
+                cmd.append("--vcr_enable")
+            if bool(egf_rbi_enable):
+                cmd.append("--rbi_enable")
+            if bool(egf_surface_ebcut_enable):
+                cmd.append("--surface_ebcut_enable")
+            if bool(egf_surface_mopc_enable):
+                cmd.append("--surface_mopc_enable")
             if bool(egf_static_surface_consistency_enable):
                 cmd += [
                     "--surface_consistency_enable",
@@ -1573,6 +2154,25 @@ def main():
     parser.add_argument("--egf_assoc_hetero_sigma_d_max_scale", type=float, default=1.75)
     parser.add_argument("--egf_assoc_hetero_sigma_n_min_scale", type=float, default=0.70)
     parser.add_argument("--egf_assoc_hetero_sigma_n_max_scale", type=float, default=2.20)
+    parser.add_argument(
+        "--egf_assoc_contra_gate_enable",
+        dest="egf_assoc_contra_gate_enable",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_assoc_contra_gate_disable",
+        dest="egf_assoc_contra_gate_enable",
+        action="store_false",
+    )
+    parser.set_defaults(egf_assoc_contra_gate_enable=True)
+    parser.add_argument("--egf_assoc_contra_stmem_weight", type=float, default=0.65)
+    parser.add_argument("--egf_assoc_contra_visibility_weight", type=float, default=0.20)
+    parser.add_argument("--egf_assoc_contra_residual_weight", type=float, default=0.15)
+    parser.add_argument("--egf_assoc_contra_free_ratio_ref", type=float, default=1.0)
+    parser.add_argument("--egf_assoc_contra_rho_ref", type=float, default=1.6)
+    parser.add_argument("--egf_assoc_contra_static_guard", type=float, default=0.70)
+    parser.add_argument("--egf_assoc_contra_rho_guard", type=float, default=0.55)
+    parser.add_argument("--egf_assoc_contra_d2_boost_max", type=float, default=2.2)
     parser.add_argument("--egf_truncation", type=float, default=0.08)
     parser.add_argument("--egf_static_truncation", type=float, default=0.08)
     parser.add_argument("--egf_rho_decay", type=float, default=0.998)
@@ -1584,6 +2184,39 @@ def main():
     parser.add_argument("--egf_dscore_ema", type=float, default=0.12)
     parser.add_argument("--egf_residual_score_weight", type=float, default=0.25)
     parser.add_argument("--egf_integration_radius_scale", type=float, default=1.0)
+    parser.add_argument("--egf_dual_state_enable", action="store_true")
+    parser.add_argument("--egf_dual_state_assoc_weight", type=float, default=0.45)
+    parser.add_argument("--egf_dual_state_free_weight", type=float, default=0.25)
+    parser.add_argument("--egf_dual_state_residual_weight", type=float, default=0.15)
+    parser.add_argument("--egf_dual_state_osc_weight", type=float, default=0.10)
+    parser.add_argument("--egf_dual_state_pose_weight", type=float, default=0.05)
+    parser.add_argument("--egf_dual_state_bias", type=float, default=0.45)
+    parser.add_argument("--egf_dual_state_temp", type=float, default=0.25)
+    parser.add_argument("--egf_dual_pose_var_ref", type=float, default=0.05)
+    parser.add_argument("--egf_dual_state_static_ema", type=float, default=0.12)
+    parser.add_argument("--egf_dual_state_min_static_ratio", type=float, default=0.06)
+    parser.add_argument("--egf_dual_state_commit_thresh", type=float, default=0.70)
+    parser.add_argument("--egf_dual_state_rollback_thresh", type=float, default=0.32)
+    parser.add_argument("--egf_dual_state_commit_gain", type=float, default=0.25)
+    parser.add_argument("--egf_dual_state_rollback_gain", type=float, default=0.10)
+    parser.add_argument("--egf_dual_state_static_protect_rho", type=float, default=0.90)
+    parser.add_argument("--egf_dual_state_static_protect_ratio", type=float, default=1.60)
+    parser.add_argument("--egf_dual_state_static_decay_mult", type=float, default=1.0)
+    parser.add_argument("--egf_dual_state_transient_decay_mult", type=float, default=2.2)
+    parser.add_argument("--egf_ptdsf_enable", action="store_true")
+    parser.add_argument("--egf_ptdsf_rho_alpha", type=float, default=0.18)
+    parser.add_argument("--egf_ptdsf_static_blend", type=float, default=0.55)
+    parser.add_argument("--egf_ptdsf_commit_age_ref", type=float, default=3.0)
+    parser.add_argument("--egf_ptdsf_commit_bonus", type=float, default=0.08)
+    parser.add_argument("--egf_ptdsf_rollback_bonus", type=float, default=0.06)
+    parser.add_argument("--egf_wod_enable", action="store_true")
+    parser.add_argument("--egf_rps_enable", action="store_true")
+    parser.add_argument("--egf_rps_hard_commit_enable", action="store_true")
+    parser.add_argument("--egf_rps_surface_bank_enable", action="store_true")
+    parser.add_argument("--egf_wdsg_enable", action="store_true")
+    parser.add_argument("--egf_wdsg_route_enable", action="store_true")
+    parser.add_argument("--egf_spg_enable", action="store_true")
+    parser.add_argument("--egf_otv_enable", action="store_true")
     parser.add_argument("--egf_lzcd_enable", action="store_true")
     parser.add_argument("--egf_lzcd_interval", type=int, default=2)
     parser.add_argument("--egf_lzcd_radius_cells", type=int, default=1)
@@ -1598,10 +2231,39 @@ def main():
     parser.add_argument("--egf_lzcd_max_bias", type=float, default=0.06)
     parser.add_argument("--egf_lzcd_max_step", type=float, default=0.02)
     parser.add_argument("--egf_lzcd_trim_quantile", type=float, default=0.75)
+    parser.add_argument("--egf_lzcd_solver_iters", type=int, default=3)
+    parser.add_argument("--egf_lzcd_solver_lambda_smooth", type=float, default=0.35)
+    parser.add_argument("--egf_lzcd_solver_step", type=float, default=0.85)
+    parser.add_argument("--egf_lzcd_solver_tol", type=float, default=5e-4)
+    parser.add_argument("--egf_lzcd_residual_anchor_weight", type=float, default=0.25)
+    parser.add_argument("--egf_lzcd_residual_alpha", type=float, default=0.12)
+    parser.add_argument("--egf_lzcd_residual_hit_ref", type=float, default=10.0)
+    parser.add_argument("--egf_lzcd_residual_max_abs", type=float, default=0.10)
+    parser.add_argument("--egf_lzcd_max_candidates", type=int, default=6000)
+    parser.add_argument("--egf_zcbf_enable", action="store_true")
+    parser.add_argument("--egf_zcbf_block_size_cells", type=int, default=6)
+    parser.add_argument("--egf_zcbf_min_rho", type=float, default=0.25)
+    parser.add_argument("--egf_zcbf_min_phi_w", type=float, default=0.6)
+    parser.add_argument("--egf_zcbf_max_dscore", type=float, default=0.55)
+    parser.add_argument("--egf_zcbf_alpha", type=float, default=0.18)
+    parser.add_argument("--egf_zcbf_trim_quantile", type=float, default=0.70)
+    parser.add_argument("--egf_zcbf_apply_gain", type=float, default=0.30)
+    parser.add_argument("--egf_zcbf_max_bias", type=float, default=0.04)
+    parser.add_argument("--egf_zcbf_static_rho_ref", type=float, default=1.0)
     parser.add_argument("--egf_lzcd_use_geo_channel", dest="egf_lzcd_use_geo_channel", action="store_true")
     parser.add_argument("--egf_lzcd_no_geo_channel", dest="egf_lzcd_use_geo_channel", action="store_false")
     parser.set_defaults(egf_lzcd_use_geo_channel=True)
     parser.add_argument("--egf_stcg_enable", action="store_true")
+    parser.add_argument("--egf_dccm_enable", action="store_true")
+    parser.add_argument("--egf_dccm_alpha", type=float, default=0.16)
+    parser.add_argument("--egf_dccm_age_gain", type=float, default=0.10)
+    parser.add_argument("--egf_dccm_age_decay", type=float, default=0.94)
+    parser.add_argument("--egf_dccm_commit_thresh", type=float, default=0.62)
+    parser.add_argument("--egf_dccm_free_weight", type=float, default=0.40)
+    parser.add_argument("--egf_dccm_rear_weight", type=float, default=0.22)
+    parser.add_argument("--egf_dccm_age_weight", type=float, default=0.18)
+    parser.add_argument("--egf_dccm_surface_weight", type=float, default=0.12)
+    parser.add_argument("--egf_dccm_rho_weight", type=float, default=0.08)
     parser.add_argument("--egf_stcg_alpha", type=float, default=0.12)
     parser.add_argument("--egf_stcg_conflict_weight", type=float, default=0.60)
     parser.add_argument("--egf_stcg_residual_weight", type=float, default=0.25)
@@ -1609,6 +2271,16 @@ def main():
     parser.add_argument("--egf_stcg_free_ratio_ref", type=float, default=0.90)
     parser.add_argument("--egf_stcg_on_thresh", type=float, default=0.58)
     parser.add_argument("--egf_stcg_off_thresh", type=float, default=0.42)
+    parser.add_argument("--egf_zdyn_enable", action="store_true")
+    parser.add_argument("--egf_zdyn_alpha_up", type=float, default=0.26)
+    parser.add_argument("--egf_zdyn_alpha_down", type=float, default=0.10)
+    parser.add_argument("--egf_zdyn_decay", type=float, default=0.985)
+    parser.add_argument("--egf_zdyn_conflict_weight", type=float, default=0.40)
+    parser.add_argument("--egf_zdyn_visibility_weight", type=float, default=0.25)
+    parser.add_argument("--egf_zdyn_residual_weight", type=float, default=0.20)
+    parser.add_argument("--egf_zdyn_osc_weight", type=float, default=0.10)
+    parser.add_argument("--egf_zdyn_free_ratio_weight", type=float, default=0.05)
+    parser.add_argument("--egf_zdyn_free_ratio_ref", type=float, default=1.0)
     parser.add_argument("--egf_raycast_clear_gain", type=float, default=0.0)
     parser.add_argument("--egf_raycast_step_scale", type=float, default=0.75)
     parser.add_argument("--egf_raycast_end_margin", type=float, default=0.16)
@@ -1662,6 +2334,89 @@ def main():
         action="store_false",
     )
     parser.set_defaults(egf_surface_use_phi_geo_channel=False)
+    parser.add_argument(
+        "--egf_surface_use_dual_static_channel",
+        dest="egf_surface_use_dual_static_channel",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_no_dual_static_channel",
+        dest="egf_surface_use_dual_static_channel",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_use_dual_static_channel=False)
+    parser.add_argument("--egf_surface_dual_p_static_min", type=float, default=0.0)
+    parser.add_argument(
+        "--egf_surface_structural_decouple_enable",
+        dest="egf_surface_structural_decouple_enable",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_structural_decouple_disable",
+        dest="egf_surface_structural_decouple_enable",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_structural_decouple_enable=True)
+    parser.add_argument("--egf_surface_decouple_min_geo_weight_ratio", type=float, default=0.35)
+    parser.add_argument("--egf_surface_decouple_dyn_drop_thresh", type=float, default=0.78)
+    parser.add_argument("--egf_surface_decouple_dyn_rho_guard", type=float, default=1.2)
+    parser.add_argument("--egf_surface_decouple_dyn_free_ratio_thresh", type=float, default=1.10)
+    parser.add_argument("--egf_surface_decouple_channel_div_enable", action="store_true")
+    parser.add_argument("--egf_surface_decouple_channel_div_thresh", type=float, default=0.04)
+    parser.add_argument("--egf_surface_decouple_channel_div_weight", type=float, default=0.35)
+    parser.add_argument("--egf_surface_decouple_channel_div_static_guard", type=float, default=0.70)
+    parser.add_argument("--egf_surface_dual_layer_extract_enable", action="store_true")
+    parser.add_argument("--egf_surface_dual_layer_geo_min_weight_ratio", type=float, default=0.30)
+    parser.add_argument(
+        "--egf_surface_dual_layer_dyn_use_zdyn",
+        dest="egf_surface_dual_layer_dyn_use_zdyn",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_dual_layer_dyn_no_zdyn",
+        dest="egf_surface_dual_layer_dyn_use_zdyn",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_dual_layer_dyn_use_zdyn=True)
+    parser.add_argument("--egf_surface_dual_layer_dyn_prob_weight", type=float, default=0.38)
+    parser.add_argument("--egf_surface_dual_layer_dyn_stmem_weight", type=float, default=0.22)
+    parser.add_argument("--egf_surface_dual_layer_dyn_contra_weight", type=float, default=0.20)
+    parser.add_argument("--egf_surface_dual_layer_dyn_transient_weight", type=float, default=0.20)
+    parser.add_argument("--egf_surface_dual_layer_dyn_phi_div_weight", type=float, default=0.16)
+    parser.add_argument("--egf_surface_dual_layer_dyn_phi_ratio_weight", type=float, default=0.10)
+    parser.add_argument("--egf_surface_dual_layer_dyn_phi_div_ref", type=float, default=0.04)
+    parser.add_argument(
+        "--egf_surface_dual_layer_dyn_use_phi_dyn",
+        dest="egf_surface_dual_layer_dyn_use_phi_dyn",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_dual_layer_dyn_no_phi_dyn",
+        dest="egf_surface_dual_layer_dyn_use_phi_dyn",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_dual_layer_dyn_use_phi_dyn=True)
+    parser.add_argument(
+        "--egf_surface_dual_layer_compete_enable",
+        dest="egf_surface_dual_layer_compete_enable",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--egf_surface_dual_layer_compete_disable",
+        dest="egf_surface_dual_layer_compete_enable",
+        action="store_false",
+    )
+    parser.set_defaults(egf_surface_dual_layer_compete_enable=False)
+    parser.add_argument("--egf_surface_dual_layer_compete_margin", type=float, default=0.08)
+    parser.add_argument("--egf_surface_dual_layer_compete_geo_weight", type=float, default=0.62)
+    parser.add_argument("--egf_surface_dual_layer_compete_dyn_mix_weight", type=float, default=0.55)
+    parser.add_argument("--egf_surface_dual_layer_compete_dyn_conf_weight", type=float, default=0.25)
+    parser.add_argument("--egf_surface_dual_layer_dyn_drop_thresh", type=float, default=0.72)
+    parser.add_argument("--egf_surface_dual_layer_dyn_free_ratio_min", type=float, default=0.90)
+    parser.add_argument("--egf_surface_dual_layer_static_anchor_rho", type=float, default=0.90)
+    parser.add_argument("--egf_surface_dual_layer_static_anchor_p", type=float, default=0.70)
+    parser.add_argument("--egf_surface_dual_layer_static_anchor_ratio", type=float, default=1.70)
+    parser.add_argument("--egf_surface_omhs_enable", action="store_true")
     parser.add_argument("--egf_surface_zero_crossing_max_offset", type=float, default=0.06)
     parser.add_argument("--egf_surface_zero_crossing_phi_gate", type=float, default=0.05)
     parser.add_argument("--egf_surface_consistency_enable", action="store_true")
@@ -1708,7 +2463,16 @@ def main():
     parser.add_argument("--egf_surface_adaptive_free_ratio_gain", type=float, default=0.5)
     parser.add_argument("--egf_surface_lzcd_apply_in_extraction", action="store_true")
     parser.add_argument("--egf_surface_lzcd_bias_scale", type=float, default=1.0)
+    parser.add_argument("--egf_surface_ptdsf_persistent_only_enable", action="store_true")
+    parser.add_argument("--egf_surface_ptdsf_persistent_min_rho", type=float, default=0.15)
+    parser.add_argument("--egf_surface_ptdsf_static_rho_weight", type=float, default=0.35)
+    parser.add_argument("--egf_surface_zcbf_apply_in_extraction", action="store_true")
+    parser.add_argument("--egf_surface_zcbf_bias_scale", type=float, default=1.0)
     parser.add_argument("--egf_surface_stcg_enable", action="store_true")
+    parser.add_argument("--egf_surface_dccm_enable", action="store_true")
+    parser.add_argument("--egf_surface_dccm_commit_weight", type=float, default=0.30)
+    parser.add_argument("--egf_surface_dccm_static_guard", type=float, default=0.65)
+    parser.add_argument("--egf_surface_dccm_drop_gain", type=float, default=0.22)
     parser.add_argument("--egf_surface_stcg_min_score", type=float, default=0.35)
     parser.add_argument("--egf_surface_stcg_rho_ref", type=float, default=1.8)
     parser.add_argument("--egf_surface_stcg_free_shrink", type=float, default=0.45)
@@ -1716,6 +2480,12 @@ def main():
     parser.add_argument("--egf_surface_stcg_dscore_shrink", type=float, default=0.30)
     parser.add_argument("--egf_surface_stcg_weight_gain", type=float, default=0.50)
     parser.add_argument("--egf_surface_stcg_static_protect", type=float, default=0.70)
+    parser.add_argument("--egf_sse_em_enable", action="store_true")
+    parser.add_argument("--egf_lbr_enable", action="store_true")
+    parser.add_argument("--egf_vcr_enable", action="store_true")
+    parser.add_argument("--egf_rbi_enable", action="store_true")
+    parser.add_argument("--egf_surface_ebcut_enable", action="store_true")
+    parser.add_argument("--egf_surface_mopc_enable", action="store_true")
     parser.add_argument("--egf_bonn_surface_adaptive_enable", dest="egf_bonn_surface_adaptive_enable", action="store_true")
     parser.add_argument("--egf_bonn_surface_no_adaptive", dest="egf_bonn_surface_adaptive_enable", action="store_false")
     parser.set_defaults(egf_bonn_surface_adaptive_enable=True)
@@ -1901,6 +2671,15 @@ def main():
                     egf_assoc_hetero_sigma_d_max_scale=args.egf_assoc_hetero_sigma_d_max_scale,
                     egf_assoc_hetero_sigma_n_min_scale=args.egf_assoc_hetero_sigma_n_min_scale,
                     egf_assoc_hetero_sigma_n_max_scale=args.egf_assoc_hetero_sigma_n_max_scale,
+                    egf_assoc_contra_gate_enable=bool(args.egf_assoc_contra_gate_enable),
+                    egf_assoc_contra_stmem_weight=args.egf_assoc_contra_stmem_weight,
+                    egf_assoc_contra_visibility_weight=args.egf_assoc_contra_visibility_weight,
+                    egf_assoc_contra_residual_weight=args.egf_assoc_contra_residual_weight,
+                    egf_assoc_contra_free_ratio_ref=args.egf_assoc_contra_free_ratio_ref,
+                    egf_assoc_contra_rho_ref=args.egf_assoc_contra_rho_ref,
+                    egf_assoc_contra_static_guard=args.egf_assoc_contra_static_guard,
+                    egf_assoc_contra_rho_guard=args.egf_assoc_contra_rho_guard,
+                    egf_assoc_contra_d2_boost_max=args.egf_assoc_contra_d2_boost_max,
                     egf_truncation=args.egf_truncation,
                     egf_static_truncation=args.egf_static_truncation,
                     egf_rho_decay=args.egf_rho_decay,
@@ -1912,6 +2691,39 @@ def main():
                     egf_dscore_ema=args.egf_dscore_ema,
                     egf_residual_score_weight=args.egf_residual_score_weight,
                     egf_integration_radius_scale=args.egf_integration_radius_scale,
+                    egf_dual_state_enable=bool(args.egf_dual_state_enable),
+                    egf_dual_state_assoc_weight=args.egf_dual_state_assoc_weight,
+                    egf_dual_state_free_weight=args.egf_dual_state_free_weight,
+                    egf_dual_state_residual_weight=args.egf_dual_state_residual_weight,
+                    egf_dual_state_osc_weight=args.egf_dual_state_osc_weight,
+                    egf_dual_state_pose_weight=args.egf_dual_state_pose_weight,
+                    egf_dual_state_bias=args.egf_dual_state_bias,
+                    egf_dual_state_temp=args.egf_dual_state_temp,
+                    egf_dual_pose_var_ref=args.egf_dual_pose_var_ref,
+                    egf_dual_state_static_ema=args.egf_dual_state_static_ema,
+                    egf_dual_state_min_static_ratio=args.egf_dual_state_min_static_ratio,
+                    egf_dual_state_commit_thresh=args.egf_dual_state_commit_thresh,
+                    egf_dual_state_rollback_thresh=args.egf_dual_state_rollback_thresh,
+                    egf_dual_state_commit_gain=args.egf_dual_state_commit_gain,
+                    egf_dual_state_rollback_gain=args.egf_dual_state_rollback_gain,
+                    egf_dual_state_static_protect_rho=args.egf_dual_state_static_protect_rho,
+                    egf_dual_state_static_protect_ratio=args.egf_dual_state_static_protect_ratio,
+                    egf_dual_state_static_decay_mult=args.egf_dual_state_static_decay_mult,
+                    egf_dual_state_transient_decay_mult=args.egf_dual_state_transient_decay_mult,
+                    egf_ptdsf_enable=bool(args.egf_ptdsf_enable),
+                    egf_ptdsf_rho_alpha=args.egf_ptdsf_rho_alpha,
+                    egf_ptdsf_static_blend=args.egf_ptdsf_static_blend,
+                    egf_ptdsf_commit_age_ref=args.egf_ptdsf_commit_age_ref,
+                    egf_ptdsf_commit_bonus=args.egf_ptdsf_commit_bonus,
+                    egf_ptdsf_rollback_bonus=args.egf_ptdsf_rollback_bonus,
+                    egf_wod_enable=bool(args.egf_wod_enable),
+                    egf_rps_enable=bool(args.egf_rps_enable),
+                    egf_rps_hard_commit_enable=bool(args.egf_rps_hard_commit_enable),
+                    egf_rps_surface_bank_enable=bool(args.egf_rps_surface_bank_enable),
+                    egf_wdsg_enable=bool(args.egf_wdsg_enable),
+                    egf_wdsg_route_enable=bool(args.egf_wdsg_route_enable),
+                    egf_spg_enable=bool(args.egf_spg_enable),
+                    egf_otv_enable=bool(args.egf_otv_enable),
                     egf_lzcd_enable=bool(args.egf_lzcd_enable),
                     egf_lzcd_interval=args.egf_lzcd_interval,
                     egf_lzcd_radius_cells=args.egf_lzcd_radius_cells,
@@ -1926,8 +2738,37 @@ def main():
                     egf_lzcd_max_bias=args.egf_lzcd_max_bias,
                     egf_lzcd_max_step=args.egf_lzcd_max_step,
                     egf_lzcd_trim_quantile=args.egf_lzcd_trim_quantile,
+                    egf_lzcd_solver_iters=args.egf_lzcd_solver_iters,
+                    egf_lzcd_solver_lambda_smooth=args.egf_lzcd_solver_lambda_smooth,
+                    egf_lzcd_solver_step=args.egf_lzcd_solver_step,
+                    egf_lzcd_solver_tol=args.egf_lzcd_solver_tol,
+                    egf_lzcd_residual_anchor_weight=args.egf_lzcd_residual_anchor_weight,
+                    egf_lzcd_residual_alpha=args.egf_lzcd_residual_alpha,
+                    egf_lzcd_residual_hit_ref=args.egf_lzcd_residual_hit_ref,
+                    egf_lzcd_residual_max_abs=args.egf_lzcd_residual_max_abs,
+                    egf_lzcd_max_candidates=args.egf_lzcd_max_candidates,
+                    egf_zcbf_enable=bool(args.egf_zcbf_enable),
+                    egf_zcbf_block_size_cells=args.egf_zcbf_block_size_cells,
+                    egf_zcbf_min_rho=args.egf_zcbf_min_rho,
+                    egf_zcbf_min_phi_w=args.egf_zcbf_min_phi_w,
+                    egf_zcbf_max_dscore=args.egf_zcbf_max_dscore,
+                    egf_zcbf_alpha=args.egf_zcbf_alpha,
+                    egf_zcbf_trim_quantile=args.egf_zcbf_trim_quantile,
+                    egf_zcbf_apply_gain=args.egf_zcbf_apply_gain,
+                    egf_zcbf_max_bias=args.egf_zcbf_max_bias,
+                    egf_zcbf_static_rho_ref=args.egf_zcbf_static_rho_ref,
                     egf_lzcd_use_geo_channel=bool(args.egf_lzcd_use_geo_channel),
                     egf_stcg_enable=bool(args.egf_stcg_enable),
+                    egf_dccm_enable=bool(args.egf_dccm_enable),
+                    egf_dccm_alpha=args.egf_dccm_alpha,
+                    egf_dccm_age_gain=args.egf_dccm_age_gain,
+                    egf_dccm_age_decay=args.egf_dccm_age_decay,
+                    egf_dccm_commit_thresh=args.egf_dccm_commit_thresh,
+                    egf_dccm_free_weight=args.egf_dccm_free_weight,
+                    egf_dccm_rear_weight=args.egf_dccm_rear_weight,
+                    egf_dccm_age_weight=args.egf_dccm_age_weight,
+                    egf_dccm_surface_weight=args.egf_dccm_surface_weight,
+                    egf_dccm_rho_weight=args.egf_dccm_rho_weight,
                     egf_stcg_alpha=args.egf_stcg_alpha,
                     egf_stcg_conflict_weight=args.egf_stcg_conflict_weight,
                     egf_stcg_residual_weight=args.egf_stcg_residual_weight,
@@ -1935,6 +2776,16 @@ def main():
                     egf_stcg_free_ratio_ref=args.egf_stcg_free_ratio_ref,
                     egf_stcg_on_thresh=args.egf_stcg_on_thresh,
                     egf_stcg_off_thresh=args.egf_stcg_off_thresh,
+                    egf_zdyn_enable=bool(args.egf_zdyn_enable),
+                    egf_zdyn_alpha_up=args.egf_zdyn_alpha_up,
+                    egf_zdyn_alpha_down=args.egf_zdyn_alpha_down,
+                    egf_zdyn_decay=args.egf_zdyn_decay,
+                    egf_zdyn_conflict_weight=args.egf_zdyn_conflict_weight,
+                    egf_zdyn_visibility_weight=args.egf_zdyn_visibility_weight,
+                    egf_zdyn_residual_weight=args.egf_zdyn_residual_weight,
+                    egf_zdyn_osc_weight=args.egf_zdyn_osc_weight,
+                    egf_zdyn_free_ratio_weight=args.egf_zdyn_free_ratio_weight,
+                    egf_zdyn_free_ratio_ref=args.egf_zdyn_free_ratio_ref,
                     egf_raycast_clear_gain=args.egf_raycast_clear_gain,
                     egf_raycast_step_scale=args.egf_raycast_step_scale,
                     egf_raycast_end_margin=args.egf_raycast_end_margin,
@@ -1964,6 +2815,39 @@ def main():
                     egf_surface_max_clear_hits=args.egf_surface_max_clear_hits,
                     egf_surface_use_zero_crossing=args.egf_surface_use_zero_crossing,
                     egf_surface_use_phi_geo_channel=bool(args.egf_surface_use_phi_geo_channel),
+                    egf_surface_use_dual_static_channel=bool(args.egf_surface_use_dual_static_channel),
+                    egf_surface_dual_p_static_min=args.egf_surface_dual_p_static_min,
+                    egf_surface_structural_decouple_enable=bool(args.egf_surface_structural_decouple_enable),
+                    egf_surface_decouple_min_geo_weight_ratio=args.egf_surface_decouple_min_geo_weight_ratio,
+                    egf_surface_decouple_dyn_drop_thresh=args.egf_surface_decouple_dyn_drop_thresh,
+                    egf_surface_decouple_dyn_rho_guard=args.egf_surface_decouple_dyn_rho_guard,
+                    egf_surface_decouple_dyn_free_ratio_thresh=args.egf_surface_decouple_dyn_free_ratio_thresh,
+                    egf_surface_decouple_channel_div_enable=bool(args.egf_surface_decouple_channel_div_enable),
+                    egf_surface_decouple_channel_div_thresh=args.egf_surface_decouple_channel_div_thresh,
+                    egf_surface_decouple_channel_div_weight=args.egf_surface_decouple_channel_div_weight,
+                    egf_surface_decouple_channel_div_static_guard=args.egf_surface_decouple_channel_div_static_guard,
+                    egf_surface_dual_layer_extract_enable=bool(args.egf_surface_dual_layer_extract_enable),
+                    egf_surface_dual_layer_geo_min_weight_ratio=args.egf_surface_dual_layer_geo_min_weight_ratio,
+                    egf_surface_dual_layer_dyn_use_zdyn=bool(args.egf_surface_dual_layer_dyn_use_zdyn),
+                    egf_surface_dual_layer_dyn_prob_weight=args.egf_surface_dual_layer_dyn_prob_weight,
+                    egf_surface_dual_layer_dyn_stmem_weight=args.egf_surface_dual_layer_dyn_stmem_weight,
+                    egf_surface_dual_layer_dyn_contra_weight=args.egf_surface_dual_layer_dyn_contra_weight,
+                    egf_surface_dual_layer_dyn_transient_weight=args.egf_surface_dual_layer_dyn_transient_weight,
+                    egf_surface_dual_layer_dyn_phi_div_weight=args.egf_surface_dual_layer_dyn_phi_div_weight,
+                    egf_surface_dual_layer_dyn_phi_ratio_weight=args.egf_surface_dual_layer_dyn_phi_ratio_weight,
+                    egf_surface_dual_layer_dyn_phi_div_ref=args.egf_surface_dual_layer_dyn_phi_div_ref,
+                    egf_surface_dual_layer_dyn_use_phi_dyn=bool(args.egf_surface_dual_layer_dyn_use_phi_dyn),
+                    egf_surface_dual_layer_compete_enable=bool(args.egf_surface_dual_layer_compete_enable),
+                    egf_surface_dual_layer_compete_margin=args.egf_surface_dual_layer_compete_margin,
+                    egf_surface_dual_layer_compete_geo_weight=args.egf_surface_dual_layer_compete_geo_weight,
+                    egf_surface_dual_layer_compete_dyn_mix_weight=args.egf_surface_dual_layer_compete_dyn_mix_weight,
+                    egf_surface_dual_layer_compete_dyn_conf_weight=args.egf_surface_dual_layer_compete_dyn_conf_weight,
+                    egf_surface_dual_layer_dyn_drop_thresh=args.egf_surface_dual_layer_dyn_drop_thresh,
+                    egf_surface_dual_layer_dyn_free_ratio_min=args.egf_surface_dual_layer_dyn_free_ratio_min,
+                    egf_surface_dual_layer_static_anchor_rho=args.egf_surface_dual_layer_static_anchor_rho,
+                    egf_surface_dual_layer_static_anchor_p=args.egf_surface_dual_layer_static_anchor_p,
+                    egf_surface_dual_layer_static_anchor_ratio=args.egf_surface_dual_layer_static_anchor_ratio,
+                    egf_surface_omhs_enable=args.egf_surface_omhs_enable,
                     egf_surface_zero_crossing_max_offset=args.egf_surface_zero_crossing_max_offset,
                     egf_surface_zero_crossing_phi_gate=args.egf_surface_zero_crossing_phi_gate,
                     egf_surface_consistency_enable=args.egf_surface_consistency_enable,
@@ -2000,7 +2884,16 @@ def main():
                     egf_surface_adaptive_free_ratio_gain=args.egf_surface_adaptive_free_ratio_gain,
                     egf_surface_lzcd_apply_in_extraction=bool(args.egf_surface_lzcd_apply_in_extraction),
                     egf_surface_lzcd_bias_scale=args.egf_surface_lzcd_bias_scale,
+                    egf_surface_ptdsf_persistent_only_enable=bool(args.egf_surface_ptdsf_persistent_only_enable),
+                    egf_surface_ptdsf_persistent_min_rho=args.egf_surface_ptdsf_persistent_min_rho,
+                    egf_surface_ptdsf_static_rho_weight=args.egf_surface_ptdsf_static_rho_weight,
+                    egf_surface_zcbf_apply_in_extraction=bool(args.egf_surface_zcbf_apply_in_extraction),
+                    egf_surface_zcbf_bias_scale=args.egf_surface_zcbf_bias_scale,
                     egf_surface_stcg_enable=bool(args.egf_surface_stcg_enable),
+                    egf_surface_dccm_enable=bool(args.egf_surface_dccm_enable),
+                    egf_surface_dccm_commit_weight=args.egf_surface_dccm_commit_weight,
+                    egf_surface_dccm_static_guard=args.egf_surface_dccm_static_guard,
+                    egf_surface_dccm_drop_gain=args.egf_surface_dccm_drop_gain,
                     egf_surface_stcg_min_score=args.egf_surface_stcg_min_score,
                     egf_surface_stcg_rho_ref=args.egf_surface_stcg_rho_ref,
                     egf_surface_stcg_free_shrink=args.egf_surface_stcg_free_shrink,
@@ -2008,6 +2901,12 @@ def main():
                     egf_surface_stcg_dscore_shrink=args.egf_surface_stcg_dscore_shrink,
                     egf_surface_stcg_weight_gain=args.egf_surface_stcg_weight_gain,
                     egf_surface_stcg_static_protect=args.egf_surface_stcg_static_protect,
+                    egf_sse_em_enable=bool(args.egf_sse_em_enable),
+                    egf_lbr_enable=bool(args.egf_lbr_enable),
+                    egf_vcr_enable=bool(args.egf_vcr_enable),
+                    egf_rbi_enable=bool(args.egf_rbi_enable),
+                    egf_surface_ebcut_enable=bool(args.egf_surface_ebcut_enable),
+                    egf_surface_mopc_enable=bool(args.egf_surface_mopc_enable),
                     egf_bonn_surface_adaptive_enable=bool(args.egf_bonn_surface_adaptive_enable),
                     egf_bonn_surface_adaptive_rho_ref=args.egf_bonn_surface_adaptive_rho_ref,
                     egf_bonn_surface_adaptive_phi_min_scale=args.egf_bonn_surface_adaptive_phi_min_scale,

@@ -22,6 +22,9 @@ class AssocMeasurement3D:
     phi: float
     seed: bool = False
     frontier: bool = False
+    dynamic_prob: float = 0.0
+    assoc_risk: float = 0.0
+    sensor_origin: np.ndarray | None = None
 
 
 class Associator3D:
@@ -34,6 +37,43 @@ class Associator3D:
         if a <= delta:
             return val
         return float(np.sign(val) * (delta + np.sqrt(max(0.0, 2.0 * delta * (a - delta)))))
+
+    def _contra_risk(self, cell) -> float:
+        if cell is None:
+            return 0.0
+        st = float(np.clip(getattr(cell, "st_mem", 0.0), 0.0, 1.0))
+        vis = float(np.clip(getattr(cell, "visibility_contradiction", 0.0), 0.0, 1.0))
+        res = float(np.clip(getattr(cell, "residual_evidence", 0.0), 0.0, 1.0))
+        surf = float(max(1e-6, getattr(cell, "surf_evidence", 0.0)))
+        free = float(max(0.0, getattr(cell, "free_evidence", 0.0)))
+        free_ratio = float(free / surf)
+        p_static = float(np.clip(getattr(cell, "p_static", 0.5), 0.0, 1.0))
+        rho = float(max(0.0, getattr(cell, "rho", 0.0)))
+
+        w_st = float(np.clip(self.cfg.assoc.contra_stmem_weight, 0.0, 1.0))
+        w_vis = float(np.clip(self.cfg.assoc.contra_visibility_weight, 0.0, 1.0))
+        w_res = float(np.clip(self.cfg.assoc.contra_residual_weight, 0.0, 1.0))
+        ws = max(1e-6, w_st + w_vis + w_res)
+        base = float((w_st * st + w_vis * vis + w_res * res) / ws)
+
+        free_ref = float(max(1e-6, self.cfg.assoc.contra_free_ratio_ref))
+        free_n = float(np.clip(free_ratio / free_ref, 0.0, 2.0))
+        rho_ref = float(max(1e-6, self.cfg.assoc.contra_rho_ref))
+        rho_n = float(np.clip(rho / rho_ref, 0.0, 1.0))
+        static_guard = float(np.clip(self.cfg.assoc.contra_static_guard, 0.0, 1.0))
+        rho_guard = float(np.clip(self.cfg.assoc.contra_rho_guard, 0.0, 1.0))
+
+        risk = float(
+            np.clip(
+                base
+                * (0.65 + 0.35 * free_n)
+                * (1.0 - static_guard * p_static)
+                * (1.0 - rho_guard * rho_n),
+                0.0,
+                1.0,
+            )
+        )
+        return risk
 
     def _find_surface_source(self, voxel_map: VoxelHashMap3D, seed_idx: VoxelIndex) -> VoxelIndex | None:
         radius = max(0, int(self.cfg.assoc.search_radius_cells))
@@ -165,6 +205,11 @@ class Associator3D:
         sigma_n = max(1e-4, float(sigma_n))
 
         d2 = (r_d * r_d) / (sigma_d * sigma_d) + (r_n * r_n) / (sigma_n * sigma_n)
+        assoc_risk = 0.0
+        if bool(self.cfg.assoc.contra_gate_enable):
+            assoc_risk = self._contra_risk(cell)
+            boost_max = float(max(1.0, self.cfg.assoc.contra_d2_boost_max))
+            d2 *= float(1.0 + assoc_risk * (boost_max - 1.0))
         return AssocMeasurement3D(
             point_world=point_world,
             normal_world=normal_world,
@@ -177,6 +222,8 @@ class Associator3D:
             phi=phi,
             seed=False,
             frontier=frontier_flag,
+            assoc_risk=float(assoc_risk),
+            sensor_origin=None if sensor_origin is None else np.asarray(sensor_origin, dtype=float).reshape(3),
         )
 
     def associate(

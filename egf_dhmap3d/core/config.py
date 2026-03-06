@@ -62,6 +62,17 @@ class Assoc3DConfig:
     hetero_sigma_d_max_scale: float = 1.75
     hetero_sigma_n_min_scale: float = 0.70
     hetero_sigma_n_max_scale: float = 2.20
+    # Pre-association contradiction gating:
+    # move dynamic contradiction handling upstream to association stage.
+    contra_gate_enable: bool = True
+    contra_stmem_weight: float = 0.65
+    contra_visibility_weight: float = 0.20
+    contra_residual_weight: float = 0.15
+    contra_free_ratio_ref: float = 1.0
+    contra_rho_ref: float = 1.6
+    contra_static_guard: float = 0.70
+    contra_rho_guard: float = 0.55
+    contra_d2_boost_max: float = 2.2
 
 
 @dataclass
@@ -83,6 +94,150 @@ class Update3DConfig:
     rho_osc_ref: float = 0.8
     dscore_ema: float = 0.12
     residual_score_weight: float = 0.25
+    # Structural decoupling dynamic state:
+    # independent dynamic probability used by suppression operator.
+    dyn_state_alpha: float = 0.16
+    dyn_state_conflict_weight: float = 0.45
+    dyn_state_visibility_weight: float = 0.25
+    dyn_state_residual_weight: float = 0.20
+    dyn_state_osc_weight: float = 0.10
+    # SSE-EM: latent static/dynamic responsibility update (module-1).
+    sse_em_enable: bool = False
+    sse_em_prior_temp: float = 0.9
+    sse_em_assoc_weight: float = 0.30
+    sse_em_residual_weight: float = 0.30
+    sse_em_free_weight: float = 0.20
+    sse_em_rho_weight: float = 0.10
+    sse_em_visibility_weight: float = 0.10
+    sse_em_mstep_alpha: float = 0.20
+    sse_em_static_floor: float = 0.05
+    sse_em_dynamic_ceil: float = 0.95
+    # Dynamic-state SDF channel (phi_dyn) integration:
+    # explicit transient geometry state to decouple suppression from geometry debias.
+    dyn_channel_enable: bool = True
+    # PT-DSF: persistent-transient dual surface field formalization.
+    ptdsf_enable: bool = False
+    ptdsf_rho_alpha: float = 0.18
+    ptdsf_static_blend: float = 0.55
+    ptdsf_commit_age_ref: float = 3.0
+    ptdsf_commit_bonus: float = 0.08
+    ptdsf_rollback_bonus: float = 0.06
+    # WOD: write-time occlusion decomposition.
+    wod_enable: bool = False
+    wod_alpha: float = 0.18
+    wod_front_margin_vox: float = 0.35
+    wod_rear_margin_vox: float = 0.35
+    wod_shell_margin_vox: float = 1.10
+    wod_history_mix: float = 0.55
+    wod_rear_consistency_ref: float = 0.04
+    wod_front_transient_boost: float = 0.35
+    wod_rear_static_boost: float = 0.55
+    wod_shell_weight: float = 0.35
+    wod_geo_front_suppress: float = 0.65
+    wod_geo_rear_boost: float = 0.25
+    wod_dyn_front_boost: float = 0.45
+    wod_dyn_shell_boost: float = 0.20
+    wod_shell_free_gain: float = 0.55
+    # RPS: rear-persistent surface buffer.
+    rps_enable: bool = False
+    rps_rho_alpha: float = 0.18
+    rps_consistency_ref: float = 0.03
+    rps_front_suppress: float = 0.60
+    rps_geo_mix: float = 0.65
+    rps_rear_boost: float = 0.85
+    rps_read_weight_gain: float = 0.70
+    rps_rho_ref: float = 1.0
+    rps_hard_commit_enable: bool = False
+    # Surface-bank readout: treat committed rear geometry as a discrete bank
+    # and only export it when it wins an explicit front-vs-rear competition.
+    rps_surface_bank_enable: bool = False
+    rps_bank_margin: float = 0.08
+    rps_bank_separation_ref: float = 0.04
+    rps_bank_rear_min_score: float = 0.52
+    # WDSG: Write-time Dual Surface Generation.
+    # Instead of routing the same signed distance into all channels, synthesize
+    # front-transient and rear-static hypotheses directly at update time.
+    wdsg_enable: bool = False
+    wdsg_front_shift_vox: float = 0.90
+    wdsg_rear_shift_vox: float = 1.10
+    wdsg_shell_shift_vox: float = 0.40
+    wdsg_max_shift_vox: float = 1.80
+    wdsg_front_mix_gain: float = 0.95
+    wdsg_rear_mix_gain: float = 1.00
+    wdsg_proj_floor: float = 0.35
+    # WDSG-R: separation-aware routing. Use dual-surface separation to reroute
+    # front-dominant observations away from static/geo and into transient/dyn.
+    wdsg_route_enable: bool = False
+    wdsg_route_static_suppress: float = 0.85
+    wdsg_route_geo_suppress: float = 0.75
+    wdsg_route_transient_boost: float = 0.75
+    wdsg_route_dyn_boost: float = 0.65
+    wdsg_route_rear_recover: float = 0.18
+    # SPG: Static Promotion Gate. Candidate geometry remains permissive, but only
+    # time-consistent static geometry is promoted into the exported front bank.
+    spg_enable: bool = False
+    spg_route_relax: float = 0.45
+    spg_score_alpha: float = 0.18
+    spg_commit_on: float = 0.62
+    spg_commit_off: float = 0.40
+    spg_commit_age_ref: float = 1.5
+    spg_commit_blend: float = 0.60
+    spg_read_weight_gain: float = 0.85
+    spg_candidate_mix: float = 0.22
+    spg_bank_decay: float = 0.96
+    # OTV: Observation-Time Transient Veto. Detect a separated front transient
+    # supported by an already stable rear surface, and reserve it into a
+    # short-lived transient bank before it contaminates persistent geometry.
+    otv_enable: bool = False
+    otv_sep_ref_vox: float = 0.90
+    otv_score_alpha: float = 0.18
+    otv_support_ref: float = 0.26
+    otv_commit_on: float = 0.58
+    otv_commit_off: float = 0.38
+    otv_age_ref: float = 1.0
+    otv_static_veto: float = 0.92
+    otv_geo_veto: float = 0.95
+    otv_transient_boost: float = 0.85
+    otv_dyn_boost: float = 0.75
+    otv_decay: float = 0.96
+    rps_score_alpha: float = 0.18
+    rps_commit_on: float = 0.62
+    rps_commit_off: float = 0.40
+    rps_commit_age_ref: float = 2.0
+    rps_candidate_gate_min: float = 0.16
+    rps_commit_blend: float = 0.78
+    rps_candidate_decay: float = 0.92
+    rps_active_decay: float = 0.97
+    dyn_channel_min_weight_ratio: float = 0.08
+    dyn_channel_obs_weight: float = 0.50
+    dyn_channel_residual_weight: float = 0.30
+    dyn_channel_risk_weight: float = 0.20
+    dyn_channel_static_suppress: float = 0.55
+    dyn_channel_div_weight: float = 0.20
+    dyn_channel_div_ref: float = 0.04
+    # Explicit dynamic latent state (z_dyn):
+    # a dedicated temporal state for suppression routing, decoupled from
+    # geometry debias and geometry-channel integration.
+    zdyn_enable: bool = False
+    zdyn_alpha_up: float = 0.26
+    zdyn_alpha_down: float = 0.10
+    zdyn_decay: float = 0.985
+    zdyn_conflict_weight: float = 0.40
+    zdyn_visibility_weight: float = 0.25
+    zdyn_residual_weight: float = 0.20
+    zdyn_osc_weight: float = 0.10
+    zdyn_free_ratio_weight: float = 0.05
+    zdyn_free_ratio_ref: float = 1.0
+    # Short-term contradiction memory (suppression-only channel).
+    stmem_enable: bool = True
+    stmem_alpha: float = 0.22
+    stmem_decay: float = 0.94
+    stmem_conflict_weight: float = 0.42
+    stmem_visibility_weight: float = 0.26
+    stmem_clear_weight: float = 0.18
+    stmem_residual_weight: float = 0.14
+    stmem_free_ratio_ref: float = 1.0
+    stmem_rho_ref: float = 1.5
     integration_radius_scale: float = 1.0
     integration_min_radius_vox: float = 1.2
     # Apply decay every N frames with mathematically equivalent compounded factors.
@@ -113,6 +268,46 @@ class Update3DConfig:
     lzcd_trim_quantile: float = 0.75
     # Prefer geometry-only SDF channel in debias estimation when available.
     lzcd_use_geo_channel: bool = True
+    # Geometry-only debias convergence solver (decoupled from dynamic suppressor).
+    lzcd_solver_iters: int = 3
+    lzcd_solver_lambda_smooth: float = 0.35
+    lzcd_solver_step: float = 0.85
+    lzcd_solver_tol: float = 5e-4
+    # Residual anchor from association signed residual (source voxel).
+    lzcd_residual_anchor_weight: float = 0.25
+    lzcd_residual_alpha: float = 0.12
+    lzcd_residual_hit_ref: float = 10.0
+    lzcd_residual_max_abs: float = 0.10
+    # LZCD affine debias:
+    # fit local phi as phi ~= a * <n, delta_x> + b and use intercept b as
+    # robust local zero-crossing estimate.
+    lzcd_affine_enable: bool = True
+    lzcd_affine_mix: float = 0.45
+    lzcd_affine_slope_min: float = 0.65
+    lzcd_affine_slope_max: float = 1.35
+    lzcd_affine_min_samples: int = 8
+    # Runtime cap for LZCD candidate voxels per frame (0 means no cap).
+    lzcd_max_candidates: int = 6000
+    # ZCBF: block-level zero-crossing bias field on persistent geometry.
+    zcbf_enable: bool = False
+    zcbf_block_size_cells: int = 6
+    zcbf_min_rho: float = 0.25
+    zcbf_min_phi_w: float = 0.6
+    zcbf_max_dscore: float = 0.55
+    zcbf_alpha: float = 0.18
+    zcbf_trim_quantile: float = 0.70
+    zcbf_apply_gain: float = 0.30
+    zcbf_max_bias: float = 0.04
+    zcbf_static_rho_ref: float = 1.0
+    # LBR-3D: local bias regression for geometry-only debias (module-2).
+    lbr_enable: bool = False
+    lbr_alpha: float = 0.14
+    lbr_max_bias: float = 0.05
+    lbr_depth_ref: float = 2.5
+    lbr_inc_weight: float = 0.45
+    lbr_depth_weight: float = 0.35
+    lbr_res_weight: float = 0.20
+    lbr_apply_gain: float = 0.35
     # STCG: spatio-temporal contradiction accumulation.
     stcg_enable: bool = False
     stcg_alpha: float = 0.12
@@ -132,6 +327,45 @@ class Update3DConfig:
     # Hysteresis thresholds for contradiction gate stabilization.
     stcg_on_thresh: float = 0.58
     stcg_off_thresh: float = 0.42
+    # VCR: visibility-contradiction decomposition gate (module-3).
+    vcr_enable: bool = False
+    vcr_alpha: float = 0.16
+    vcr_free_weight: float = 0.35
+    vcr_occ_weight: float = 0.35
+    vcr_res_weight: float = 0.20
+    vcr_vis_weight: float = 0.10
+    vcr_on_thresh: float = 0.55
+    vcr_off_thresh: float = 0.40
+    # Dual-state fusion:
+    # static channel stores long-term stable geometry;
+    # transient channel absorbs dynamic/inconsistent observations.
+    dual_state_enable: bool = False
+    dual_state_assoc_weight: float = 0.45
+    dual_state_free_weight: float = 0.25
+    dual_state_residual_weight: float = 0.15
+    dual_state_osc_weight: float = 0.10
+    dual_state_pose_weight: float = 0.05
+    dual_state_bias: float = 0.45
+    dual_state_temp: float = 0.25
+    dual_pose_var_ref: float = 0.05
+    dual_state_static_ema: float = 0.12
+    dual_state_min_static_ratio: float = 0.06
+    dual_state_commit_thresh: float = 0.70
+    dual_state_rollback_thresh: float = 0.32
+    dual_state_commit_gain: float = 0.25
+    dual_state_rollback_gain: float = 0.10
+    dual_state_static_protect_rho: float = 0.90
+    dual_state_static_protect_ratio: float = 1.6
+    dual_state_static_decay_mult: float = 1.0
+    dual_state_transient_decay_mult: float = 2.2
+    # RBI: local re-integration buffer (module-4).
+    rbi_enable: bool = False
+    rbi_decay: float = 0.92
+    rbi_commit_static_p: float = 0.72
+    rbi_dyn_gate: float = 0.35
+    rbi_min_weight: float = 1.5
+    rbi_recover_gain: float = 0.30
+    rbi_max_step: float = 0.02
     enable_evidence: bool = True
     enable_gradient_fusion: bool = True
 
@@ -216,8 +450,20 @@ class Surface3DConfig:
     # LZCD surface-time debias application.
     lzcd_apply_in_extraction: bool = False
     lzcd_bias_scale: float = 1.0
+    # PT-DSF extraction: export persistent geometry as first-class surface.
+    ptdsf_persistent_only_enable: bool = False
+    ptdsf_persistent_min_rho: float = 0.15
+    ptdsf_static_rho_weight: float = 0.35
+    # ZCBF extraction-time bias application.
+    zcbf_apply_in_extraction: bool = False
+    zcbf_bias_scale: float = 1.0
     # STCG soft gating in extraction.
     stcg_enable: bool = False
+    # DCCM extraction soft gate: only affects dynamic suppressor, not geometry candidate formation.
+    dccm_enable: bool = False
+    dccm_commit_weight: float = 0.30
+    dccm_static_guard: float = 0.65
+    dccm_drop_gain: float = 0.22
     stcg_min_score: float = 0.35
     stcg_rho_ref: float = 1.8
     stcg_free_shrink: float = 0.45
@@ -225,6 +471,72 @@ class Surface3DConfig:
     stcg_dscore_shrink: float = 0.30
     stcg_weight_gain: float = 0.50
     stcg_static_protect: float = 0.70
+    # Prefer static dual-state channel during extraction when available.
+    use_dual_static_channel: bool = False
+    dual_p_static_min: float = 0.0
+    # Structural decoupling:
+    # geometry extraction from debiased geometry channel + independent dynamic suppressor.
+    structural_decouple_enable: bool = True
+    decouple_min_geo_weight_ratio: float = 0.35
+    decouple_dyn_drop_thresh: float = 0.78
+    decouple_dyn_rho_guard: float = 1.2
+    decouple_dyn_free_ratio_thresh: float = 1.10
+    # Cross-channel contradiction gate:
+    # when geometry channel disagrees with legacy/static channel, increase dynamic suppression.
+    decouple_channel_div_enable: bool = False
+    decouple_channel_div_thresh: float = 0.04
+    decouple_channel_div_weight: float = 0.35
+    decouple_channel_div_static_guard: float = 0.70
+    # Decoupled short-memory gate (only affects suppression gate).
+    decouple_stmem_enable: bool = True
+    decouple_stmem_weight: float = 0.55
+    decouple_stmem_static_guard: float = 0.55
+    decouple_stmem_rho_guard: float = 0.45
+    decouple_stmem_free_shrink: float = 0.12
+    # Explicit dual-layer extraction:
+    # stage-1 extracts geometry candidates (Acc-oriented) from geometry/static channels;
+    # stage-2 applies dynamic suppressor mask (Ghost-oriented) from dynamic states only.
+    dual_layer_extract_enable: bool = False
+    dual_layer_geo_min_weight_ratio: float = 0.30
+    dual_layer_dyn_use_zdyn: bool = True
+    dual_layer_dyn_prob_weight: float = 0.38
+    dual_layer_dyn_stmem_weight: float = 0.22
+    dual_layer_dyn_contra_weight: float = 0.20
+    dual_layer_dyn_transient_weight: float = 0.20
+    dual_layer_dyn_phi_div_weight: float = 0.16
+    dual_layer_dyn_phi_ratio_weight: float = 0.10
+    dual_layer_dyn_phi_div_ref: float = 0.04
+    dual_layer_dyn_use_phi_dyn: bool = True
+    dual_layer_compete_enable: bool = False
+    dual_layer_compete_margin: float = 0.08
+    dual_layer_compete_geo_weight: float = 0.62
+    dual_layer_compete_dyn_mix_weight: float = 0.55
+    dual_layer_compete_dyn_conf_weight: float = 0.25
+    dual_layer_dyn_drop_thresh: float = 0.72
+    dual_layer_dyn_free_ratio_min: float = 0.90
+    dual_layer_static_anchor_rho: float = 0.90
+    dual_layer_static_anchor_p: float = 0.70
+    dual_layer_static_anchor_ratio: float = 1.70
+    # OMHS: occlusion-aware multi-hypothesis surface readout.
+    omhs_enable: bool = False
+    # EBCut: local energy-based extraction (module-5).
+    ebcut_enable: bool = False
+    ebcut_energy_thresh: float = 0.58
+    ebcut_w_phi: float = 0.30
+    ebcut_w_dyn: float = 0.35
+    ebcut_w_free: float = 0.20
+    ebcut_w_conf: float = 0.15
+    ebcut_w_smooth: float = 0.10
+    ebcut_smooth_radius: int = 1
+    # MOPC: online multi-objective local controller (module-6).
+    mopc_enable: bool = False
+    mopc_step: float = 0.02
+    mopc_dyn_target: float = 0.20
+    mopc_rej_target: float = 0.08
+    mopc_drop_min: float = 0.60
+    mopc_drop_max: float = 0.90
+    mopc_maxd_min: float = 0.70
+    mopc_maxd_max: float = 1.00
 
 
 @dataclass

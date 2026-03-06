@@ -46,6 +46,54 @@ class EGFDHMap3D:
             "associate_sec": 0.0,
             "update_sec": 0.0,
         }
+        self._mopc_drop_thresh: float = float(self.cfg.surface.dual_layer_dyn_drop_thresh)
+        self._mopc_max_d_score: float = float(self.cfg.surface.max_d_score)
+
+    def _apply_mopc(self, assoc_stats: Dict[str, float], update_stats: Dict[str, float]) -> Dict[str, float]:
+        if not bool(self.cfg.surface.mopc_enable):
+            return {
+                "mopc_applied": 0.0,
+                "mopc_drop_thresh": float(self.cfg.surface.dual_layer_dyn_drop_thresh),
+                "mopc_max_d_score": float(self.cfg.surface.max_d_score),
+                "mopc_err_dyn": 0.0,
+                "mopc_err_rej": 0.0,
+                "mopc_ctrl": 0.0,
+            }
+        n_acc = float(max(0.0, assoc_stats.get("accepted", 0.0)))
+        n_rej = float(max(0.0, assoc_stats.get("rejected", 0.0)))
+        rej_ratio = float(n_rej / max(1.0, n_acc + n_rej))
+        mean_dyn = float(np.clip(update_stats.get("mean_d_score", self.dynamic_score), 0.0, 1.0))
+        mean_vcr = float(np.clip(update_stats.get("mean_vcr_score", 0.0), 0.0, 1.0))
+        dyn_obs = float(np.clip(0.55 * mean_dyn + 0.25 * self.dynamic_score + 0.20 * mean_vcr, 0.0, 1.0))
+        err_dyn = float(dyn_obs - float(self.cfg.surface.mopc_dyn_target))
+        err_rej = float(rej_ratio - float(self.cfg.surface.mopc_rej_target))
+        ctrl = float(0.60 * err_dyn + 0.40 * err_rej)
+        step = float(max(1e-4, self.cfg.surface.mopc_step))
+
+        self._mopc_drop_thresh = float(
+            np.clip(
+                self._mopc_drop_thresh - step * ctrl,
+                float(self.cfg.surface.mopc_drop_min),
+                float(self.cfg.surface.mopc_drop_max),
+            )
+        )
+        self._mopc_max_d_score = float(
+            np.clip(
+                self._mopc_max_d_score - 0.85 * step * ctrl,
+                float(self.cfg.surface.mopc_maxd_min),
+                float(self.cfg.surface.mopc_maxd_max),
+            )
+        )
+        self.cfg.surface.dual_layer_dyn_drop_thresh = float(self._mopc_drop_thresh)
+        self.cfg.surface.max_d_score = float(self._mopc_max_d_score)
+        return {
+            "mopc_applied": 1.0,
+            "mopc_drop_thresh": float(self._mopc_drop_thresh),
+            "mopc_max_d_score": float(self._mopc_max_d_score),
+            "mopc_err_dyn": float(err_dyn),
+            "mopc_err_rej": float(err_rej),
+            "mopc_ctrl": float(ctrl),
+        }
 
     def _delta_from_gt(self, t_wc: np.ndarray) -> np.ndarray:
         if self.prev_gt_pose is None:
@@ -247,7 +295,16 @@ class EGFDHMap3D:
             adaptive_free_ratio_gain=float(self.cfg.surface.adaptive_free_ratio_gain),
             lzcd_apply_in_extraction=bool(self.cfg.surface.lzcd_apply_in_extraction),
             lzcd_bias_scale=float(self.cfg.surface.lzcd_bias_scale),
+            ptdsf_persistent_only_enable=bool(self.cfg.surface.ptdsf_persistent_only_enable),
+            ptdsf_persistent_min_rho=float(self.cfg.surface.ptdsf_persistent_min_rho),
+            ptdsf_static_rho_weight=float(self.cfg.surface.ptdsf_static_rho_weight),
+            zcbf_apply_in_extraction=bool(self.cfg.surface.zcbf_apply_in_extraction),
+            zcbf_bias_scale=float(self.cfg.surface.zcbf_bias_scale),
             stcg_enable=bool(self.cfg.surface.stcg_enable),
+            dccm_enable=bool(self.cfg.surface.dccm_enable),
+            dccm_commit_weight=float(self.cfg.surface.dccm_commit_weight),
+            dccm_static_guard=float(self.cfg.surface.dccm_static_guard),
+            dccm_drop_gain=float(self.cfg.surface.dccm_drop_gain),
             stcg_min_score=float(self.cfg.surface.stcg_min_score),
             stcg_rho_ref=float(self.cfg.surface.stcg_rho_ref),
             stcg_free_shrink=float(self.cfg.surface.stcg_free_shrink),
@@ -255,6 +312,52 @@ class EGFDHMap3D:
             stcg_dscore_shrink=float(self.cfg.surface.stcg_dscore_shrink),
             stcg_weight_gain=float(self.cfg.surface.stcg_weight_gain),
             stcg_static_protect=float(self.cfg.surface.stcg_static_protect),
+            use_dual_static_channel=bool(self.cfg.surface.use_dual_static_channel),
+            dual_p_static_min=float(self.cfg.surface.dual_p_static_min),
+            structural_decouple_enable=bool(self.cfg.surface.structural_decouple_enable),
+            decouple_min_geo_weight_ratio=float(self.cfg.surface.decouple_min_geo_weight_ratio),
+            decouple_dyn_drop_thresh=float(self.cfg.surface.decouple_dyn_drop_thresh),
+            decouple_dyn_rho_guard=float(self.cfg.surface.decouple_dyn_rho_guard),
+            decouple_dyn_free_ratio_thresh=float(self.cfg.surface.decouple_dyn_free_ratio_thresh),
+            decouple_channel_div_enable=bool(self.cfg.surface.decouple_channel_div_enable),
+            decouple_channel_div_thresh=float(self.cfg.surface.decouple_channel_div_thresh),
+            decouple_channel_div_weight=float(self.cfg.surface.decouple_channel_div_weight),
+            decouple_channel_div_static_guard=float(self.cfg.surface.decouple_channel_div_static_guard),
+            decouple_stmem_enable=bool(self.cfg.surface.decouple_stmem_enable),
+            decouple_stmem_weight=float(self.cfg.surface.decouple_stmem_weight),
+            decouple_stmem_static_guard=float(self.cfg.surface.decouple_stmem_static_guard),
+            decouple_stmem_rho_guard=float(self.cfg.surface.decouple_stmem_rho_guard),
+            decouple_stmem_free_shrink=float(self.cfg.surface.decouple_stmem_free_shrink),
+            dual_layer_extract_enable=bool(self.cfg.surface.dual_layer_extract_enable),
+            dual_layer_geo_min_weight_ratio=float(self.cfg.surface.dual_layer_geo_min_weight_ratio),
+            dual_layer_dyn_use_zdyn=bool(self.cfg.surface.dual_layer_dyn_use_zdyn),
+            dual_layer_dyn_prob_weight=float(self.cfg.surface.dual_layer_dyn_prob_weight),
+            dual_layer_dyn_stmem_weight=float(self.cfg.surface.dual_layer_dyn_stmem_weight),
+            dual_layer_dyn_contra_weight=float(self.cfg.surface.dual_layer_dyn_contra_weight),
+            dual_layer_dyn_transient_weight=float(self.cfg.surface.dual_layer_dyn_transient_weight),
+            dual_layer_dyn_phi_div_weight=float(self.cfg.surface.dual_layer_dyn_phi_div_weight),
+            dual_layer_dyn_phi_ratio_weight=float(self.cfg.surface.dual_layer_dyn_phi_ratio_weight),
+            dual_layer_dyn_phi_div_ref=float(self.cfg.surface.dual_layer_dyn_phi_div_ref),
+            dual_layer_dyn_use_phi_dyn=bool(self.cfg.surface.dual_layer_dyn_use_phi_dyn),
+            dual_layer_compete_enable=bool(self.cfg.surface.dual_layer_compete_enable),
+            dual_layer_compete_margin=float(self.cfg.surface.dual_layer_compete_margin),
+            dual_layer_compete_geo_weight=float(self.cfg.surface.dual_layer_compete_geo_weight),
+            dual_layer_compete_dyn_mix_weight=float(self.cfg.surface.dual_layer_compete_dyn_mix_weight),
+            dual_layer_compete_dyn_conf_weight=float(self.cfg.surface.dual_layer_compete_dyn_conf_weight),
+            dual_layer_dyn_drop_thresh=float(self.cfg.surface.dual_layer_dyn_drop_thresh),
+            dual_layer_dyn_free_ratio_min=float(self.cfg.surface.dual_layer_dyn_free_ratio_min),
+            dual_layer_static_anchor_rho=float(self.cfg.surface.dual_layer_static_anchor_rho),
+            dual_layer_static_anchor_p=float(self.cfg.surface.dual_layer_static_anchor_p),
+            dual_layer_static_anchor_ratio=float(self.cfg.surface.dual_layer_static_anchor_ratio),
+            omhs_enable=bool(self.cfg.surface.omhs_enable),
+            ebcut_enable=bool(self.cfg.surface.ebcut_enable),
+            ebcut_energy_thresh=float(self.cfg.surface.ebcut_energy_thresh),
+            ebcut_w_phi=float(self.cfg.surface.ebcut_w_phi),
+            ebcut_w_dyn=float(self.cfg.surface.ebcut_w_dyn),
+            ebcut_w_free=float(self.cfg.surface.ebcut_w_free),
+            ebcut_w_conf=float(self.cfg.surface.ebcut_w_conf),
+            ebcut_w_smooth=float(self.cfg.surface.ebcut_w_smooth),
+            ebcut_smooth_radius=int(self.cfg.surface.ebcut_smooth_radius),
         )
         if map_pts.shape[0] < 1200:
             return {"map_refine_applied": 0.0, "map_refine_fitness": 0.0, "map_refine_rmse": 0.0}
@@ -361,6 +464,7 @@ class EGFDHMap3D:
             rejected,
             sensor_origin=sensor_origin,
             frame_id=self.frame_counter,
+            pose_cov=self.predictor.pose.cov,
         )
         t_upd1 = time.perf_counter()
 
@@ -377,6 +481,7 @@ class EGFDHMap3D:
         self.dynamic_score = float((1.0 - alpha) * self.dynamic_score + alpha * target)
         self.dynamic_score = float(np.clip(self.dynamic_score, 0.0, 1.0))
         self.odom_valid_ratio = float((1.0 - alpha) * self.odom_valid_ratio + alpha * odom_stats.get("odom_valid", 0.0))
+        mopc_stats = self._apply_mopc(assoc_stats=assoc_stats, update_stats=update_stats)
 
         self.trajectory.append(self.predictor.pose.as_matrix())
         self.frame_counter += 1
@@ -384,6 +489,7 @@ class EGFDHMap3D:
         out.update(assoc_stats)
         out.update(update_stats)
         out.update(odom_stats)
+        out.update(mopc_stats)
         out["odom_valid_ratio"] = float(self.odom_valid_ratio)
         out["rejected"] = float(len(rejected))
         out["dynamic_score"] = float(self.dynamic_score)
@@ -453,7 +559,16 @@ class EGFDHMap3D:
             adaptive_free_ratio_gain=float(self.cfg.surface.adaptive_free_ratio_gain),
             lzcd_apply_in_extraction=bool(self.cfg.surface.lzcd_apply_in_extraction),
             lzcd_bias_scale=float(self.cfg.surface.lzcd_bias_scale),
+            ptdsf_persistent_only_enable=bool(self.cfg.surface.ptdsf_persistent_only_enable),
+            ptdsf_persistent_min_rho=float(self.cfg.surface.ptdsf_persistent_min_rho),
+            ptdsf_static_rho_weight=float(self.cfg.surface.ptdsf_static_rho_weight),
+            zcbf_apply_in_extraction=bool(self.cfg.surface.zcbf_apply_in_extraction),
+            zcbf_bias_scale=float(self.cfg.surface.zcbf_bias_scale),
             stcg_enable=bool(self.cfg.surface.stcg_enable),
+            dccm_enable=bool(self.cfg.surface.dccm_enable),
+            dccm_commit_weight=float(self.cfg.surface.dccm_commit_weight),
+            dccm_static_guard=float(self.cfg.surface.dccm_static_guard),
+            dccm_drop_gain=float(self.cfg.surface.dccm_drop_gain),
             stcg_min_score=float(self.cfg.surface.stcg_min_score),
             stcg_rho_ref=float(self.cfg.surface.stcg_rho_ref),
             stcg_free_shrink=float(self.cfg.surface.stcg_free_shrink),
@@ -461,6 +576,51 @@ class EGFDHMap3D:
             stcg_dscore_shrink=float(self.cfg.surface.stcg_dscore_shrink),
             stcg_weight_gain=float(self.cfg.surface.stcg_weight_gain),
             stcg_static_protect=float(self.cfg.surface.stcg_static_protect),
+            use_dual_static_channel=bool(self.cfg.surface.use_dual_static_channel),
+            dual_p_static_min=float(self.cfg.surface.dual_p_static_min),
+            structural_decouple_enable=bool(self.cfg.surface.structural_decouple_enable),
+            decouple_min_geo_weight_ratio=float(self.cfg.surface.decouple_min_geo_weight_ratio),
+            decouple_dyn_drop_thresh=float(self.cfg.surface.decouple_dyn_drop_thresh),
+            decouple_dyn_rho_guard=float(self.cfg.surface.decouple_dyn_rho_guard),
+            decouple_dyn_free_ratio_thresh=float(self.cfg.surface.decouple_dyn_free_ratio_thresh),
+            decouple_channel_div_enable=bool(self.cfg.surface.decouple_channel_div_enable),
+            decouple_channel_div_thresh=float(self.cfg.surface.decouple_channel_div_thresh),
+            decouple_channel_div_weight=float(self.cfg.surface.decouple_channel_div_weight),
+            decouple_channel_div_static_guard=float(self.cfg.surface.decouple_channel_div_static_guard),
+            decouple_stmem_enable=bool(self.cfg.surface.decouple_stmem_enable),
+            decouple_stmem_weight=float(self.cfg.surface.decouple_stmem_weight),
+            decouple_stmem_static_guard=float(self.cfg.surface.decouple_stmem_static_guard),
+            decouple_stmem_rho_guard=float(self.cfg.surface.decouple_stmem_rho_guard),
+            decouple_stmem_free_shrink=float(self.cfg.surface.decouple_stmem_free_shrink),
+            dual_layer_extract_enable=bool(self.cfg.surface.dual_layer_extract_enable),
+            dual_layer_geo_min_weight_ratio=float(self.cfg.surface.dual_layer_geo_min_weight_ratio),
+            dual_layer_dyn_use_zdyn=bool(self.cfg.surface.dual_layer_dyn_use_zdyn),
+            dual_layer_dyn_prob_weight=float(self.cfg.surface.dual_layer_dyn_prob_weight),
+            dual_layer_dyn_stmem_weight=float(self.cfg.surface.dual_layer_dyn_stmem_weight),
+            dual_layer_dyn_contra_weight=float(self.cfg.surface.dual_layer_dyn_contra_weight),
+            dual_layer_dyn_transient_weight=float(self.cfg.surface.dual_layer_dyn_transient_weight),
+            dual_layer_dyn_phi_div_weight=float(self.cfg.surface.dual_layer_dyn_phi_div_weight),
+            dual_layer_dyn_phi_ratio_weight=float(self.cfg.surface.dual_layer_dyn_phi_ratio_weight),
+            dual_layer_dyn_phi_div_ref=float(self.cfg.surface.dual_layer_dyn_phi_div_ref),
+            dual_layer_dyn_use_phi_dyn=bool(self.cfg.surface.dual_layer_dyn_use_phi_dyn),
+            dual_layer_compete_enable=bool(self.cfg.surface.dual_layer_compete_enable),
+            dual_layer_compete_margin=float(self.cfg.surface.dual_layer_compete_margin),
+            dual_layer_compete_geo_weight=float(self.cfg.surface.dual_layer_compete_geo_weight),
+            dual_layer_compete_dyn_mix_weight=float(self.cfg.surface.dual_layer_compete_dyn_mix_weight),
+            dual_layer_compete_dyn_conf_weight=float(self.cfg.surface.dual_layer_compete_dyn_conf_weight),
+            dual_layer_dyn_drop_thresh=float(self.cfg.surface.dual_layer_dyn_drop_thresh),
+            dual_layer_dyn_free_ratio_min=float(self.cfg.surface.dual_layer_dyn_free_ratio_min),
+            dual_layer_static_anchor_rho=float(self.cfg.surface.dual_layer_static_anchor_rho),
+            dual_layer_static_anchor_p=float(self.cfg.surface.dual_layer_static_anchor_p),
+            dual_layer_static_anchor_ratio=float(self.cfg.surface.dual_layer_static_anchor_ratio),
+            ebcut_enable=bool(self.cfg.surface.ebcut_enable),
+            ebcut_energy_thresh=float(self.cfg.surface.ebcut_energy_thresh),
+            ebcut_w_phi=float(self.cfg.surface.ebcut_w_phi),
+            ebcut_w_dyn=float(self.cfg.surface.ebcut_w_dyn),
+            ebcut_w_free=float(self.cfg.surface.ebcut_w_free),
+            ebcut_w_conf=float(self.cfg.surface.ebcut_w_conf),
+            ebcut_w_smooth=float(self.cfg.surface.ebcut_w_smooth),
+            ebcut_smooth_radius=int(self.cfg.surface.ebcut_smooth_radius),
         )
 
     def save_surface_pointcloud(self, out_path: str | Path) -> int:

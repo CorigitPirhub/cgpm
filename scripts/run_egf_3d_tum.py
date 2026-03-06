@@ -182,7 +182,16 @@ def main():
     parser.add_argument("--surface_adaptive_free_ratio_gain", type=float, default=0.5)
     parser.add_argument("--surface_lzcd_apply_in_extraction", action="store_true")
     parser.add_argument("--surface_lzcd_bias_scale", type=float, default=1.0)
+    parser.add_argument("--surface_ptdsf_persistent_only_enable", action="store_true")
+    parser.add_argument("--surface_ptdsf_persistent_min_rho", type=float, default=0.15)
+    parser.add_argument("--surface_ptdsf_static_rho_weight", type=float, default=0.35)
+    parser.add_argument("--surface_zcbf_apply_in_extraction", action="store_true")
+    parser.add_argument("--surface_zcbf_bias_scale", type=float, default=1.0)
     parser.add_argument("--surface_stcg_enable", action="store_true")
+    parser.add_argument("--surface_dccm_enable", action="store_true")
+    parser.add_argument("--surface_dccm_commit_weight", type=float, default=0.30)
+    parser.add_argument("--surface_dccm_static_guard", type=float, default=0.65)
+    parser.add_argument("--surface_dccm_drop_gain", type=float, default=0.22)
     parser.add_argument("--surface_stcg_min_score", type=float, default=0.35)
     parser.add_argument("--surface_stcg_rho_ref", type=float, default=1.8)
     parser.add_argument("--surface_stcg_free_shrink", type=float, default=0.45)
@@ -190,6 +199,73 @@ def main():
     parser.add_argument("--surface_stcg_dscore_shrink", type=float, default=0.30)
     parser.add_argument("--surface_stcg_weight_gain", type=float, default=0.50)
     parser.add_argument("--surface_stcg_static_protect", type=float, default=0.70)
+    parser.add_argument("--surface_use_dual_static_channel", dest="surface_use_dual_static_channel", action="store_true")
+    parser.add_argument("--surface_no_dual_static_channel", dest="surface_use_dual_static_channel", action="store_false")
+    parser.set_defaults(surface_use_dual_static_channel=False)
+    parser.add_argument("--surface_dual_p_static_min", type=float, default=0.0)
+    parser.add_argument("--surface_structural_decouple_enable", dest="surface_structural_decouple_enable", action="store_true")
+    parser.add_argument("--surface_structural_decouple_disable", dest="surface_structural_decouple_enable", action="store_false")
+    parser.set_defaults(surface_structural_decouple_enable=True)
+    parser.add_argument("--surface_decouple_min_geo_weight_ratio", type=float, default=0.35)
+    parser.add_argument("--surface_decouple_dyn_drop_thresh", type=float, default=0.78)
+    parser.add_argument("--surface_decouple_dyn_rho_guard", type=float, default=1.2)
+    parser.add_argument("--surface_decouple_dyn_free_ratio_thresh", type=float, default=1.10)
+    parser.add_argument("--surface_decouple_channel_div_enable", action="store_true")
+    parser.add_argument("--surface_decouple_channel_div_thresh", type=float, default=0.04)
+    parser.add_argument("--surface_decouple_channel_div_weight", type=float, default=0.35)
+    parser.add_argument("--surface_decouple_channel_div_static_guard", type=float, default=0.70)
+    parser.add_argument("--surface_dual_layer_extract_enable", action="store_true")
+    parser.add_argument("--surface_dual_layer_geo_min_weight_ratio", type=float, default=0.30)
+    parser.add_argument(
+        "--surface_dual_layer_dyn_use_zdyn",
+        dest="surface_dual_layer_dyn_use_zdyn",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--surface_dual_layer_dyn_no_zdyn",
+        dest="surface_dual_layer_dyn_use_zdyn",
+        action="store_false",
+    )
+    parser.set_defaults(surface_dual_layer_dyn_use_zdyn=True)
+    parser.add_argument("--surface_dual_layer_dyn_prob_weight", type=float, default=0.38)
+    parser.add_argument("--surface_dual_layer_dyn_stmem_weight", type=float, default=0.22)
+    parser.add_argument("--surface_dual_layer_dyn_contra_weight", type=float, default=0.20)
+    parser.add_argument("--surface_dual_layer_dyn_transient_weight", type=float, default=0.20)
+    parser.add_argument("--surface_dual_layer_dyn_phi_div_weight", type=float, default=0.16)
+    parser.add_argument("--surface_dual_layer_dyn_phi_ratio_weight", type=float, default=0.10)
+    parser.add_argument("--surface_dual_layer_dyn_phi_div_ref", type=float, default=0.04)
+    parser.add_argument(
+        "--surface_dual_layer_dyn_use_phi_dyn",
+        dest="surface_dual_layer_dyn_use_phi_dyn",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--surface_dual_layer_dyn_no_phi_dyn",
+        dest="surface_dual_layer_dyn_use_phi_dyn",
+        action="store_false",
+    )
+    parser.set_defaults(surface_dual_layer_dyn_use_phi_dyn=True)
+    parser.add_argument(
+        "--surface_dual_layer_compete_enable",
+        dest="surface_dual_layer_compete_enable",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--surface_dual_layer_compete_disable",
+        dest="surface_dual_layer_compete_enable",
+        action="store_false",
+    )
+    parser.set_defaults(surface_dual_layer_compete_enable=False)
+    parser.add_argument("--surface_dual_layer_compete_margin", type=float, default=0.08)
+    parser.add_argument("--surface_dual_layer_compete_geo_weight", type=float, default=0.62)
+    parser.add_argument("--surface_dual_layer_compete_dyn_mix_weight", type=float, default=0.55)
+    parser.add_argument("--surface_dual_layer_compete_dyn_conf_weight", type=float, default=0.25)
+    parser.add_argument("--surface_dual_layer_dyn_drop_thresh", type=float, default=0.72)
+    parser.add_argument("--surface_dual_layer_dyn_free_ratio_min", type=float, default=0.90)
+    parser.add_argument("--surface_dual_layer_static_anchor_rho", type=float, default=0.90)
+    parser.add_argument("--surface_dual_layer_static_anchor_p", type=float, default=0.70)
+    parser.add_argument("--surface_dual_layer_static_anchor_ratio", type=float, default=1.70)
+    parser.add_argument("--surface_omhs_enable", action="store_true")
     parser.add_argument("--poisson_depth", type=int, default=8)
     parser.add_argument("--poisson_iters", type=int, default=1)
     parser.add_argument("--poisson_lr", type=float, default=0.08)
@@ -212,6 +288,17 @@ def main():
     parser.add_argument("--assoc_hetero_sigma_d_max_scale", type=float, default=1.75)
     parser.add_argument("--assoc_hetero_sigma_n_min_scale", type=float, default=0.70)
     parser.add_argument("--assoc_hetero_sigma_n_max_scale", type=float, default=2.20)
+    parser.add_argument("--assoc_contra_gate_enable", dest="assoc_contra_gate_enable", action="store_true")
+    parser.add_argument("--assoc_contra_gate_disable", dest="assoc_contra_gate_enable", action="store_false")
+    parser.set_defaults(assoc_contra_gate_enable=True)
+    parser.add_argument("--assoc_contra_stmem_weight", type=float, default=0.65)
+    parser.add_argument("--assoc_contra_visibility_weight", type=float, default=0.20)
+    parser.add_argument("--assoc_contra_residual_weight", type=float, default=0.15)
+    parser.add_argument("--assoc_contra_free_ratio_ref", type=float, default=1.0)
+    parser.add_argument("--assoc_contra_rho_ref", type=float, default=1.6)
+    parser.add_argument("--assoc_contra_static_guard", type=float, default=0.70)
+    parser.add_argument("--assoc_contra_rho_guard", type=float, default=0.55)
+    parser.add_argument("--assoc_contra_d2_boost_max", type=float, default=2.2)
     parser.add_argument("--assoc_gate_threshold", type=float, default=14.0)
     parser.add_argument("--assoc_search_radius_cells", type=int, default=2)
     parser.add_argument("--assoc_strict_surface_weight", type=float, default=0.8)
@@ -233,6 +320,39 @@ def main():
     parser.add_argument("--residual_score_weight", type=float, default=0.25)
     parser.add_argument("--integration_radius_scale", type=float, default=1.0)
     parser.add_argument("--integration_min_radius_vox", type=float, default=1.2)
+    parser.add_argument("--dual_state_enable", action="store_true")
+    parser.add_argument("--dual_state_assoc_weight", type=float, default=0.45)
+    parser.add_argument("--dual_state_free_weight", type=float, default=0.25)
+    parser.add_argument("--dual_state_residual_weight", type=float, default=0.15)
+    parser.add_argument("--dual_state_osc_weight", type=float, default=0.10)
+    parser.add_argument("--dual_state_pose_weight", type=float, default=0.05)
+    parser.add_argument("--dual_state_bias", type=float, default=0.45)
+    parser.add_argument("--dual_state_temp", type=float, default=0.25)
+    parser.add_argument("--dual_pose_var_ref", type=float, default=0.05)
+    parser.add_argument("--dual_state_static_ema", type=float, default=0.12)
+    parser.add_argument("--dual_state_min_static_ratio", type=float, default=0.06)
+    parser.add_argument("--dual_state_commit_thresh", type=float, default=0.70)
+    parser.add_argument("--dual_state_rollback_thresh", type=float, default=0.32)
+    parser.add_argument("--dual_state_commit_gain", type=float, default=0.25)
+    parser.add_argument("--dual_state_rollback_gain", type=float, default=0.10)
+    parser.add_argument("--dual_state_static_protect_rho", type=float, default=0.90)
+    parser.add_argument("--dual_state_static_protect_ratio", type=float, default=1.60)
+    parser.add_argument("--dual_state_static_decay_mult", type=float, default=1.0)
+    parser.add_argument("--dual_state_transient_decay_mult", type=float, default=2.2)
+    parser.add_argument("--ptdsf_enable", action="store_true")
+    parser.add_argument("--ptdsf_rho_alpha", type=float, default=0.18)
+    parser.add_argument("--ptdsf_static_blend", type=float, default=0.55)
+    parser.add_argument("--ptdsf_commit_age_ref", type=float, default=3.0)
+    parser.add_argument("--ptdsf_commit_bonus", type=float, default=0.08)
+    parser.add_argument("--ptdsf_rollback_bonus", type=float, default=0.06)
+    parser.add_argument("--wod_enable", action="store_true")
+    parser.add_argument("--rps_enable", action="store_true")
+    parser.add_argument("--rps_hard_commit_enable", action="store_true")
+    parser.add_argument("--rps_surface_bank_enable", action="store_true")
+    parser.add_argument("--wdsg_enable", action="store_true")
+    parser.add_argument("--wdsg_route_enable", action="store_true")
+    parser.add_argument("--spg_enable", action="store_true")
+    parser.add_argument("--otv_enable", action="store_true")
     parser.add_argument("--decay_interval_frames", type=int, default=1)
     parser.add_argument("--lzcd_enable", action="store_true")
     parser.add_argument("--lzcd_interval", type=int, default=2)
@@ -248,10 +368,39 @@ def main():
     parser.add_argument("--lzcd_max_bias", type=float, default=0.06)
     parser.add_argument("--lzcd_max_step", type=float, default=0.02)
     parser.add_argument("--lzcd_trim_quantile", type=float, default=0.75)
+    parser.add_argument("--lzcd_solver_iters", type=int, default=3)
+    parser.add_argument("--lzcd_solver_lambda_smooth", type=float, default=0.35)
+    parser.add_argument("--lzcd_solver_step", type=float, default=0.85)
+    parser.add_argument("--lzcd_solver_tol", type=float, default=5e-4)
+    parser.add_argument("--lzcd_residual_anchor_weight", type=float, default=0.25)
+    parser.add_argument("--lzcd_residual_alpha", type=float, default=0.12)
+    parser.add_argument("--lzcd_residual_hit_ref", type=float, default=10.0)
+    parser.add_argument("--lzcd_residual_max_abs", type=float, default=0.10)
+    parser.add_argument("--lzcd_max_candidates", type=int, default=6000)
+    parser.add_argument("--zcbf_enable", action="store_true")
+    parser.add_argument("--zcbf_block_size_cells", type=int, default=6)
+    parser.add_argument("--zcbf_min_rho", type=float, default=0.25)
+    parser.add_argument("--zcbf_min_phi_w", type=float, default=0.6)
+    parser.add_argument("--zcbf_max_dscore", type=float, default=0.55)
+    parser.add_argument("--zcbf_alpha", type=float, default=0.18)
+    parser.add_argument("--zcbf_trim_quantile", type=float, default=0.70)
+    parser.add_argument("--zcbf_apply_gain", type=float, default=0.30)
+    parser.add_argument("--zcbf_max_bias", type=float, default=0.04)
+    parser.add_argument("--zcbf_static_rho_ref", type=float, default=1.0)
     parser.add_argument("--lzcd_use_geo_channel", dest="lzcd_use_geo_channel", action="store_true")
     parser.add_argument("--lzcd_no_geo_channel", dest="lzcd_use_geo_channel", action="store_false")
     parser.set_defaults(lzcd_use_geo_channel=True)
     parser.add_argument("--stcg_enable", action="store_true")
+    parser.add_argument("--dccm_enable", action="store_true")
+    parser.add_argument("--dccm_alpha", type=float, default=0.16)
+    parser.add_argument("--dccm_age_gain", type=float, default=0.10)
+    parser.add_argument("--dccm_age_decay", type=float, default=0.94)
+    parser.add_argument("--dccm_commit_thresh", type=float, default=0.62)
+    parser.add_argument("--dccm_free_weight", type=float, default=0.40)
+    parser.add_argument("--dccm_rear_weight", type=float, default=0.22)
+    parser.add_argument("--dccm_age_weight", type=float, default=0.18)
+    parser.add_argument("--dccm_surface_weight", type=float, default=0.12)
+    parser.add_argument("--dccm_rho_weight", type=float, default=0.08)
     parser.add_argument("--stcg_alpha", type=float, default=0.12)
     parser.add_argument("--stcg_conflict_weight", type=float, default=0.60)
     parser.add_argument("--stcg_residual_weight", type=float, default=0.25)
@@ -259,6 +408,53 @@ def main():
     parser.add_argument("--stcg_free_ratio_ref", type=float, default=0.90)
     parser.add_argument("--stcg_on_thresh", type=float, default=0.58)
     parser.add_argument("--stcg_off_thresh", type=float, default=0.42)
+    parser.add_argument("--zdyn_enable", action="store_true")
+    parser.add_argument("--zdyn_alpha_up", type=float, default=0.26)
+    parser.add_argument("--zdyn_alpha_down", type=float, default=0.10)
+    parser.add_argument("--zdyn_decay", type=float, default=0.985)
+    parser.add_argument("--zdyn_conflict_weight", type=float, default=0.40)
+    parser.add_argument("--zdyn_visibility_weight", type=float, default=0.25)
+    parser.add_argument("--zdyn_residual_weight", type=float, default=0.20)
+    parser.add_argument("--zdyn_osc_weight", type=float, default=0.10)
+    parser.add_argument("--zdyn_free_ratio_weight", type=float, default=0.05)
+    parser.add_argument("--zdyn_free_ratio_ref", type=float, default=1.0)
+    parser.add_argument("--sse_em_enable", action="store_true")
+    parser.add_argument("--sse_em_prior_temp", type=float, default=0.9)
+    parser.add_argument("--sse_em_mstep_alpha", type=float, default=0.20)
+    parser.add_argument("--sse_em_static_floor", type=float, default=0.05)
+    parser.add_argument("--sse_em_dynamic_ceil", type=float, default=0.95)
+    parser.add_argument("--lbr_enable", action="store_true")
+    parser.add_argument("--lbr_alpha", type=float, default=0.14)
+    parser.add_argument("--lbr_max_bias", type=float, default=0.05)
+    parser.add_argument("--lbr_depth_ref", type=float, default=2.5)
+    parser.add_argument("--lbr_apply_gain", type=float, default=0.35)
+    parser.add_argument("--vcr_enable", action="store_true")
+    parser.add_argument("--vcr_alpha", type=float, default=0.16)
+    parser.add_argument("--vcr_on_thresh", type=float, default=0.55)
+    parser.add_argument("--vcr_off_thresh", type=float, default=0.40)
+    parser.add_argument("--rbi_enable", action="store_true")
+    parser.add_argument("--rbi_decay", type=float, default=0.92)
+    parser.add_argument("--rbi_commit_static_p", type=float, default=0.72)
+    parser.add_argument("--rbi_dyn_gate", type=float, default=0.35)
+    parser.add_argument("--rbi_min_weight", type=float, default=1.5)
+    parser.add_argument("--rbi_recover_gain", type=float, default=0.30)
+    parser.add_argument("--rbi_max_step", type=float, default=0.02)
+    parser.add_argument("--surface_ebcut_enable", action="store_true")
+    parser.add_argument("--surface_ebcut_energy_thresh", type=float, default=0.58)
+    parser.add_argument("--surface_ebcut_w_phi", type=float, default=0.30)
+    parser.add_argument("--surface_ebcut_w_dyn", type=float, default=0.35)
+    parser.add_argument("--surface_ebcut_w_free", type=float, default=0.20)
+    parser.add_argument("--surface_ebcut_w_conf", type=float, default=0.15)
+    parser.add_argument("--surface_ebcut_w_smooth", type=float, default=0.10)
+    parser.add_argument("--surface_ebcut_smooth_radius", type=int, default=1)
+    parser.add_argument("--surface_mopc_enable", action="store_true")
+    parser.add_argument("--surface_mopc_step", type=float, default=0.02)
+    parser.add_argument("--surface_mopc_dyn_target", type=float, default=0.20)
+    parser.add_argument("--surface_mopc_rej_target", type=float, default=0.08)
+    parser.add_argument("--surface_mopc_drop_min", type=float, default=0.60)
+    parser.add_argument("--surface_mopc_drop_max", type=float, default=0.90)
+    parser.add_argument("--surface_mopc_maxd_min", type=float, default=0.70)
+    parser.add_argument("--surface_mopc_maxd_max", type=float, default=1.00)
     parser.add_argument("--raycast_clear_gain", type=float, default=0.0)
     parser.add_argument("--raycast_step_scale", type=float, default=1.0)
     parser.add_argument("--raycast_end_margin", type=float, default=0.12)
@@ -361,7 +557,16 @@ def main():
     cfg.surface.adaptive_free_ratio_gain = float(np.clip(args.surface_adaptive_free_ratio_gain, 0.0, 0.99))
     cfg.surface.lzcd_apply_in_extraction = bool(args.surface_lzcd_apply_in_extraction)
     cfg.surface.lzcd_bias_scale = float(max(0.0, args.surface_lzcd_bias_scale))
+    cfg.surface.ptdsf_persistent_only_enable = bool(args.surface_ptdsf_persistent_only_enable)
+    cfg.surface.ptdsf_persistent_min_rho = float(max(0.0, args.surface_ptdsf_persistent_min_rho))
+    cfg.surface.ptdsf_static_rho_weight = float(max(0.0, args.surface_ptdsf_static_rho_weight))
+    cfg.surface.zcbf_apply_in_extraction = bool(args.surface_zcbf_apply_in_extraction)
+    cfg.surface.zcbf_bias_scale = float(max(0.0, args.surface_zcbf_bias_scale))
     cfg.surface.stcg_enable = bool(args.surface_stcg_enable)
+    cfg.surface.dccm_enable = bool(args.surface_dccm_enable)
+    cfg.surface.dccm_commit_weight = float(max(0.0, args.surface_dccm_commit_weight))
+    cfg.surface.dccm_static_guard = float(np.clip(args.surface_dccm_static_guard, 0.0, 1.0))
+    cfg.surface.dccm_drop_gain = float(np.clip(args.surface_dccm_drop_gain, 0.0, 1.0))
     cfg.surface.stcg_min_score = float(np.clip(args.surface_stcg_min_score, 0.0, 1.0))
     cfg.surface.stcg_rho_ref = float(max(1e-6, args.surface_stcg_rho_ref))
     cfg.surface.stcg_free_shrink = float(np.clip(args.surface_stcg_free_shrink, 0.0, 1.0))
@@ -369,6 +574,39 @@ def main():
     cfg.surface.stcg_dscore_shrink = float(np.clip(args.surface_stcg_dscore_shrink, 0.0, 1.0))
     cfg.surface.stcg_weight_gain = float(max(0.0, args.surface_stcg_weight_gain))
     cfg.surface.stcg_static_protect = float(np.clip(args.surface_stcg_static_protect, 0.0, 1.0))
+    cfg.surface.use_dual_static_channel = bool(args.surface_use_dual_static_channel)
+    cfg.surface.dual_p_static_min = float(max(0.0, args.surface_dual_p_static_min))
+    cfg.surface.structural_decouple_enable = bool(args.surface_structural_decouple_enable)
+    cfg.surface.decouple_min_geo_weight_ratio = float(max(1e-6, args.surface_decouple_min_geo_weight_ratio))
+    cfg.surface.decouple_dyn_drop_thresh = float(np.clip(args.surface_decouple_dyn_drop_thresh, 0.0, 1.5))
+    cfg.surface.decouple_dyn_rho_guard = float(max(0.0, args.surface_decouple_dyn_rho_guard))
+    cfg.surface.decouple_dyn_free_ratio_thresh = float(max(0.0, args.surface_decouple_dyn_free_ratio_thresh))
+    cfg.surface.decouple_channel_div_enable = bool(args.surface_decouple_channel_div_enable)
+    cfg.surface.decouple_channel_div_thresh = float(max(1e-6, args.surface_decouple_channel_div_thresh))
+    cfg.surface.decouple_channel_div_weight = float(max(0.0, args.surface_decouple_channel_div_weight))
+    cfg.surface.decouple_channel_div_static_guard = float(np.clip(args.surface_decouple_channel_div_static_guard, 0.0, 1.0))
+    cfg.surface.dual_layer_extract_enable = bool(args.surface_dual_layer_extract_enable)
+    cfg.surface.dual_layer_geo_min_weight_ratio = float(np.clip(args.surface_dual_layer_geo_min_weight_ratio, 0.0, 1.0))
+    cfg.surface.dual_layer_dyn_use_zdyn = bool(args.surface_dual_layer_dyn_use_zdyn)
+    cfg.surface.dual_layer_dyn_prob_weight = float(max(0.0, args.surface_dual_layer_dyn_prob_weight))
+    cfg.surface.dual_layer_dyn_stmem_weight = float(max(0.0, args.surface_dual_layer_dyn_stmem_weight))
+    cfg.surface.dual_layer_dyn_contra_weight = float(max(0.0, args.surface_dual_layer_dyn_contra_weight))
+    cfg.surface.dual_layer_dyn_transient_weight = float(max(0.0, args.surface_dual_layer_dyn_transient_weight))
+    cfg.surface.dual_layer_dyn_phi_div_weight = float(max(0.0, args.surface_dual_layer_dyn_phi_div_weight))
+    cfg.surface.dual_layer_dyn_phi_ratio_weight = float(max(0.0, args.surface_dual_layer_dyn_phi_ratio_weight))
+    cfg.surface.dual_layer_dyn_phi_div_ref = float(max(1e-6, args.surface_dual_layer_dyn_phi_div_ref))
+    cfg.surface.dual_layer_dyn_use_phi_dyn = bool(args.surface_dual_layer_dyn_use_phi_dyn)
+    cfg.surface.dual_layer_compete_enable = bool(args.surface_dual_layer_compete_enable)
+    cfg.surface.dual_layer_compete_margin = float(max(0.0, args.surface_dual_layer_compete_margin))
+    cfg.surface.dual_layer_compete_geo_weight = float(np.clip(args.surface_dual_layer_compete_geo_weight, 0.0, 1.0))
+    cfg.surface.dual_layer_compete_dyn_mix_weight = float(np.clip(args.surface_dual_layer_compete_dyn_mix_weight, 0.0, 1.0))
+    cfg.surface.dual_layer_compete_dyn_conf_weight = float(np.clip(args.surface_dual_layer_compete_dyn_conf_weight, 0.0, 1.0))
+    cfg.surface.dual_layer_dyn_drop_thresh = float(np.clip(args.surface_dual_layer_dyn_drop_thresh, 0.0, 1.2))
+    cfg.surface.dual_layer_dyn_free_ratio_min = float(max(0.0, args.surface_dual_layer_dyn_free_ratio_min))
+    cfg.surface.dual_layer_static_anchor_rho = float(max(0.0, args.surface_dual_layer_static_anchor_rho))
+    cfg.surface.dual_layer_static_anchor_p = float(np.clip(args.surface_dual_layer_static_anchor_p, 0.0, 1.0))
+    cfg.surface.dual_layer_static_anchor_ratio = float(max(1e-6, args.surface_dual_layer_static_anchor_ratio))
+    cfg.surface.omhs_enable = bool(args.surface_omhs_enable)
     cfg.surface.poisson_depth = int(args.poisson_depth)
     cfg.update.poisson_iters = int(max(0, args.poisson_iters))
     cfg.update.poisson_lr = float(max(1e-4, args.poisson_lr))
@@ -390,6 +628,15 @@ def main():
     cfg.assoc.hetero_sigma_d_max_scale = float(max(cfg.assoc.hetero_sigma_d_min_scale, args.assoc_hetero_sigma_d_max_scale))
     cfg.assoc.hetero_sigma_n_min_scale = float(max(1e-3, args.assoc_hetero_sigma_n_min_scale))
     cfg.assoc.hetero_sigma_n_max_scale = float(max(cfg.assoc.hetero_sigma_n_min_scale, args.assoc_hetero_sigma_n_max_scale))
+    cfg.assoc.contra_gate_enable = bool(args.assoc_contra_gate_enable)
+    cfg.assoc.contra_stmem_weight = float(max(0.0, args.assoc_contra_stmem_weight))
+    cfg.assoc.contra_visibility_weight = float(max(0.0, args.assoc_contra_visibility_weight))
+    cfg.assoc.contra_residual_weight = float(max(0.0, args.assoc_contra_residual_weight))
+    cfg.assoc.contra_free_ratio_ref = float(max(1e-6, args.assoc_contra_free_ratio_ref))
+    cfg.assoc.contra_rho_ref = float(max(1e-6, args.assoc_contra_rho_ref))
+    cfg.assoc.contra_static_guard = float(np.clip(args.assoc_contra_static_guard, 0.0, 1.0))
+    cfg.assoc.contra_rho_guard = float(np.clip(args.assoc_contra_rho_guard, 0.0, 1.0))
+    cfg.assoc.contra_d2_boost_max = float(max(1.0, args.assoc_contra_d2_boost_max))
     cfg.assoc.huber_delta_n = float(args.huber_delta_n)
     cfg.assoc.seed_fallback_enable = bool(args.assoc_seed_fallback_enable)
     cfg.assoc.seed_fallback_low_support_scale = float(max(0.0, args.assoc_seed_fallback_low_support_scale))
@@ -405,6 +652,39 @@ def main():
     cfg.update.residual_score_weight = float(args.residual_score_weight)
     cfg.update.integration_radius_scale = float(np.clip(args.integration_radius_scale, 0.20, 1.0))
     cfg.update.integration_min_radius_vox = float(max(0.6, args.integration_min_radius_vox))
+    cfg.update.dual_state_enable = bool(args.dual_state_enable)
+    cfg.update.dual_state_assoc_weight = float(max(0.0, args.dual_state_assoc_weight))
+    cfg.update.dual_state_free_weight = float(max(0.0, args.dual_state_free_weight))
+    cfg.update.dual_state_residual_weight = float(max(0.0, args.dual_state_residual_weight))
+    cfg.update.dual_state_osc_weight = float(max(0.0, args.dual_state_osc_weight))
+    cfg.update.dual_state_pose_weight = float(max(0.0, args.dual_state_pose_weight))
+    cfg.update.dual_state_bias = float(np.clip(args.dual_state_bias, 0.0, 1.0))
+    cfg.update.dual_state_temp = float(max(1e-3, args.dual_state_temp))
+    cfg.update.dual_pose_var_ref = float(max(1e-6, args.dual_pose_var_ref))
+    cfg.update.dual_state_static_ema = float(np.clip(args.dual_state_static_ema, 0.01, 0.95))
+    cfg.update.dual_state_min_static_ratio = float(np.clip(args.dual_state_min_static_ratio, 0.0, 0.5))
+    cfg.update.dual_state_commit_thresh = float(np.clip(args.dual_state_commit_thresh, 0.0, 1.0))
+    cfg.update.dual_state_rollback_thresh = float(np.clip(args.dual_state_rollback_thresh, 0.0, 1.0))
+    cfg.update.dual_state_commit_gain = float(np.clip(args.dual_state_commit_gain, 0.0, 1.0))
+    cfg.update.dual_state_rollback_gain = float(np.clip(args.dual_state_rollback_gain, 0.0, 1.0))
+    cfg.update.dual_state_static_protect_rho = float(max(0.0, args.dual_state_static_protect_rho))
+    cfg.update.dual_state_static_protect_ratio = float(max(1e-6, args.dual_state_static_protect_ratio))
+    cfg.update.dual_state_static_decay_mult = float(max(0.2, args.dual_state_static_decay_mult))
+    cfg.update.dual_state_transient_decay_mult = float(max(0.2, args.dual_state_transient_decay_mult))
+    cfg.update.ptdsf_enable = bool(args.ptdsf_enable)
+    cfg.update.ptdsf_rho_alpha = float(np.clip(args.ptdsf_rho_alpha, 0.01, 1.0))
+    cfg.update.ptdsf_static_blend = float(np.clip(args.ptdsf_static_blend, 0.0, 1.0))
+    cfg.update.ptdsf_commit_age_ref = float(max(1.0, args.ptdsf_commit_age_ref))
+    cfg.update.ptdsf_commit_bonus = float(max(0.0, args.ptdsf_commit_bonus))
+    cfg.update.ptdsf_rollback_bonus = float(max(0.0, args.ptdsf_rollback_bonus))
+    cfg.update.wod_enable = bool(args.wod_enable)
+    cfg.update.rps_enable = bool(args.rps_enable)
+    cfg.update.rps_hard_commit_enable = bool(args.rps_hard_commit_enable)
+    cfg.update.rps_surface_bank_enable = bool(args.rps_surface_bank_enable)
+    cfg.update.wdsg_enable = bool(args.wdsg_enable)
+    cfg.update.wdsg_route_enable = bool(args.wdsg_route_enable)
+    cfg.update.spg_enable = bool(args.spg_enable)
+    cfg.update.otv_enable = bool(args.otv_enable)
     cfg.update.decay_interval_frames = int(max(1, args.decay_interval_frames))
     cfg.update.lzcd_enable = bool(args.lzcd_enable)
     cfg.update.lzcd_interval = int(max(1, args.lzcd_interval))
@@ -420,8 +700,37 @@ def main():
     cfg.update.lzcd_max_bias = float(max(1e-4, args.lzcd_max_bias))
     cfg.update.lzcd_max_step = float(max(1e-4, args.lzcd_max_step))
     cfg.update.lzcd_trim_quantile = float(np.clip(args.lzcd_trim_quantile, 0.55, 1.0))
+    cfg.update.lzcd_solver_iters = int(max(1, args.lzcd_solver_iters))
+    cfg.update.lzcd_solver_lambda_smooth = float(max(0.0, args.lzcd_solver_lambda_smooth))
+    cfg.update.lzcd_solver_step = float(np.clip(args.lzcd_solver_step, 0.10, 1.0))
+    cfg.update.lzcd_solver_tol = float(max(1e-6, args.lzcd_solver_tol))
+    cfg.update.lzcd_residual_anchor_weight = float(np.clip(args.lzcd_residual_anchor_weight, 0.0, 0.95))
+    cfg.update.lzcd_residual_alpha = float(np.clip(args.lzcd_residual_alpha, 0.01, 0.95))
+    cfg.update.lzcd_residual_hit_ref = float(max(1.0, args.lzcd_residual_hit_ref))
+    cfg.update.lzcd_residual_max_abs = float(max(1e-4, args.lzcd_residual_max_abs))
+    cfg.update.lzcd_max_candidates = int(max(0, args.lzcd_max_candidates))
+    cfg.update.zcbf_enable = bool(args.zcbf_enable)
+    cfg.update.zcbf_block_size_cells = int(max(1, args.zcbf_block_size_cells))
+    cfg.update.zcbf_min_rho = float(max(0.0, args.zcbf_min_rho))
+    cfg.update.zcbf_min_phi_w = float(max(0.0, args.zcbf_min_phi_w))
+    cfg.update.zcbf_max_dscore = float(np.clip(args.zcbf_max_dscore, 0.0, 1.0))
+    cfg.update.zcbf_alpha = float(np.clip(args.zcbf_alpha, 0.01, 0.95))
+    cfg.update.zcbf_trim_quantile = float(np.clip(args.zcbf_trim_quantile, 0.55, 1.0))
+    cfg.update.zcbf_apply_gain = float(np.clip(args.zcbf_apply_gain, 0.0, 1.0))
+    cfg.update.zcbf_max_bias = float(max(1e-5, args.zcbf_max_bias))
+    cfg.update.zcbf_static_rho_ref = float(max(1e-6, args.zcbf_static_rho_ref))
     cfg.update.lzcd_use_geo_channel = bool(args.lzcd_use_geo_channel)
     cfg.update.stcg_enable = bool(args.stcg_enable)
+    cfg.update.dccm_enable = bool(args.dccm_enable)
+    cfg.update.dccm_alpha = float(np.clip(args.dccm_alpha, 0.01, 0.95))
+    cfg.update.dccm_age_gain = float(max(0.0, args.dccm_age_gain))
+    cfg.update.dccm_age_decay = float(np.clip(args.dccm_age_decay, 0.70, 1.0))
+    cfg.update.dccm_commit_thresh = float(np.clip(args.dccm_commit_thresh, 0.0, 1.0))
+    cfg.update.dccm_free_weight = float(max(0.0, args.dccm_free_weight))
+    cfg.update.dccm_rear_weight = float(max(0.0, args.dccm_rear_weight))
+    cfg.update.dccm_age_weight = float(max(0.0, args.dccm_age_weight))
+    cfg.update.dccm_surface_weight = float(max(0.0, args.dccm_surface_weight))
+    cfg.update.dccm_rho_weight = float(max(0.0, args.dccm_rho_weight))
     cfg.update.stcg_alpha = float(np.clip(args.stcg_alpha, 0.01, 0.95))
     cfg.update.stcg_conflict_weight = float(max(0.0, args.stcg_conflict_weight))
     cfg.update.stcg_residual_weight = float(max(0.0, args.stcg_residual_weight))
@@ -429,6 +738,53 @@ def main():
     cfg.update.stcg_free_ratio_ref = float(max(1e-6, args.stcg_free_ratio_ref))
     cfg.update.stcg_on_thresh = float(np.clip(args.stcg_on_thresh, 0.05, 0.95))
     cfg.update.stcg_off_thresh = float(np.clip(args.stcg_off_thresh, 0.01, 0.90))
+    cfg.update.zdyn_enable = bool(args.zdyn_enable)
+    cfg.update.zdyn_alpha_up = float(np.clip(args.zdyn_alpha_up, 0.01, 0.95))
+    cfg.update.zdyn_alpha_down = float(np.clip(args.zdyn_alpha_down, 0.01, 0.95))
+    cfg.update.zdyn_decay = float(np.clip(args.zdyn_decay, 0.80, 1.0))
+    cfg.update.zdyn_conflict_weight = float(max(0.0, args.zdyn_conflict_weight))
+    cfg.update.zdyn_visibility_weight = float(max(0.0, args.zdyn_visibility_weight))
+    cfg.update.zdyn_residual_weight = float(max(0.0, args.zdyn_residual_weight))
+    cfg.update.zdyn_osc_weight = float(max(0.0, args.zdyn_osc_weight))
+    cfg.update.zdyn_free_ratio_weight = float(max(0.0, args.zdyn_free_ratio_weight))
+    cfg.update.zdyn_free_ratio_ref = float(max(1e-6, args.zdyn_free_ratio_ref))
+    cfg.update.sse_em_enable = bool(args.sse_em_enable)
+    cfg.update.sse_em_prior_temp = float(max(1e-3, args.sse_em_prior_temp))
+    cfg.update.sse_em_mstep_alpha = float(np.clip(args.sse_em_mstep_alpha, 0.01, 0.95))
+    cfg.update.sse_em_static_floor = float(np.clip(args.sse_em_static_floor, 0.0, 0.49))
+    cfg.update.sse_em_dynamic_ceil = float(np.clip(args.sse_em_dynamic_ceil, 0.51, 1.0))
+    cfg.update.lbr_enable = bool(args.lbr_enable)
+    cfg.update.lbr_alpha = float(np.clip(args.lbr_alpha, 0.01, 0.95))
+    cfg.update.lbr_max_bias = float(max(1e-5, args.lbr_max_bias))
+    cfg.update.lbr_depth_ref = float(max(1e-5, args.lbr_depth_ref))
+    cfg.update.lbr_apply_gain = float(np.clip(args.lbr_apply_gain, 0.0, 1.0))
+    cfg.update.vcr_enable = bool(args.vcr_enable)
+    cfg.update.vcr_alpha = float(np.clip(args.vcr_alpha, 0.01, 0.95))
+    cfg.update.vcr_on_thresh = float(np.clip(args.vcr_on_thresh, 0.05, 0.95))
+    cfg.update.vcr_off_thresh = float(np.clip(args.vcr_off_thresh, 0.01, 0.90))
+    cfg.update.rbi_enable = bool(args.rbi_enable)
+    cfg.update.rbi_decay = float(np.clip(args.rbi_decay, 0.60, 0.999))
+    cfg.update.rbi_commit_static_p = float(np.clip(args.rbi_commit_static_p, 0.0, 1.0))
+    cfg.update.rbi_dyn_gate = float(np.clip(args.rbi_dyn_gate, 0.0, 1.0))
+    cfg.update.rbi_min_weight = float(max(1e-6, args.rbi_min_weight))
+    cfg.update.rbi_recover_gain = float(np.clip(args.rbi_recover_gain, 0.0, 1.0))
+    cfg.update.rbi_max_step = float(max(1e-5, args.rbi_max_step))
+    cfg.surface.ebcut_enable = bool(args.surface_ebcut_enable)
+    cfg.surface.ebcut_energy_thresh = float(max(0.0, args.surface_ebcut_energy_thresh))
+    cfg.surface.ebcut_w_phi = float(max(0.0, args.surface_ebcut_w_phi))
+    cfg.surface.ebcut_w_dyn = float(max(0.0, args.surface_ebcut_w_dyn))
+    cfg.surface.ebcut_w_free = float(max(0.0, args.surface_ebcut_w_free))
+    cfg.surface.ebcut_w_conf = float(max(0.0, args.surface_ebcut_w_conf))
+    cfg.surface.ebcut_w_smooth = float(max(0.0, args.surface_ebcut_w_smooth))
+    cfg.surface.ebcut_smooth_radius = int(max(0, args.surface_ebcut_smooth_radius))
+    cfg.surface.mopc_enable = bool(args.surface_mopc_enable)
+    cfg.surface.mopc_step = float(max(1e-6, args.surface_mopc_step))
+    cfg.surface.mopc_dyn_target = float(np.clip(args.surface_mopc_dyn_target, 0.0, 1.0))
+    cfg.surface.mopc_rej_target = float(np.clip(args.surface_mopc_rej_target, 0.0, 1.0))
+    cfg.surface.mopc_drop_min = float(np.clip(args.surface_mopc_drop_min, 0.0, 1.5))
+    cfg.surface.mopc_drop_max = float(np.clip(args.surface_mopc_drop_max, 0.0, 1.5))
+    cfg.surface.mopc_maxd_min = float(np.clip(args.surface_mopc_maxd_min, 0.0, 1.5))
+    cfg.surface.mopc_maxd_max = float(np.clip(args.surface_mopc_maxd_max, 0.0, 1.5))
     cfg.update.raycast_clear_gain = float(args.raycast_clear_gain)
     cfg.update.raycast_step_scale = float(args.raycast_step_scale)
     cfg.update.raycast_end_margin = float(args.raycast_end_margin)
@@ -640,6 +996,15 @@ def main():
         "assoc_hetero_sigma_d_max_scale": float(cfg.assoc.hetero_sigma_d_max_scale),
         "assoc_hetero_sigma_n_min_scale": float(cfg.assoc.hetero_sigma_n_min_scale),
         "assoc_hetero_sigma_n_max_scale": float(cfg.assoc.hetero_sigma_n_max_scale),
+        "assoc_contra_gate_enable": bool(cfg.assoc.contra_gate_enable),
+        "assoc_contra_stmem_weight": float(cfg.assoc.contra_stmem_weight),
+        "assoc_contra_visibility_weight": float(cfg.assoc.contra_visibility_weight),
+        "assoc_contra_residual_weight": float(cfg.assoc.contra_residual_weight),
+        "assoc_contra_free_ratio_ref": float(cfg.assoc.contra_free_ratio_ref),
+        "assoc_contra_rho_ref": float(cfg.assoc.contra_rho_ref),
+        "assoc_contra_static_guard": float(cfg.assoc.contra_static_guard),
+        "assoc_contra_rho_guard": float(cfg.assoc.contra_rho_guard),
+        "assoc_contra_d2_boost_max": float(cfg.assoc.contra_d2_boost_max),
         "assoc_gate_threshold": float(cfg.assoc.gate_threshold),
         "assoc_search_radius_cells": int(cfg.assoc.search_radius_cells),
         "assoc_strict_surface_weight": float(cfg.assoc.strict_surface_weight),
@@ -695,6 +1060,84 @@ def main():
         "surface_stcg_dscore_shrink": float(cfg.surface.stcg_dscore_shrink),
         "surface_stcg_weight_gain": float(cfg.surface.stcg_weight_gain),
         "surface_stcg_static_protect": float(cfg.surface.stcg_static_protect),
+        "surface_use_dual_static_channel": bool(cfg.surface.use_dual_static_channel),
+        "surface_structural_decouple_enable": bool(cfg.surface.structural_decouple_enable),
+        "surface_decouple_min_geo_weight_ratio": float(cfg.surface.decouple_min_geo_weight_ratio),
+        "surface_decouple_dyn_drop_thresh": float(cfg.surface.decouple_dyn_drop_thresh),
+        "surface_decouple_dyn_rho_guard": float(cfg.surface.decouple_dyn_rho_guard),
+        "surface_decouple_dyn_free_ratio_thresh": float(cfg.surface.decouple_dyn_free_ratio_thresh),
+        "surface_decouple_channel_div_enable": bool(cfg.surface.decouple_channel_div_enable),
+        "surface_decouple_channel_div_thresh": float(cfg.surface.decouple_channel_div_thresh),
+        "surface_decouple_channel_div_weight": float(cfg.surface.decouple_channel_div_weight),
+        "surface_decouple_channel_div_static_guard": float(cfg.surface.decouple_channel_div_static_guard),
+        "surface_dual_layer_extract_enable": bool(cfg.surface.dual_layer_extract_enable),
+        "surface_dual_layer_geo_min_weight_ratio": float(cfg.surface.dual_layer_geo_min_weight_ratio),
+        "surface_dual_layer_dyn_use_zdyn": bool(cfg.surface.dual_layer_dyn_use_zdyn),
+        "surface_dual_layer_dyn_prob_weight": float(cfg.surface.dual_layer_dyn_prob_weight),
+        "surface_dual_layer_dyn_stmem_weight": float(cfg.surface.dual_layer_dyn_stmem_weight),
+        "surface_dual_layer_dyn_contra_weight": float(cfg.surface.dual_layer_dyn_contra_weight),
+        "surface_dual_layer_dyn_transient_weight": float(cfg.surface.dual_layer_dyn_transient_weight),
+        "surface_dual_layer_dyn_phi_div_weight": float(cfg.surface.dual_layer_dyn_phi_div_weight),
+        "surface_dual_layer_dyn_phi_ratio_weight": float(cfg.surface.dual_layer_dyn_phi_ratio_weight),
+        "surface_dual_layer_dyn_phi_div_ref": float(cfg.surface.dual_layer_dyn_phi_div_ref),
+        "surface_dual_layer_dyn_use_phi_dyn": bool(cfg.surface.dual_layer_dyn_use_phi_dyn),
+        "surface_dual_layer_compete_enable": bool(cfg.surface.dual_layer_compete_enable),
+        "surface_dual_layer_compete_margin": float(cfg.surface.dual_layer_compete_margin),
+        "surface_dual_layer_compete_geo_weight": float(cfg.surface.dual_layer_compete_geo_weight),
+        "surface_dual_layer_compete_dyn_mix_weight": float(cfg.surface.dual_layer_compete_dyn_mix_weight),
+        "surface_dual_layer_compete_dyn_conf_weight": float(cfg.surface.dual_layer_compete_dyn_conf_weight),
+        "surface_dual_layer_dyn_drop_thresh": float(cfg.surface.dual_layer_dyn_drop_thresh),
+        "surface_dual_layer_dyn_free_ratio_min": float(cfg.surface.dual_layer_dyn_free_ratio_min),
+        "surface_ebcut_enable": bool(cfg.surface.ebcut_enable),
+        "surface_ebcut_energy_thresh": float(cfg.surface.ebcut_energy_thresh),
+        "surface_ebcut_w_phi": float(cfg.surface.ebcut_w_phi),
+        "surface_ebcut_w_dyn": float(cfg.surface.ebcut_w_dyn),
+        "surface_ebcut_w_free": float(cfg.surface.ebcut_w_free),
+        "surface_ebcut_w_conf": float(cfg.surface.ebcut_w_conf),
+        "surface_ebcut_w_smooth": float(cfg.surface.ebcut_w_smooth),
+        "surface_ebcut_smooth_radius": int(cfg.surface.ebcut_smooth_radius),
+        "surface_mopc_enable": bool(cfg.surface.mopc_enable),
+        "surface_mopc_step": float(cfg.surface.mopc_step),
+        "surface_mopc_dyn_target": float(cfg.surface.mopc_dyn_target),
+        "surface_mopc_rej_target": float(cfg.surface.mopc_rej_target),
+        "surface_mopc_drop_min": float(cfg.surface.mopc_drop_min),
+        "surface_mopc_drop_max": float(cfg.surface.mopc_drop_max),
+        "surface_mopc_maxd_min": float(cfg.surface.mopc_maxd_min),
+        "surface_mopc_maxd_max": float(cfg.surface.mopc_maxd_max),
+        "sse_em_enable": bool(cfg.update.sse_em_enable),
+        "sse_em_prior_temp": float(cfg.update.sse_em_prior_temp),
+        "sse_em_mstep_alpha": float(cfg.update.sse_em_mstep_alpha),
+        "sse_em_static_floor": float(cfg.update.sse_em_static_floor),
+        "sse_em_dynamic_ceil": float(cfg.update.sse_em_dynamic_ceil),
+        "lbr_enable": bool(cfg.update.lbr_enable),
+        "lbr_alpha": float(cfg.update.lbr_alpha),
+        "lbr_max_bias": float(cfg.update.lbr_max_bias),
+        "lbr_depth_ref": float(cfg.update.lbr_depth_ref),
+        "lbr_apply_gain": float(cfg.update.lbr_apply_gain),
+        "vcr_enable": bool(cfg.update.vcr_enable),
+        "vcr_alpha": float(cfg.update.vcr_alpha),
+        "vcr_on_thresh": float(cfg.update.vcr_on_thresh),
+        "vcr_off_thresh": float(cfg.update.vcr_off_thresh),
+        "rbi_enable": bool(cfg.update.rbi_enable),
+        "rbi_decay": float(cfg.update.rbi_decay),
+        "rbi_commit_static_p": float(cfg.update.rbi_commit_static_p),
+        "rbi_dyn_gate": float(cfg.update.rbi_dyn_gate),
+        "rbi_min_weight": float(cfg.update.rbi_min_weight),
+        "rbi_recover_gain": float(cfg.update.rbi_recover_gain),
+        "rbi_max_step": float(cfg.update.rbi_max_step),
+        "surface_dual_layer_static_anchor_rho": float(cfg.surface.dual_layer_static_anchor_rho),
+        "surface_dual_layer_static_anchor_p": float(cfg.surface.dual_layer_static_anchor_p),
+        "surface_dual_layer_static_anchor_ratio": float(cfg.surface.dual_layer_static_anchor_ratio),
+        "surface_omhs_enable": bool(cfg.surface.omhs_enable),
+        "wod_enable": bool(cfg.update.wod_enable),
+        "rps_enable": bool(cfg.update.rps_enable),
+        "rps_hard_commit_enable": bool(cfg.update.rps_hard_commit_enable),
+        "rps_surface_bank_enable": bool(cfg.update.rps_surface_bank_enable),
+        "wdsg_enable": bool(cfg.update.wdsg_enable),
+        "wdsg_route_enable": bool(cfg.update.wdsg_route_enable),
+        "spg_enable": bool(cfg.update.spg_enable),
+        "otv_enable": bool(cfg.update.otv_enable),
+        "surface_dual_p_static_min": float(cfg.surface.dual_p_static_min),
         "huber_delta_n": float(cfg.assoc.huber_delta_n),
         "poisson_iters": int(cfg.update.poisson_iters),
         "poisson_lr": float(cfg.update.poisson_lr),
@@ -712,6 +1155,25 @@ def main():
         "residual_score_weight": float(cfg.update.residual_score_weight),
         "integration_radius_scale": float(cfg.update.integration_radius_scale),
         "integration_min_radius_vox": float(cfg.update.integration_min_radius_vox),
+        "dual_state_enable": bool(cfg.update.dual_state_enable),
+        "dual_state_assoc_weight": float(cfg.update.dual_state_assoc_weight),
+        "dual_state_free_weight": float(cfg.update.dual_state_free_weight),
+        "dual_state_residual_weight": float(cfg.update.dual_state_residual_weight),
+        "dual_state_osc_weight": float(cfg.update.dual_state_osc_weight),
+        "dual_state_pose_weight": float(cfg.update.dual_state_pose_weight),
+        "dual_state_bias": float(cfg.update.dual_state_bias),
+        "dual_state_temp": float(cfg.update.dual_state_temp),
+        "dual_pose_var_ref": float(cfg.update.dual_pose_var_ref),
+        "dual_state_static_ema": float(cfg.update.dual_state_static_ema),
+        "dual_state_min_static_ratio": float(cfg.update.dual_state_min_static_ratio),
+        "dual_state_commit_thresh": float(cfg.update.dual_state_commit_thresh),
+        "dual_state_rollback_thresh": float(cfg.update.dual_state_rollback_thresh),
+        "dual_state_commit_gain": float(cfg.update.dual_state_commit_gain),
+        "dual_state_rollback_gain": float(cfg.update.dual_state_rollback_gain),
+        "dual_state_static_protect_rho": float(cfg.update.dual_state_static_protect_rho),
+        "dual_state_static_protect_ratio": float(cfg.update.dual_state_static_protect_ratio),
+        "dual_state_static_decay_mult": float(cfg.update.dual_state_static_decay_mult),
+        "dual_state_transient_decay_mult": float(cfg.update.dual_state_transient_decay_mult),
         "decay_interval_frames": int(cfg.update.decay_interval_frames),
         "lzcd_enable": bool(cfg.update.lzcd_enable),
         "lzcd_interval": int(cfg.update.lzcd_interval),
@@ -727,6 +1189,15 @@ def main():
         "lzcd_max_bias": float(cfg.update.lzcd_max_bias),
         "lzcd_max_step": float(cfg.update.lzcd_max_step),
         "lzcd_trim_quantile": float(cfg.update.lzcd_trim_quantile),
+        "lzcd_solver_iters": int(cfg.update.lzcd_solver_iters),
+        "lzcd_solver_lambda_smooth": float(cfg.update.lzcd_solver_lambda_smooth),
+        "lzcd_solver_step": float(cfg.update.lzcd_solver_step),
+        "lzcd_solver_tol": float(cfg.update.lzcd_solver_tol),
+        "lzcd_residual_anchor_weight": float(cfg.update.lzcd_residual_anchor_weight),
+        "lzcd_residual_alpha": float(cfg.update.lzcd_residual_alpha),
+        "lzcd_residual_hit_ref": float(cfg.update.lzcd_residual_hit_ref),
+        "lzcd_residual_max_abs": float(cfg.update.lzcd_residual_max_abs),
+        "lzcd_max_candidates": int(cfg.update.lzcd_max_candidates),
         "lzcd_use_geo_channel": bool(cfg.update.lzcd_use_geo_channel),
         "stcg_enable": bool(cfg.update.stcg_enable),
         "stcg_alpha": float(cfg.update.stcg_alpha),
@@ -736,6 +1207,16 @@ def main():
         "stcg_free_ratio_ref": float(cfg.update.stcg_free_ratio_ref),
         "stcg_on_thresh": float(cfg.update.stcg_on_thresh),
         "stcg_off_thresh": float(cfg.update.stcg_off_thresh),
+        "zdyn_enable": bool(cfg.update.zdyn_enable),
+        "zdyn_alpha_up": float(cfg.update.zdyn_alpha_up),
+        "zdyn_alpha_down": float(cfg.update.zdyn_alpha_down),
+        "zdyn_decay": float(cfg.update.zdyn_decay),
+        "zdyn_conflict_weight": float(cfg.update.zdyn_conflict_weight),
+        "zdyn_visibility_weight": float(cfg.update.zdyn_visibility_weight),
+        "zdyn_residual_weight": float(cfg.update.zdyn_residual_weight),
+        "zdyn_osc_weight": float(cfg.update.zdyn_osc_weight),
+        "zdyn_free_ratio_weight": float(cfg.update.zdyn_free_ratio_weight),
+        "zdyn_free_ratio_ref": float(cfg.update.zdyn_free_ratio_ref),
         "raycast_clear_gain": float(cfg.update.raycast_clear_gain),
         "raycast_step_scale": float(cfg.update.raycast_step_scale),
         "raycast_end_margin": float(cfg.update.raycast_end_margin),

@@ -761,6 +761,37 @@
     - 当前最优仍为 `lzcd_only_b`，在不破坏 `Comp-R` 的前提下，`Acc` 与 `ghost_red_min` 未进一步过线。
     - `P10` 状态维持为 **未过线（best-achievable under current operators）**。
 
+
+#### 追加冲线执行记录（2026-03-06，P10 结构解耦主线：WDSG-R -> SPG）
+- 背景：前一轮 `OMHS/RPS/HRC/Surface-Bank` 已证明 readout 侧不是主瓶颈；`WDSG-R` 首次把 `Acc` 压到 `1.39cm`，但 `ghost_ratio` 仍约 `0.286`，且 `Comp-R@5cm` 只有 `91.79%`。
+- 本轮目标：不再做阈值扫参，改为把“几何候选”和“静态导出”拆成两套状态语义。
+- 新增结构：
+  - `WDSG-R + SPG`：`phi_geo` 继续承担高精度候选几何；新增 `SPG`（Static Promotion Gate）把时间一致的静态几何晋升到独立 front bank；
+  - `SPG fallback`：未晋升且带动态/遮挡信号的前层几何只能保守回退；
+  - `No-direct-geo export`：`phi_geo` 不再直接导出，必须先经 `SPG` 晋升，防止候选几何绕过静态判据。
+- 运行命令：
+  - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_wdsgr_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v10_wdsgr --summary_csv output/summary_tables/p10_structural_probe_v10_wdsgr.csv --figure assets/p10_structural_probe_v10_wdsgr.png --force`
+  - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_wdsgr_spg_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v11_wdsgr_spg --summary_csv output/summary_tables/p10_structural_probe_v11_wdsgr_spg.csv --figure assets/p10_structural_probe_v11_wdsgr_spg.png --force`
+  - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_wdsgr_spg_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v12_wdsgr_spgfb --summary_csv output/summary_tables/p10_structural_probe_v12_wdsgr_spgfb.csv --figure assets/p10_structural_probe_v12_wdsgr_spgfb.png --force`
+  - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_wdsgr_spg_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v13_wdsgr_spg_nogeo --summary_csv output/summary_tables/p10_structural_probe_v13_wdsgr_spg_nogeo.csv --figure assets/p10_structural_probe_v13_wdsgr_spg_nogeo.png --force`
+- 汇总产物：
+  - `output/summary_tables/p10_structural_probe_v5_v10_v11_v12_v13.csv`
+  - `output/summary_tables/p10_structural_probe_v10_v11_v12_v13_by_sequence.csv`
+- 关键结果（TUM walking mean / Bonn all3 mean）：
+  - `v10_wdsgr`: `Acc=1.3887cm`, `Comp-R=91.79%`, `F-score=0.9369`, `ghost_ratio=0.2865`
+  - `v11_wdsgr_spg`: `Acc=1.1910cm`, `Comp-R=93.11%`, `F-score=0.9562`, `ghost_ratio=0.2954`
+  - `v12_wdsgr_spgfb`: 与 `v11` 基本等价，说明“保守静态回退”不是主要瓶颈
+  - `v13_wdsgr_spg_nogeo`: `Acc=1.2331cm`, `Comp-R=94.79%`, `F-score=0.9650`, `ghost_ratio=0.2853`
+- 结论：
+  1. `WDSG-R` 证明 update 端双表面生成是正确方向；
+  2. `SPG` 证明“候选几何 / 导出几何”分离后，`Acc + Comp-R` 可以继续同时上涨；
+  3. `No-direct-geo export` 是本轮最好配置，几何质量明显优于 `v10`，ghost 也从 `v11/v12` 的 `0.295` 级别回落到 `0.285`；
+  4. 但 `ghost_ratio` 仍未显著优于短 probe 下的 TSDF，说明当前剩余瓶颈不在 persistent readout，而在**即时动态观测没有被单独状态化**。当前 `ghost_tail_ratio` 在 TUM 已接近 `0`，说明“历史残影”问题基本被抑制，真正没解开的是“当前帧动态表面是否应该进入局部静态地图”。
+- 状态更新：
+  - `P10` 仍 **未过线**；
+  - 但当前 `best-achievable under current structural decouple line` 已从早期 `baseline_relaxed (Acc≈2.56cm)` 更新为 `v13_wdsgr_spg_nogeo (Acc≈1.23cm, Comp-R≈94.79%, F-score≈0.965)`；
+  - 下一步不再继续堆 readout 规则，而应补一个“观测级动态态 / 即时瞬态 veto”模块，让当前帧动态表面在 update 端就被隔离。
+
 #### 追加冲线执行记录（2026-03-04，Bonn 动态抑制专项）
 - 背景：
   - 采用当前代码口径重新建立 Bonn 参考：`output/post_cleanup/p10_route_bonn_tsdf_ref/slam/tables/dynamic_metrics.csv`
@@ -777,6 +808,101 @@
   - 纯参数强化可持续压低 ghost，但在当前算子下已出现明显边际递减（`22.23% -> 27.32%`），仍未达到 P10 要求的 `>=35%`。
   - 本轮新增实验分支：`STCG contradiction shell`（代码位于 `egf_dhmap3d/modules/updater.py`，配置位于 `egf_dhmap3d/core/config.py`）。
   - 该分支当前未封板：在极端配置上显著拉长单序列运行时间，需先做算子级复杂度约束（采样触发/半径裁剪）再进入下一轮验收；当前已设为默认关闭（`stcg_shell_enable=False`）。
+
+#### 追加冲线执行记录（2026-03-05，Dual-State 解耦专项）
+- 目标：
+  - 按“解耦 Acc 与 ghost”的新思路，验证双通道融合是否可直接把 P10 推到过线。
+- 代码改动：
+  - `scripts/run_egf_3d_tum.py`：补充 dual-state 静态锚点参数（`dual_state_static_protect_rho/ratio`）命令行与回写。
+  - `scripts/run_benchmark.py`：打通 dual-state 全参数透传（权重、bias/temp、commit/rollback、decay、static protect）。
+  - `scripts/run_p10_precision_profile.py`：扩展 profile 字段并新增 `dual_state_bonnsafe_a/b`。
+- 实验命令：
+  - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,dual_state_decouple_a,dual_state_bonnsafe_a,dual_state_bonnsafe_b,lzcd_only_b --frames 40 --stride 3 --max_points_per_frame 1200 --out_root output/post_cleanup/p10_dual_try_medium --summary_csv output/summary_tables/local_mapping_precision_profile_dual_medium.csv --figure assets/acc_comp_tradeoff_dual_medium.png --force`
+  - 说明：为避免无效算力消耗，执行到 `dual_state_bonnsafe_b` 后中止后续 `baseline_relaxed/lzcd_only_b` 队列；已手工汇总完整三组 dual 结果。
+- 产物：
+  - `output/post_cleanup/p10_dual_try_medium/00_dual_state_decouple_a/...`
+  - `output/post_cleanup/p10_dual_try_medium/01_dual_state_bonnsafe_a/...`
+  - `output/post_cleanup/p10_dual_try_medium/02_dual_state_bonnsafe_b/...`
+  - `output/summary_tables/local_mapping_precision_profile_dual_medium.csv`
+  - `assets/acc_comp_tradeoff_dual_medium.png`
+- 结果（P10 同口径）：
+  - `dual_state_decouple_a`：`tum_acc_cm=2.041`, `tum_comp_r_5cm=99.933`, `bonn_acc_cm=6.732`, `bonn_comp_r_5cm=68.869`, `ghost_red_min=0.331`
+  - `dual_state_bonnsafe_a`：`tum_acc_cm=2.002`, `tum_comp_r_5cm=99.933`, `bonn_acc_cm=7.045`, `bonn_comp_r_5cm=66.835`, `ghost_red_min=0.319`
+  - `dual_state_bonnsafe_b`：`tum_acc_cm=2.062`, `tum_comp_r_5cm=99.936`, `bonn_acc_cm=7.066`, `bonn_comp_r_5cm=66.905`, `ghost_red_min=0.330`
+- 判定：
+  - 三组均 `pass_all=False`。
+  - 结论：当前 dual-state 门控解耦方向在 TUM 侧只能小幅改善/持平，且 Bonn `Acc/Comp-R` 显著不达标；仅靠该分支的参数与门控重分配无法通过 P10，需引入新的“几何去偏主算子”。
+
+#### 追加冲线执行记录（2026-03-05，LZCD-v2/STCG-v2 算子化尝试）
+- 目标：
+  - 按“先去偏、再抑动态”的新路线验证模块级改造是否可提升 P10（避免纯参数调优）。
+- 代码改动（本轮）：
+  - `egf_dhmap3d/modules/updater.py`
+    - LZCD-v2：引入 `static_anchor + dyn_risk` 的动态增益/步长调制；
+    - STCG-v2：将 `visibility_contradiction` 与 `clear_hits` 纳入矛盾观测；
+    - shell contradiction 同步更新 visibility 历史。
+  - `egf_dhmap3d/core/voxel_hash.py`
+    - dual-state 提取改为阈值化静态权重（替代 `p_s/p_ref` 饱和比）；
+    - STCG 提取端加入 `clear_hits` 混合门控与静态保护。
+- 执行命令：
+  - `python scripts/run_p10_precision_profile.py --profiles dual_state_decouple_a --frames 20 --stride 3 --max_points_per_frame 900 --out_root output/post_cleanup/p10_lzcd_stcg_v2_dual_quick --summary_csv output/summary_tables/local_mapping_precision_profile_lzcd_stcg_v2_dual_quick.csv --figure assets/acc_comp_tradeoff_lzcd_stcg_v2_dual_quick.png --force`
+  - `python scripts/run_p10_precision_profile.py --profiles lzcd_only_b --frames 20 --stride 3 --max_points_per_frame 900 --out_root output/post_cleanup/p10_lzcd_stcg_v2_lzcd_quick --summary_csv output/summary_tables/local_mapping_precision_profile_lzcd_stcg_v2_lzcd_quick.csv --figure assets/acc_comp_tradeoff_lzcd_stcg_v2_lzcd_quick.png --force`
+  - `python scripts/run_p10_precision_profile.py --profiles lzcd_only_b --frames 15 --stride 3 --max_points_per_frame 900 --out_root output/post_cleanup/p10_lzcd_stcg_v2_lzcd_quick15 --summary_csv output/summary_tables/local_mapping_precision_profile_lzcd_stcg_v2_lzcd_quick15.csv --figure assets/acc_comp_tradeoff_lzcd_stcg_v2_lzcd_quick15.png --force`
+- 产物：
+  - `output/summary_tables/local_mapping_precision_profile_lzcd_stcg_v2_dual_quick.csv`
+  - `output/summary_tables/local_mapping_precision_profile_lzcd_stcg_v2_lzcd_quick.csv`
+  - `output/summary_tables/local_mapping_precision_profile_lzcd_stcg_v2_lzcd_quick15.csv`
+  - `assets/acc_comp_tradeoff_lzcd_stcg_v2_dual_quick.png`
+  - `assets/acc_comp_tradeoff_lzcd_stcg_v2_lzcd_quick.png`
+  - `assets/acc_comp_tradeoff_lzcd_stcg_v2_lzcd_quick15.png`
+- 关键结果：
+  - `dual_state_decouple_a (20f)`：
+    - `tum_acc_cm=2.931`, `tum_comp_r_5cm=100.00`
+    - `bonn_acc_cm=5.871`, `bonn_comp_r_5cm=57.87`
+    - `ghost_red_min=-0.068`
+  - `lzcd_only_b (20f)`：
+    - `tum_acc_cm=3.063`, `tum_comp_r_5cm=99.82`
+    - `bonn_acc_cm=5.982`, `bonn_comp_r_5cm=66.36`
+    - `ghost_red_min=0.132`
+  - `lzcd_only_b (15f, 保守步长复测)`：
+    - `tum_acc_cm=3.162`, `tum_comp_r_5cm=99.86`
+    - `bonn_acc_cm=5.728`, `bonn_comp_r_5cm=65.14`
+    - `ghost_red_min=-0.255`
+- 与上一轮 dual 基线对比（`output/summary_tables/local_mapping_precision_profile_dual_medium.csv`）：
+  - TUM `Acc` 从 `~2.00-2.06` 退化到 `~2.93-3.16`；
+  - Bonn `Comp-R` 从 `~66.8-68.9` 无稳定提升（且部分配置显著下降）；
+  - `pass_all` 全部为 `False`。
+- 判定：
+  - 本轮 LZCD-v2/STCG-v2 路线 **未形成有效增益**，当前实现不满足 P10 冲线要求；
+  - 结论：需进入下一条主线（结构解耦而非同域门控叠加），优先考虑“几何偏置估计器与动态抑制器物理分层”的新算子设计。
+
+#### 追加冲线执行记录（2026-03-05，结构解耦主线切换）
+- 目标：
+  - 把“几何去偏”和“动态抑制”拆成独立状态/算子，避免单一门控链相互拉扯。
+- 代码改动（已落地）：
+  - `egf_dhmap3d/core/types.py`
+    - 新增 `dyn_prob`（独立动态抑制状态）。
+  - `egf_dhmap3d/core/config.py`
+    - 新增 `dyn_state_*` 配置（独立动态状态更新权重）；
+    - 新增 `surface.structural_decouple_*` 配置（提取阶段独立动态抑制门控）。
+  - `egf_dhmap3d/modules/updater.py`
+    - 新增独立动态状态更新（`dyn_prob`）并与 `d_score` 解耦；
+    - LZCD 改为几何置信驱动，不再依赖动态风险（去掉 dyn-risk 耦合项）；
+    - raycast 清理改用 `dyn_prob`。
+  - `egf_dhmap3d/core/voxel_hash.py`
+    - 提取阶段新增 `structural_decouple_enable` 分支：几何通道优先 + 独立动态抑制门控；
+    - SNEF 动态风险输入改为 `dyn_prob`（解耦后动态状态）。
+  - `egf_dhmap3d/modules/pipeline.py`
+    - 透传结构解耦参数到表面提取调用。
+- 验证命令（smoke）：
+  - `python scripts/run_p10_precision_profile.py --profiles lzcd_only_b --frames 8 --stride 3 --max_points_per_frame 700 --out_root output/post_cleanup/p10_struct_decouple_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_smoke.csv --figure assets/acc_comp_tradeoff_struct_decouple_smoke.png --force`
+  - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed --frames 8 --stride 3 --max_points_per_frame 700 --out_root output/post_cleanup/p10_struct_decouple_smoke_base --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_smoke_base.csv --figure assets/acc_comp_tradeoff_struct_decouple_smoke_base.png --force`
+- 结果（仅 smoke，不作封板）：
+  - `lzcd_only_b`：`tum_acc_cm=3.561`, `bonn_acc_cm=5.194`, `bonn_comp_r_5cm=74.79`, `ghost_red_min=0.441`
+  - `baseline_relaxed`：`tum_acc_cm=3.676`, `bonn_acc_cm=5.176`, `bonn_comp_r_5cm=75.30`, `ghost_red_min=0.436`
+- 判定：
+  - 结构解耦链路工作正常且动态抑制优势保持，但 TUM `Acc` 明显偏高，尚未达到 P10；
+  - 下一步应在该结构上做“几何去偏专用算子”收敛（而非回到同域门控叠加）。
 
 ### P11. 效率封板（从可用到可投）
 
@@ -1020,6 +1146,438 @@
   - 最终判定：`P15` 通过。
 
 ### 7.4 最终封板判定（全部满足才算完成）
+
+### 7.3.1 结构解耦下“几何去偏专用算子”收敛尝试（2026-03-05）
+
+- 已在结构解耦链路上新增几何专用去偏求解器（LZCD Convergence Operator）：
+  - 代码位点：
+    - `egf_dhmap3d/modules/updater.py`（几何残差锚点 + 图平滑迭代收敛求解 + 回溯更新）
+    - `egf_dhmap3d/core/types.py`（`geo_res_ema`, `geo_res_hits`）
+    - `egf_dhmap3d/core/voxel_hash.py`（新状态初始化与衰减）
+    - `egf_dhmap3d/core/config.py`（`lzcd_solver_*`, `lzcd_residual_*`）
+- 运行命令：
+  - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop2_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop2_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop2_smoke/profile.png --force`
+- 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop2_smoke.csv`）：
+  - `baseline_relaxed`: `tum_acc_cm=3.7573`, `bonn_acc_cm=5.5176`, `bonn_comp_r_5cm=60.59`
+  - `lzcd_only_b`: `tum_acc_cm=3.6535`, `bonn_acc_cm=5.4814`, `bonn_comp_r_5cm=61.35`
+- 结论：
+  - 几何 Acc 有小幅改善（去偏方向正确），但幅度仍不足以冲过 P10 硬线；
+  - 运行时成本显著上升（`update` 阶段主导），后续需做“几何算子局部化/稀疏化”热点优化。
+
+- 追加执行（2026-03-05，结构解耦 profile 扩展）：
+  - `geoop3`：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop3_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop3_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop3_smoke/profile.png --force`
+    - 结果：`lzcd_only_b` 相比 `baseline_relaxed` 小幅降 Acc（TUM `3.7573 -> 3.6448`，Bonn `5.5176 -> 5.4816`），但仍远未达到 P10 `Acc` 硬线。
+  - `geoop4`（引入 `lzcd_geochan_* / lzcd_dualstatic_*`）：
+    - 汇总：`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop4_smoke.csv`
+    - 结果：`lzcd_geochan_a` 将 TUM Acc 压到 `3.4064`，但 Bonn ghost 降幅最小值降至 `0.1409`；`dualstatic` 虽可把 TUM Acc 压到约 `1.98`，但 Bonn `Acc/Comp-R` 明显崩塌，不可用。
+  - `geoop5`（`geochan + STCG`）：
+    - 汇总：`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop5_smoke.csv`
+    - 结果：相对 `geoop4` 基本无净收益；Bonn 侧 ghost 降幅仍显著低于要求。
+  - `geoop6`（`geochan + CCG`）：
+    - 汇总：`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop6_smoke.csv`
+    - 结果：`lzcd_geochan_ccg_a` 在 TUM 侧略优（`tum_acc=3.4033`），但 Bonn 侧仍未恢复（`bonn_acc=5.1840`，`ghost_min=0.1426`）。
+
+- 追加执行（2026-03-05，LZCD 仿射去偏）：
+  - 新增模块（几何专用，不耦合动态抑制链）：
+    - `egf_dhmap3d/modules/updater.py`：
+      - 在 LZCD 中加入局部仿射拟合：`phi ~= a * <n, delta_x> + b`，以 `b` 作为局部零水平参考；
+      - 加入静态置信门控（高 `rho`、低 `dyn_prob` 时仿射项影响更强），抑制动态区域过校正。
+    - `egf_dhmap3d/core/config.py`：
+      - 新增 `lzcd_affine_*` 参数（开关、混合系数、斜率范围、最小样本数）。
+  - `geoop7`：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_a,lzcd_geochan_ccg_a --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop7_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop7_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop7_smoke/profile.png --force`
+    - 结果：`lzcd_geochan_ccg_a` 最优（`tum_acc=3.3925`，`bonn_acc=5.2296`，`ghost_min=0.1390`），相对 `geoop6`：
+      - TUM Acc 继续小幅改善（`3.4033 -> 3.3925`）；
+      - Bonn Acc 轻微回退（`5.1840 -> 5.2296`）。
+  - `geoop8`（仿射静态置信门控强化）：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_a,lzcd_geochan_ccg_a --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop8_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop8_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop8_smoke/profile.png --force`
+    - 结果：与 `geoop7` 基本持平（变化在千分级），未形成可观增益。
+
+- 追加执行（2026-03-05，ST-Mem 结构解耦模块）：
+  - 新增模块（仅作用动态抑制链，不回写几何通道）：
+    - `egf_dhmap3d/core/types.py`：新增体素短时矛盾记忆状态 `st_mem`；
+    - `egf_dhmap3d/modules/updater.py`：基于 `free/surf conflict + visibility + clear + residual` 更新 `st_mem`；
+    - `egf_dhmap3d/core/voxel_hash.py`：提取阶段将 `st_mem` 注入 `dyn_gate`，并新增“强矛盾直通分支”；
+    - `egf_dhmap3d/modules/pipeline.py` / `egf_dhmap3d/core/config.py`：配置与提取参数贯通。
+  - `geoop9`（ST-Mem 初版）：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_a,lzcd_geochan_ccg_a --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop9_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop9_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop9_smoke/profile.png --force`
+    - 结果：与 `geoop8` 基本持平；`lzcd_geochan_ccg_a` 的 `ghost_min` 约 `0.1375`，未见明显提升。
+  - `geoop10`（强矛盾直通分支）：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_a,lzcd_geochan_ccg_a --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop10_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop10_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop10_smoke/profile.png --force`
+    - 结果：`ghost_min` 相比 `geoop9` 仅小幅回升（约 `+0.0015`），总体仍处于同一量级；`Acc/Comp-R` 基本不变。
+  - `geoop11`（加入更激进 ST-Mem profile：`lzcd_geochan_ccg_stmem_a/b`）：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_ccg_a,lzcd_geochan_ccg_stmem_a,lzcd_geochan_ccg_stmem_b --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop11_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop11_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop11_smoke/profile.png --force`
+    - 结果：
+      - `stmem_b` 可进一步压低 TUM Acc（`3.394 -> 3.362`），但 `ghost_min` 下降到 `0.118`；
+      - `stmem_a` 在 `ghost_min` 上仅小幅改善到 `0.145`，仍显著低于目标线。
+    - 判定：当前 ST-Mem 参数强化呈现“Acc 改善 vs ghost 退化”的再耦合，尚未形成 P10 可用解。
+  - `geoop12`（ST-Mem 前移到更新期几何融合权重）：
+    - 代码：`egf_dhmap3d/modules/updater.py` 在 `phi_geo` 融合时引入 `st_mem` 抑制系数（上游抑制，非提取后门控）。
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_ccg_a,lzcd_geochan_ccg_stmem_a --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop12_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop12_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop12_smoke/profile.png --force`
+    - 结果：`stmem_a` 成为本轮最佳（`tum_acc=3.3729`，`bonn_acc=5.2404`，`ghost_min=0.1451`），较 `geoop11` 仅小幅变化（`ghost_min +0.0002` 级别），仍未跨越关键门槛。
+
+- 追加执行（2026-03-05，关联阶段矛盾门控参数贯通 + `geoop14`）：
+  - 参数链路已打通并回写：
+    - `scripts/run_egf_3d_tum.py`：新增 `assoc_contra_*` CLI / cfg / summary 回写。
+    - `scripts/run_benchmark.py`：新增 `--egf_assoc_contra_*` 参数、`run_method` 签名与 TUM/Bonn 透传。
+    - `scripts/run_p10_precision_profile.py`：`Profile` 与 `common_egf` 已纳入 `assoc_contra_*`；`stmem_a/b` 已使用更强 contra 配置。
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_only_b,lzcd_geochan_ccg_a,lzcd_geochan_ccg_stmem_a,lzcd_geochan_ccg_stmem_b --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop14_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop14_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop14_smoke/profile.png --force`
+  - 结果（最优 `stmem_b`）：
+    - `tum_acc_cm=3.3618`, `tum_fscore=0.8886`
+    - `bonn_acc_cm=5.2273`, `bonn_fscore=0.6062`
+    - `ghost_min=0.1247`
+    - `pass_all=False`
+  - 相对 `geoop13`（同 profile）：
+    - `tum_acc_cm`: `3.3619 -> 3.3618`（微幅改善）
+    - `bonn_acc_cm`: `5.2233 -> 5.2273`（微幅退化）
+    - `ghost_min`: `0.1240 -> 0.1247`（微幅改善）
+
+- 阶段结论更新（截至 `geoop14`）：
+  - 结构解耦 + 几何去偏路线在 TUM `Acc` 侧稳定有效；
+  - `assoc_contra` 上游门控已成为“可控变量”，但在当前架构上提升仍停留千分级；
+  - P10 仍未过线，瓶颈依旧是 Bonn 侧 `Acc/Comp-R` 与 `ghost` 的耦合。
+
+- 追加执行（2026-03-05，结构级改造 `geoop15`：显式动态状态 + 双图层提取）：
+  - 新增结构模块：
+    - `egf_dhmap3d/modules/updater.py`：
+      - 新增显式动态潜变量 `z_dyn`（独立于 `phi_geo` 去偏链），按 `conflict/visibility/residual/osc/free_ratio` 更新，支持 `alpha_up/down` 非对称收敛。
+    - `egf_dhmap3d/core/voxel_hash.py`：
+      - 新增 `dual_layer_extract_enable` 路径：
+        - Stage-G（geometry layer）先构建几何候选，不在候选阶段直接做动态丢弃；
+        - Stage-D（dynamic layer）再用 `z_dyn + st_mem + contradiction + transient_ratio` 做软掩膜抑制。
+    - `egf_dhmap3d/core/config.py` / `scripts/run_egf_3d_tum.py` / `scripts/run_benchmark.py` / `scripts/run_p10_precision_profile.py`：
+      - 贯通 `zdyn_*` 与 `surface_dual_layer_*` 参数链路（CLI、runner、summary）。
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_geochan_ccg_stmem_b,struct_dual_layer_a,struct_dual_layer_b --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop15_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop15_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop15_smoke/profile.png --force`
+  - 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop15_smoke.csv`）：
+    - `baseline_relaxed`：`tum_acc=3.7573`, `tum_ghost=0.1736`, `bonn_acc=5.5201`, `bonn_comp_r_5cm=60.59`, `bonn_ghost=0.0550`
+    - `lzcd_geochan_ccg_stmem_b`：`tum_acc=3.3618`, `tum_ghost=0.2152`, `bonn_acc=5.2369`, `bonn_comp_r_5cm=60.26`, `bonn_ghost=0.0642`
+    - `struct_dual_layer_a`：`tum_acc=3.5605`, `tum_ghost=0.1927`, `bonn_acc=5.4491`, `bonn_comp_r_5cm=62.16`, `bonn_ghost=0.0570`
+    - `struct_dual_layer_b`：`tum_acc=3.5619`, `tum_ghost=0.1925`, `bonn_acc=5.4493`, `bonn_comp_r_5cm=62.24`, `bonn_ghost=0.0569`
+  - 判定：
+    - 双图层 + 显式动态状态已实现并可复现，且确实形成新的 Pareto 点（相对 `stmem_b`，ghost 明显下降；相对 `baseline_relaxed`，Acc 改善）。
+    - 但仍未跨越 P10 硬线（`pass_all=False`），核心瓶颈仍是 Bonn `Acc` 与 ghost 抑制的剩余耦合。
+
+- 追加执行（2026-03-05，结构解耦残余耦合修正 `geoop15b`）：
+  - 目的：
+    - 修复 `dual_layer` 在候选阶段仍被动态门控隐式收缩的问题（减少“几何层被动态层提前污染”）。
+  - 代码修正：
+    - `egf_dhmap3d/core/voxel_hash.py`
+      - 在 `dual_layer` 模式下禁用 STCG 候选阶段动态收缩；
+      - 在 `adaptive_enable` 分支将候选阶段动态项降权（`d_n = 0.35 * d_raw`）。
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_geochan_ccg_stmem_b,struct_dual_layer_a,struct_dual_layer_b --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop15b_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop15b_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop15b_smoke/profile.png --force`
+  - 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop15b_smoke.csv`）：
+    - `struct_dual_layer_a`：`tum_acc=3.5660`, `tum_ghost=0.1920`, `bonn_acc=5.4440`, `bonn_comp_r_5cm=62.17`, `bonn_ghost=0.0573`
+    - `struct_dual_layer_b`：`tum_acc=3.5673`, `tum_ghost=0.1919`, `bonn_acc=5.4439`, `bonn_comp_r_5cm=62.16`, `bonn_ghost=0.0573`
+  - 判定：
+    - 修正后动态抑制略稳（`tum_ghost` 小幅下降），但几何 Acc 未出现有效下降；`pass_all=False`。
+
+- 追加执行（2026-03-05，结构化双图层定向扫参 `geoop16`）：
+  - 目的：
+    - 在结构不变前提下，围绕 `z_dyn` 收敛速度与 dual-layer 抑制强度做小范围结构参数扫描，验证是否仍有可达增益。
+  - 新增 profile：
+    - `struct_dual_layer_c`（geometry-prior：提高几何保留、提高静态锚点）
+    - `struct_dual_layer_d`（dynamic-aggressive：降低 drop 阈值、提高动态权重）
+    - `struct_dual_layer_e`（balanced：较低 `sigma_n0` + 中等 dual-layer 抑制）
+    - 实现位点：`scripts/run_p10_precision_profile.py`
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_geochan_ccg_stmem_b,struct_dual_layer_a,struct_dual_layer_b,struct_dual_layer_c,struct_dual_layer_d,struct_dual_layer_e --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop16_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop16_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop16_smoke/profile.png --force`
+  - 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop16_smoke.csv`）：
+    - `struct_dual_layer_a`：`tum_acc=3.5660`, `bonn_acc=5.4495`, `bonn_comp_r_5cm=62.17`, `bonn_ghost=0.0569`
+    - `struct_dual_layer_b`：`tum_acc=3.5673`, `bonn_acc=5.4435`, `bonn_comp_r_5cm=62.17`, `bonn_ghost=0.0572`
+    - `struct_dual_layer_c`：`tum_acc=3.5677`, `bonn_acc=5.4435`, `bonn_comp_r_5cm=62.20`, `bonn_ghost=0.0572`
+    - `struct_dual_layer_d`：`tum_acc=3.5625`, `bonn_acc=5.4438`, `bonn_comp_r_5cm=62.19`, `bonn_ghost=0.0572`
+    - `struct_dual_layer_e`：`tum_acc=3.5716`, `bonn_acc=5.4427`, `bonn_comp_r_5cm=61.81`, `bonn_ghost=0.0583`
+    - 全局 best 仍为 `lzcd_geochan_ccg_stmem_b`（按当前打分函数），`pass_all=False`。
+  - 判定：
+    - 双图层结构已稳定可复现，并形成 `Comp-R` 受益（Bonn ~`62%`）；
+    - 但 `Acc` 仍停留在 `~3.56 / ~5.44` 区间，未出现突破性改进，P10 继续未过线。
+
+- 追加执行（2026-03-05，显式动态几何状态通道 `geoop17`）：
+  - 新增模块（结构解耦主线）：
+    - `phi_dyn`（动态几何通道）落地：
+      - `egf_dhmap3d/core/types.py`：新增 `phi_dyn`, `phi_dyn_w`
+      - `egf_dhmap3d/modules/updater.py`：新增 `phi_dyn` 独立融合（由 `dynamic_prob + residual + assoc_risk` 驱动）
+      - `egf_dhmap3d/modules/updater.py`：`dyn_prob` 更新中加入 `|phi_dyn-phi_geo|` 反馈
+      - `egf_dhmap3d/core/voxel_hash.py`：双图层 Stage-D 新增 `phi_dyn` 相关动态项（`phi_div / phi_dyn_w_ratio`）
+      - `egf_dhmap3d/modules/pipeline.py`：新增参数链路传递
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_geochan_ccg_stmem_b,struct_dual_layer_a,struct_dual_layer_b,struct_dual_layer_c --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop17_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop17_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop17_smoke/profile.png --force`
+  - 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop17_smoke.csv`）：
+    - `best = lzcd_geochan_ccg_stmem_b`：`tum_acc=3.3620`, `bonn_acc=5.2458`, `pass_all=False`
+    - `struct_dual_layer_[a/b/c]`：`bonn_comp_r_5cm ~ 62.13~62.20`，但 `bonn_acc` 仍在 `5.44~5.45`
+  - 判定：
+    - `phi_dyn` 通道可运行、可复现，但净增益仅千分到百分位量级，未跨过 P10 关键门槛。
+
+- 追加执行（2026-03-05，几何-动态竞争提取算子 `geoop18`）：
+  - 新增模块：
+    - 在 dual-layer Stage-D 增加显式 `geo_score vs dyn_score` 竞争判别（`egf_dhmap3d/core/voxel_hash.py`）。
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles lzcd_geochan_ccg_stmem_b,struct_dual_layer_a,struct_dual_layer_b,struct_dual_layer_c --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop18_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop18_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop18_smoke/profile.png --force`
+  - 结果（对比 `geoop17`）：
+    - `struct_dual_layer_[a/b/c]`：`tum_acc` 微降（约 `-0.005`），`tum_ghost` 微降（约 `-0.0001~-0.0002`）；
+    - 但 `bonn_acc` 反向上升（劣化）约 `+0.039~+0.049`（`5.44 -> 5.49` 区间），不符合 P10 主目标。
+  - 竞争开启复核（单 profile）：
+    - 命令：
+      - `python scripts/run_p10_precision_profile.py --profiles struct_dual_layer_c --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop18c_compete_on --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop18c_compete_on.csv --figure output/post_cleanup/p10_struct_decouple_geoop18c_compete_on/profile.png --force`
+    - 结果：
+      - `tum_acc=3.5628`, `bonn_acc=5.4915`, `bonn_comp_r_5cm=62.24`, `ghost_red_min=0.267`
+    - 判定：
+      - 与 `geoop17` 相比，Bonn `Acc` 明显劣化趋势成立；竞争门控当前参数不可作为主线默认。
+  - 判定：
+    - 竞争算子存在可解释 trade-off，但当前参数区间对 Bonn `Acc` 不利；
+    - 已保留模块实现，默认改为关闭（`dual_layer_compete_enable=False`），避免影响主线配置。
+
+- 追加执行（2026-03-05，竞争项自适应后验复核 `geoop19/19b`）：
+  - 目的：
+    - 验证“固定竞争劣化”是否来自阈值僵硬，而非竞争思想本身。
+  - 代码位点：
+    - `egf_dhmap3d/core/voxel_hash.py`：加入 dual-layer 后验自适应（`drop_th_eff/comp_margin_eff`）与 `phi_geo/phi_dyn` 轻后验融合。
+    - `scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：新增 competition/phi-dyn 高级参数透传。
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles baseline_relaxed,lzcd_geochan_ccg_stmem_b,struct_dual_layer_c --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop19_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop19_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop19_smoke/profile.png --force`
+    - `python scripts/run_p10_precision_profile.py --profiles struct_dual_layer_c,struct_dual_layer_c_compete_adapt --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop19b_compete_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop19b_compete_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop19b_compete_smoke/profile.png --force`
+  - 结果：
+    - `geoop19` 最优仍为 `lzcd_geochan_ccg_stmem_b`（`tum_acc=3.3620`, `bonn_acc=5.2265`）。
+    - `geoop19b` 中 `compete_adapt` 相对 `struct_dual_layer_c`：`tum_ghost` 小幅下降（`-0.00041`），但 `bonn_acc` 上升（劣化，`+0.0429`），`bonn_fscore` 下降（`-0.00186`）。
+  - 判定：
+    - 自适应竞争仍未解决 Bonn 侧 Acc 反弹，竞争项不进入默认主线。
+
+- 追加执行（2026-03-05，竞争微扫 `geoop20`）：
+  - 目的：
+    - 在竞争启用下，仅扫关键三元组（`margin/div_weight/drop_thresh`）验证是否存在“低损失竞争甜点”。
+  - 新增 profile：
+    - `struct_dual_layer_c_compete_m03`
+    - `struct_dual_layer_c_compete_m05`
+    - `struct_dual_layer_c_compete_m07`
+    - 实现位点：`scripts/run_p10_precision_profile.py`
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles struct_dual_layer_c,struct_dual_layer_c_compete_m03,struct_dual_layer_c_compete_m05,struct_dual_layer_c_compete_m07 --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop20_compete_sweep_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop20_compete_sweep_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop20_compete_sweep_smoke/profile.png --force`
+  - 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop20_compete_sweep_smoke.csv`）：
+    - 最优仍为 `struct_dual_layer_c`（无竞争）。
+    - 三个竞争变体均表现为同一模式：`tum_ghost` 仅千分位改善（`~ -0.0004`），但 `bonn_acc` 统一劣化（`+0.037~+0.041`），`bonn_fscore` 下降（`~ -0.0018~-0.0020`）。
+  - 判定：
+    - 竞争门控在当前结构下属于“低收益高代价”分支，继续保留代码但默认禁用；
+    - P10 主线继续走“去偏算子 + 非竞争式动态抑制”。
+
+- 追加执行（2026-03-05，非竞争参数微扫 `geoop21`）：
+  - 目的：
+    - 在“禁用竞争”前提下，仅调整 dual-layer 动态项（`phi_div/drop/free_ratio`）验证是否仍有可挖掘增益。
+  - 新增 profile：
+    - `struct_dual_layer_c_nocomp_soft`
+    - `struct_dual_layer_c_nocomp_mid`
+    - `struct_dual_layer_c_nocomp_hard`
+    - 实现位点：`scripts/run_p10_precision_profile.py`（基于 `struct_dual_layer_c` 的 `replace(...)` 扩展）
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles struct_dual_layer_c,struct_dual_layer_c_nocomp_soft,struct_dual_layer_c_nocomp_mid,struct_dual_layer_c_nocomp_hard --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop21_nocomp_sweep_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop21_nocomp_sweep_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop21_nocomp_sweep_smoke/profile.png --force`
+  - 结果（`output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop21_nocomp_sweep_smoke.csv`）：
+    - 最优为 `struct_dual_layer_c_nocomp_mid`，但改变量极小：
+      - `bonn_acc`: `5.44378 -> 5.44366`（`-0.00012`）
+      - `bonn_fscore`: `0.592589 -> 0.592654`（`+0.000065`）
+      - `bonn_ghost_ratio`: `0.057187 -> 0.057144`（`-0.000043`）
+    - TUM 侧四个 profile 指标完全一致（`tum_acc/tum_fscore/tum_ghost` 无变化）。
+  - 判定：
+    - 非竞争参数层已进入“数值噪声级”边际收益，无法推动 P10 过线；
+    - 下一阶段必须回到模块级改造（结构可辨识新信息源），不再追加同类微扫。
+
+- 追加执行（2026-03-06，按 `1->2->3->4->5->6` 模块链顺序验证，`geoop22`）：
+  - 目标：
+    - 严格按顺序验证模块叠加链路是否能推动 P10 过线：
+      - `1:SSE-EM -> 2:+LBR -> 3:+VCR -> 4:+RBI -> 5:+EBCut -> 6:+MOPC`。
+  - 命令：
+    - `python scripts/run_p10_precision_profile.py --profiles struct_dual_layer_c,stage1_sse_em,stage2_sse_em_lbr,stage3_sse_em_lbr_vcr,stage4_sse_em_lbr_vcr_rbi,stage5_sse_em_lbr_vcr_rbi_ebcut,stage6_sse_em_lbr_vcr_rbi_ebcut_mopc --frames 8 --stride 4 --max_points_per_frame 600 --out_root output/post_cleanup/p10_struct_decouple_geoop22_modular_chain_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop22_modular_chain_smoke.csv --figure output/post_cleanup/p10_struct_decouple_geoop22_modular_chain_smoke/profile.png --force`
+  - 产物：
+    - `output/summary_tables/local_mapping_precision_profile_struct_decouple_geoop22_modular_chain_smoke.csv`
+    - `output/post_cleanup/p10_struct_decouple_geoop22_modular_chain_smoke/profile.png`
+    - `output/post_cleanup/p10_struct_decouple_geoop22_modular_chain_smoke/best_profile.json`
+  - 关键结果（按 profile）：
+    - `baseline(struct_dual_layer_c)`：`tum_acc=3.5677`, `bonn_acc=5.4494`, `bonn_comp_r_5cm=62.19`, `bonn_ghost_red=0.2408`
+    - `stage1(+SSE-EM)`：`tum_acc=3.5677`, `bonn_acc=5.4437`, `bonn_comp_r_5cm=62.18`, `bonn_ghost_red=0.2388`
+    - `stage2(+LBR)`：`tum_acc=3.5860`, `bonn_acc=5.4466`, `bonn_comp_r_5cm=62.24`, `bonn_ghost_red=0.2340`
+    - `stage3(+VCR)`：`tum_acc=3.5881`, `bonn_acc=5.4466`, `bonn_comp_r_5cm=62.28`, `bonn_ghost_red=0.2318`
+    - `stage4(+RBI)`：`tum_acc=3.5822`, `bonn_acc=5.4263`, `bonn_comp_r_5cm=62.77`, `bonn_ghost_red=0.2383`
+    - `stage5(+EBCut)`：`tum_acc=3.4763`, `bonn_acc=5.2411`, `bonn_comp_r_5cm=61.92`, `bonn_ghost_red=0.1443`（本轮 best）
+    - `stage6(+MOPC)`：`tum_acc=3.4763`, `bonn_acc=5.2411`, `bonn_comp_r_5cm=61.92`, `bonn_ghost_red=0.1437`
+  - 判定：
+    - 模块链顺序验证已完整闭环，`stage5/6` 在 `Acc` 上有阶段性改善，但 Bonn 侧 `ghost` 相对 TSDF 降幅显著回落（约 `14%`），且 `Comp-R` 仍远低于 P10 门槛（`95%`）；
+    - 全部 profile `pass_all=False`，本轮未推动 P10 过线。
+
+- 2026-03-06: `PT-DSF/ZCBF/DCCM` 结构分支首轮落地与 smoke 验证：
+  - 代码落点：
+    - `egf_dhmap3d/core/types.py`：新增 `rho_static/rho_transient`、`ptdsf_*`、`zcbf_*`、`dccm_*` 体素状态。
+    - `egf_dhmap3d/core/config.py`：新增 `ptdsf/zcbf/dccm` 更新与提取配置。
+    - `egf_dhmap3d/core/voxel_hash.py`：新增 persistent-only 读出、`zcbf` 偏置注入、`dccm_commit` 软抑制。
+    - `egf_dhmap3d/modules/updater.py`：新增 `PT-DSF` 分流写入、`ZCBF` 局部零交叉偏置场、`DCCM` 延迟提交矛盾记忆。
+    - `egf_dhmap3d/modules/pipeline.py`、`scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：打通新模块 CLI 与评估链路。
+  - 运行命令：
+    - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_a,p10_ptdsf_zcbf_dccm_b --frames 20 --stride 2 --out_root output/post_cleanup/p10_structural_smoke --summary_csv output/summary_tables/local_mapping_precision_profile_structural_smoke.csv --figure assets/p10_structural_smoke.png --force`
+    - 实际执行中，`profile A` 已完整跑完；`profile B` 在 `TUM` 首段启动后手动截停，因为 `A` 已经明确不具备冲线趋势。
+  - 产物：
+    - `output/post_cleanup/p10_structural_smoke/00_p10_ptdsf_zcbf_dccm_a/`
+    - `output/summary_tables/p10_structural_ptdsf_zcbf_dccm_smoke_a.csv`
+  - 关键结果（`profile A`，6 序列聚合）：
+    - `TUM`: `mean_acc_cm=2.5981`, `mean_comp_r_5cm=99.9967`, `min_ghost_reduction_vs_tsdf=0.1826`, `mean_fscore=0.9243`
+    - `Bonn`: `mean_acc_cm=4.8190`, `mean_comp_r_5cm=84.3287`, `min_ghost_reduction_vs_tsdf=0.4623`, `mean_fscore=0.7600`
+  - 判定：
+    - 本轮首要目标“结构上解耦几何去偏与动态抑制”已完成代码落地，且新状态/算子链路已可端到端运行；
+    - 但 `PT-DSF/ZCBF/DCCM` 的首版实现仍未推动 `P10` 过线，尤其 `TUM` 侧 `ghost` 相对 `TSDF` 降幅仅 `18.3%`，`Bonn` 侧 `Acc` 仍在 `4.82cm` 量级；
+    - 说明当前 `persistent/transient` 分流与局部偏置校正仍然不够“强解耦”：`ZCBF` 去偏力度不足以显著回正零交叉，而 `DCCM` 读出抑制又没有把 `TUM` 尾迹稳定压下去。
+  - 下一步：
+    - 不再继续扩大 `profile B`/长帧 sweep；优先重构 `PT-DSF` 的 persistent readout 和 `ZCBF` 的偏置归一化/可信度传播，再进入下一轮验证。
+
+- 2026-03-06: `PT-DSF/ZCBF/DCCM` 第二轮结构重构（按三条主线直接改，停止参数型尝试）：
+  - 已落地修改：
+    - `egf_dhmap3d/core/voxel_hash.py`
+      - 强化 `PT-DSF` persistent readout：静态主分支与 `phi_geo` 的 persistent 读出权重显著提高，只有在 persistent 分支偏弱或与几何分支显著失配时才允许极弱 transient leak；
+      - `legacy phi` 同步时引入基于 `zcbf_bias_conf` 的 debiased persistent readout，使最终导出的主表面首先受 persistent 分支支配；
+      - `DCCM` 从 dual-layer 主门控链移除，不再抬升 `dyn_mix` 或缩紧全局 `drop_scale`，只保留在 `transient veto / competition` 支路中。
+    - `egf_dhmap3d/modules/updater.py`
+      - `ZCBF` 升级为“观测置信归一化 + block bias propagation”版本：block 观测权重不再只看 `phi_w`，还显式乘上 persistent 置信与 `rho` 归一化因子；
+      - `DCCM` 继续只写入 transient/free-space 相关记忆，不再回流到几何主分支的融合门控。
+  - 当前短 probe（已跑完；用于判断结构方向，不作为 P10 终版验收）：
+    - 命令：`python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v3 --summary_csv output/summary_tables/p10_structural_probe_v3.csv --figure assets/p10_structural_probe_v3.png --force`
+    - 产物：
+      - `output/post_cleanup/p10_structural_probe_v3/`
+      - `output/summary_tables/p10_structural_probe_v3.csv`
+      - `output/summary_tables/p10_structural_probe_v3_best.json`
+      - `output/summary_tables/p10_structural_probe_v3_by_sequence.csv`
+      - `assets/p10_structural_probe_v3.png`
+    - 完整结果：
+      - `TUM(3 walking mean)`: `acc=3.724cm`, `fscore=0.8508`, `ghost_ratio=0.1237`，相对 `TSDF` 的最差序列降幅约 `40.4%`；
+      - `Bonn(all3 mean)`: `acc=4.955cm`, `fscore=0.6201`, `ghost_ratio=0.0386`, `ghost_tail_ratio=0.1185`；其中 `ghost_tail_ratio` 相对 `TSDF` 均值下降约 `52.6%`，但 `ghost_ratio` 因短帧分母效应出现反常，不适合作为本 probe 的唯一 ghost 判据。
+  - 阶段判定：
+    - 这轮结构重构已经把 `TUM` 短 probe 上的最差 `ghost` 降幅从上一轮的 `18.3%` 提升到约 `40.4%`，说明“persistent 主读出 + ZCBF 置信传播 + DCCM 支路隔离”方向是正确的；
+    - `Bonn` 上的 `fscore/acc` 也优于同设置下的 `TSDF`，但 ghost 结论必须看双口径（`ghost_ratio + ghost_tail_ratio`），不能继续只看单一比例指标；
+    - 本轮仍不是 `P10` 终版验收，但已足够作为下一步结构主线的保留依据：后续若继续冲线，应在当前结构上补“Bonn 双口径 ghost 汇总 + 显式动态状态估计/竞争融合”，而不是回退到纯参数扫描。
+
+- 2026-03-06: `OMHS`（Occlusion-aware Multi-Hypothesis Surface）首轮结构化落地与 `v4_omhs` probe：
+  - 本轮代码收口：
+    - `egf_dhmap3d/core/types.py`：新增 `omhs_front_conf / omhs_rear_conf / omhs_gap / omhs_active` 状态；
+    - `egf_dhmap3d/core/config.py`：新增 `surface.omhs_enable`；
+    - `egf_dhmap3d/modules/updater.py`：新增 `_update_omhs_state()`，在 dual-state 同步后维护前/后层置信与遮挡 gap；
+    - `egf_dhmap3d/core/voxel_hash.py`：
+      - `persistent_surface_readout()` 中对 transient leak 引入 `rear_support/front_drive` 抑制；
+      - `extract_surface_points()` 中新增 `omhs_enable` 链路、rear-anchor 保留和 dual-layer 后验豁免；
+    - `egf_dhmap3d/modules/pipeline.py`、`scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：打通 `--surface_omhs_enable`。
+  - 验证命令：
+    - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v4_omhs --summary_csv output/summary_tables/p10_structural_probe_v4_omhs.csv --figure assets/p10_structural_probe_v4_omhs.png --force`
+  - 产物：
+    - `output/post_cleanup/p10_structural_probe_v4_omhs/`
+    - `output/summary_tables/p10_structural_probe_v4_omhs.csv`
+    - `output/summary_tables/p10_structural_probe_v4_omhs_best.json`
+    - `output/summary_tables/p10_structural_probe_v4_omhs_by_sequence.csv`
+    - `assets/p10_structural_probe_v4_omhs.png`
+  - 与 `v3` 的聚合差分：
+    - `TUM`: `acc 3.7237 -> 3.7259 cm`, `fscore 0.8508 -> 0.8502`, `ghost_ratio 0.1237 -> 0.1241`；
+    - `Bonn`: `acc 4.9552 -> 4.9599 cm`, `Comp-R@5cm 64.76 -> 64.89`, `fscore 0.6201 -> 0.6206`, `ghost_ratio 0.0386 -> 0.0388`；
+    - `Bonn` 按序列的 `ghost_tail_ratio` 相对 `TSDF` 降幅仍主要来自既有结构主线，`OMHS` 自身只带来 `1e-3` 量级波动，未形成可归因的新增益。
+  - 判定：
+    - 当前 `OMHS` 作为“提取端/读出端的 rear-surface 保护”是可运行的，但净效果接近中性；
+    - 它没有实质改善 `P10` 的核心瓶颈，说明 Bonn 的问题并不主要是“后验筛选时把 rear surface 删掉了”，而是“写入阶段 rear persistent evidence 本身不够强，导致后验无面可保”；
+    - 因此 `OMHS` 可以保留为辅助结构，但不应继续沿阈值或保留策略方向深挖。
+  - 下一步：
+    - 从 `readout-side OMHS` 切到 `write-time occlusion decomposition`：在更新阶段显式分离 front/rear hit，而不是只在提取阶段做 rear anchor 保留；
+    - 优先实现“写入阶段的双层表面竞争/残差分桶”，再决定是否保留当前 `OMHS` 作为输出稳定器。
+
+- 2026-03-06: `WOD`（Write-Time Occlusion Decomposition）首轮落地与 `v5_wod` probe：
+  - 本轮代码收口：
+    - `egf_dhmap3d/core/types.py`：新增 `wod_front_conf / wod_rear_conf / wod_shell_conf`；
+    - `egf_dhmap3d/core/config.py`：新增 `wod_*` 更新配置；
+    - `egf_dhmap3d/modules/updater.py`：新增 `_write_time_occlusion_split()`，在更新阶段把近表面观测分解成 `front / rear / shell` 并分别作用于 `phi_static / phi_transient / phi_geo / phi_dyn / surf/free evidence`；
+    - `egf_dhmap3d/core/voxel_hash.py`：把 `wod_*` 状态接入遗忘与 readout；
+    - `scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：打通 `--wod_enable`。
+  - 验证命令：
+    - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v5_wod --summary_csv output/summary_tables/p10_structural_probe_v5_wod.csv --figure assets/p10_structural_probe_v5_wod.png --force`
+  - 产物：
+    - `output/post_cleanup/p10_structural_probe_v5_wod/`
+    - `output/summary_tables/p10_structural_probe_v5_wod.csv`
+    - `output/summary_tables/p10_structural_probe_v5_wod_by_sequence.csv`
+    - `assets/p10_structural_probe_v5_wod.png`
+  - 与 `v4_omhs` 的聚合差分：
+    - `TUM`: `acc 3.7259 -> 3.7126 cm`, `fscore 0.8502 -> 0.8515`, `ghost_ratio 0.1241 -> 0.1244`；
+    - `Bonn`: `acc 4.9599 -> 4.9964 cm`, `Comp-R@5cm 64.89 -> 65.42`, `fscore 0.6206 -> 0.6201`, `ghost_ratio 0.0388 -> 0.0387`；
+    - 结论：`WOD` 证明了“问题确实在写入期而不在 readout-only”，但当前仍是弱增益模块，尚不足以推动 `P10` 过线。
+  - 判定：
+    - `WOD` 可保留为结构主线的一部分；
+    - 但仅靠 soft split + soft weighting 还不能稳定建立 rear persistent surface；
+    - 下一步必须让 `rear` 以独立状态被写入，而不是继续堆叠 readout 权重。
+
+- 2026-03-06: `RPS`（Rear-Persistent Surface Buffer）首轮落地与 `v6_rps` probe：
+  - 本轮代码收口：
+    - `egf_dhmap3d/core/types.py`：新增 `phi_rear / phi_rear_w / rho_rear`；
+    - `egf_dhmap3d/core/config.py`：新增 `rps_*` 配置；
+    - `egf_dhmap3d/modules/updater.py`：在 geometry write 后新增 rear-buffer 写入，把 `WOD` 的 `rear` 责任显式沉淀为独立表面状态；
+    - `egf_dhmap3d/core/voxel_hash.py`：把 `phi_rear / rho_rear` 接入 `PT-DSF` 状态统计、persistent readout、遗忘与 stale 清理；
+    - `scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：打通 `--rps_enable`，并新增 profile `p10_ptdsf_zcbf_dccm_rps_a`。
+  - 验证命令：
+    - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_rps_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v6_rps --summary_csv output/summary_tables/p10_structural_probe_v6_rps.csv --figure assets/p10_structural_probe_v6_rps.png --force`
+  - 产物：
+    - `output/post_cleanup/p10_structural_probe_v6_rps/`
+    - `output/summary_tables/p10_structural_probe_v6_rps.csv`
+    - `output/summary_tables/p10_structural_probe_v6_rps_by_sequence.csv`
+    - `output/summary_tables/p10_structural_probe_v6_rps_vs_v5.csv`
+    - `assets/p10_structural_probe_v6_rps.png`
+  - 与 `v5_wod` 的聚合差分：
+    - `TUM`: `acc 3.7126 -> 3.7429 cm`, `fscore 0.8515 -> 0.8478`, `ghost_ratio 0.1244 -> 0.1216`；
+    - `Bonn`: `acc 4.9964 -> 4.9992 cm`, `Comp-R@5cm 65.42 -> 64.89`, `fscore 0.6201 -> 0.6170`, `ghost_ratio 0.0387 -> 0.0386`；
+    - 按序列看：`balloon2` 出现正增益（`acc 4.323 -> 4.300 cm`, `fscore 0.6967 -> 0.7015`），但 `balloon / TUM(3 walking)` 均回退，说明收益强依赖遮挡模式。
+  - 判定：
+    - `RPS` 已证明“rear persistent 可以被状态化写入”，但当前实现只带来**选择性**收益，并没有形成跨数据集稳定增益；
+    - 它更像 `P10` 主线上的研究原型，而不是当前可封板的主配置；
+    - 下一步不应继续给 `RPS` 堆权重，而应升级为更硬的 `rear commit / surface-bank` 结构，只在满足遮挡矛盾触发条件时提交 rear surface。
+
+- 2026-03-06: `HRC`（Hard Rear-Commit）首轮落地与 `v7_hrc` probe：
+  - 本轮代码收口：
+    - `egf_dhmap3d/core/types.py`：新增 `phi_rear_cand / phi_rear_cand_w / rho_rear_cand / rps_commit_score / rps_commit_age / rps_active`；
+    - `egf_dhmap3d/core/config.py`：新增 `rps_hard_commit_*` 相关配置；
+    - `egf_dhmap3d/modules/updater.py`：把 `RPS` 从 always-on rear buffer 改成 `candidate -> commit -> active bank` 链路；
+    - `egf_dhmap3d/core/voxel_hash.py`：仅在 committed / active 条件满足时才让 rear bank 参与 `PT-DSF` 统计与 persistent readout；
+    - `scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：新增 `--rps_hard_commit_enable`，并接入 profile `p10_ptdsf_zcbf_dccm_hrc_a`。
+  - 验证命令：
+    - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_hrc_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v7_hrc --summary_csv output/summary_tables/p10_structural_probe_v7_hrc.csv --figure assets/p10_structural_probe_v7_hrc.png --force`
+  - 产物：
+    - `output/post_cleanup/p10_structural_probe_v7_hrc/`
+    - `output/summary_tables/p10_structural_probe_v7_hrc.csv`
+    - `output/summary_tables/p10_structural_probe_v567_by_sequence.csv`
+    - `output/summary_tables/p10_structural_probe_v7_hrc_vs_v5_v6_by_sequence.csv`
+    - `assets/p10_structural_probe_v7_hrc.png`
+  - 与 `v5_wod` 的聚合差分：
+    - `TUM`: `acc 3.7126 -> 3.7232 cm`, `fscore 0.8515 -> 0.8501`, `ghost_ratio 0.1244 -> 0.1236`；
+    - `Bonn`: `acc 4.9964 -> 4.9775 cm`, `Comp-R@5cm 65.42 -> 64.64`, `fscore 0.6201 -> 0.6179`, `ghost_ratio 0.03866 -> 0.03830`；
+    - 按序列看：`walking_xyz` 与 `walking_static` 仅得到极小 ghost 改善但几何略退，`balloon2 / crowd2` 有轻微正向 Bonn ghost 改善，但整体仍未超过 `v5_wod`。
+  - 判定：
+    - `HRC` 证明“rear state 的条件提交”比 `always-on RPS` 更稳；
+    - 但它仍未形成跨数据集稳定增益，说明问题不只是“rear buffer 太常开”，而是“rear state 即使提交后，主表面读出仍然很少真正从它获益”。
+
+- 2026-03-06: `Surface-Bank`（Committed Surface-Bank Readout）首轮落地与 `v8_sbank` probe：
+  - 本轮代码收口：
+    - `egf_dhmap3d/core/config.py`：新增 `rps_surface_bank_enable / rps_bank_*`；
+    - `egf_dhmap3d/core/voxel_hash.py`：把 persistent readout 从 `front/rear soft mix` 改成 `front-bank vs rear-bank` 离散竞争，rear 仅在明确胜出时导出；
+    - `scripts/run_egf_3d_tum.py`、`scripts/run_benchmark.py`、`scripts/run_p10_precision_profile.py`：打通 `--rps_surface_bank_enable`，并新增 profile `p10_ptdsf_zcbf_dccm_sbank_a`。
+  - 验证命令：
+    - `python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_sbank_a --frames 4 --stride 8 --max_points_per_frame 1500 --out_root output/post_cleanup/p10_structural_probe_v8_sbank --summary_csv output/summary_tables/p10_structural_probe_v8_sbank.csv --figure assets/p10_structural_probe_v8_sbank.png --force`
+  - 产物：
+    - `output/post_cleanup/p10_structural_probe_v8_sbank/`
+    - `output/summary_tables/p10_structural_probe_v8_sbank.csv`
+    - `output/summary_tables/p10_structural_probe_v5678_by_sequence.csv`
+    - `output/summary_tables/p10_structural_probe_v8_sbank_vs_v567.csv`
+    - `assets/p10_structural_probe_v8_sbank.png`
+  - 与 `v7_hrc` 的聚合差分：
+    - `TUM`: `acc 3.7232 -> 3.7255 cm`, `fscore 0.8501 -> 0.8497`, `ghost_ratio 0.12358 -> 0.12364`；
+    - `Bonn`: `acc 4.9775 -> 4.9779 cm`, `Comp-R@5cm 64.64 -> 64.61`, `fscore 0.6179 -> 0.6176`, `ghost_ratio 0.03830 -> 0.03784`；
+    - 按序列看：`walking_xyz / walking_static` 与 `v7_hrc` 完全一致，`walking_halfsphere` 轻微回退，Bonn 三条序列仅出现 `1e-4 ~ 1e-3` 级别 ghost 波动。
+  - 判定：
+    - `Surface-Bank` 已经把 readout 端做到足够“硬”，但结果几乎不变；
+    - 这说明 `P10` 的主瓶颈**不在导出阶段的 front/rear 竞争**，而在写入阶段 rear/static 几何本身尚未被可靠形成。
+
+- 当前判定（结构解耦 + 几何去偏专用算子）：
+  - 方向有效：主症结已经从“后验筛选误删”进一步收敛到“写入阶段是否真的形成了可用的 rear/static 几何状态”；
+  - 已证伪子路线：`readout-only OMHS` 近中性、`soft WOD weighting` 仅弱增益、`always-on RPS buffer` 条件敏感、`Surface-Bank readout` 近乎零增益；
+  - 主要瓶颈：`Acc` 与 ghost 仍未被**写入期结构性解耦**，当前 rear bank 更多是在“有则读”，而不是“先被可靠写出来”；
+  - 下一步建议：进入“写入期双表面生成”主线，用显式的 `front-transient / rear-static` 双写入与提交机制，在 update 阶段直接形成两个可竞争的几何状态，而不是继续在 readout 端做更硬的选择。
 
 满足以下全部条件即判定“局部建图顶刊标准已达成（无保留）”：
 1. P10-P15 全部硬验收通过；  
