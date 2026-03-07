@@ -691,6 +691,28 @@ def run_method(
     egf_wdsg_route_enable: bool,
     egf_spg_enable: bool,
     egf_otv_enable: bool,
+    egf_xmem_enable: bool,
+    egf_obl_enable: bool,
+    egf_dual_map_enable: bool,
+    egf_cmct_enable: bool,
+    egf_cgcc_enable: bool,
+    egf_pfv_enable: bool,
+    egf_pfvp_enable: bool,
+    egf_xmem_sep_ref_vox: float,
+    egf_xmem_occ_alpha: float,
+    egf_xmem_free_alpha: float,
+    egf_xmem_score_alpha: float,
+    egf_xmem_support_ref: float,
+    egf_xmem_commit_on: float,
+    egf_xmem_commit_off: float,
+    egf_xmem_age_ref: float,
+    egf_xmem_static_guard: float,
+    egf_xmem_free_gain: float,
+    egf_xmem_static_veto: float,
+    egf_xmem_geo_veto: float,
+    egf_xmem_transient_boost: float,
+    egf_xmem_dyn_boost: float,
+    egf_xmem_decay: float,
     egf_lzcd_enable: bool,
     egf_lzcd_interval: int,
     egf_lzcd_radius_cells: int,
@@ -814,6 +836,14 @@ def run_method(
     egf_surface_dual_layer_static_anchor_rho: float,
     egf_surface_dual_layer_static_anchor_p: float,
     egf_surface_dual_layer_static_anchor_ratio: float,
+    egf_surface_csr_enable: bool,
+    egf_surface_csr_min_score: float,
+    egf_surface_csr_geo_blend: float,
+    egf_surface_csr_geo_agree_min: float,
+    egf_surface_xmap_enable: bool,
+    egf_surface_xmap_dyn_min_score: float,
+    egf_surface_xmap_static_min_score: float,
+    egf_surface_xmap_sep_ref_vox: float,
     egf_surface_omhs_enable: bool,
     egf_surface_zero_crossing_max_offset: float,
     egf_surface_zero_crossing_phi_gate: float,
@@ -1368,6 +1398,48 @@ def run_method(
                 str(float(np.clip(egf_surface_dual_layer_static_anchor_p, 0.0, 1.0))),
                 "--surface_dual_layer_static_anchor_ratio",
                 str(float(max(1e-6, egf_surface_dual_layer_static_anchor_ratio))),
+                "--surface_csr_min_score",
+                str(float(np.clip(egf_surface_csr_min_score, 0.0, 1.0))),
+                "--surface_csr_geo_blend",
+                str(float(np.clip(egf_surface_csr_geo_blend, 0.0, 1.0))),
+                "--surface_csr_geo_agree_min",
+                str(float(np.clip(egf_surface_csr_geo_agree_min, 0.0, 1.0))),
+                "--surface_xmap_dyn_min_score",
+                str(float(np.clip(egf_surface_xmap_dyn_min_score, 0.0, 1.0))),
+                "--surface_xmap_static_min_score",
+                str(float(np.clip(egf_surface_xmap_static_min_score, 0.0, 1.0))),
+                "--surface_xmap_sep_ref_vox",
+                str(float(max(0.1, egf_surface_xmap_sep_ref_vox))),
+                "--xmem_sep_ref_vox",
+                str(float(max(0.1, egf_xmem_sep_ref_vox))),
+                "--xmem_occ_alpha",
+                str(float(np.clip(egf_xmem_occ_alpha, 0.01, 0.95))),
+                "--xmem_free_alpha",
+                str(float(np.clip(egf_xmem_free_alpha, 0.01, 0.95))),
+                "--xmem_score_alpha",
+                str(float(np.clip(egf_xmem_score_alpha, 0.01, 0.95))),
+                "--xmem_support_ref",
+                str(float(np.clip(egf_xmem_support_ref, 0.01, 0.95))),
+                "--xmem_commit_on",
+                str(float(np.clip(egf_xmem_commit_on, 0.0, 1.0))),
+                "--xmem_commit_off",
+                str(float(np.clip(egf_xmem_commit_off, 0.0, 1.0))),
+                "--xmem_age_ref",
+                str(float(max(1.0, egf_xmem_age_ref))),
+                "--xmem_static_guard",
+                str(float(np.clip(egf_xmem_static_guard, 0.0, 1.0))),
+                "--xmem_free_gain",
+                str(float(max(0.0, egf_xmem_free_gain))),
+                "--xmem_static_veto",
+                str(float(np.clip(egf_xmem_static_veto, 0.0, 1.2))),
+                "--xmem_geo_veto",
+                str(float(np.clip(egf_xmem_geo_veto, 0.0, 1.2))),
+                "--xmem_transient_boost",
+                str(float(max(0.0, egf_xmem_transient_boost))),
+                "--xmem_dyn_boost",
+                str(float(np.clip(egf_xmem_dyn_boost, 0.0, 1.5))),
+                "--xmem_decay",
+                str(float(np.clip(egf_xmem_decay, 0.80, 1.0))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
@@ -1393,8 +1465,26 @@ def run_method(
                 cmd.append("--spg_enable")
             if bool(egf_otv_enable):
                 cmd.append("--otv_enable")
+            if bool(egf_xmem_enable):
+                cmd.append("--xmem_enable")
+            if bool(egf_obl_enable):
+                cmd.append("--obl_enable")
+            if bool(egf_dual_map_enable):
+                cmd.append("--dual_map_enable")
+            if bool(egf_cmct_enable):
+                cmd.append("--cmct_enable")
+            if bool(egf_cgcc_enable):
+                cmd.append("--cgcc_enable")
+            if bool(egf_pfv_enable):
+                cmd.append("--pfv_enable")
+            if bool(egf_pfvp_enable):
+                cmd.append("--pfvp_enable")
             if bool(egf_surface_omhs_enable):
                 cmd.append("--surface_omhs_enable")
+            if bool(egf_surface_csr_enable):
+                cmd.append("--surface_csr_enable")
+            if bool(egf_surface_xmap_enable):
+                cmd.append("--surface_xmap_enable")
             if bool(egf_lzcd_use_geo_channel):
                 cmd.append("--lzcd_use_geo_channel")
             else:
@@ -1809,6 +1899,36 @@ def run_method(
                 str(float(max(0.0, egf_surface_decouple_channel_div_weight))),
                 "--surface_decouple_channel_div_static_guard",
                 str(float(np.clip(egf_surface_decouple_channel_div_static_guard, 0.0, 1.0))),
+                "--xmem_sep_ref_vox",
+                str(float(max(0.1, egf_xmem_sep_ref_vox))),
+                "--xmem_occ_alpha",
+                str(float(np.clip(egf_xmem_occ_alpha, 0.01, 0.95))),
+                "--xmem_free_alpha",
+                str(float(np.clip(egf_xmem_free_alpha, 0.01, 0.95))),
+                "--xmem_score_alpha",
+                str(float(np.clip(egf_xmem_score_alpha, 0.01, 0.95))),
+                "--xmem_support_ref",
+                str(float(np.clip(egf_xmem_support_ref, 0.01, 0.95))),
+                "--xmem_commit_on",
+                str(float(np.clip(egf_xmem_commit_on, 0.0, 1.0))),
+                "--xmem_commit_off",
+                str(float(np.clip(egf_xmem_commit_off, 0.0, 1.0))),
+                "--xmem_age_ref",
+                str(float(max(1.0, egf_xmem_age_ref))),
+                "--xmem_static_guard",
+                str(float(np.clip(egf_xmem_static_guard, 0.0, 1.0))),
+                "--xmem_free_gain",
+                str(float(max(0.0, egf_xmem_free_gain))),
+                "--xmem_static_veto",
+                str(float(np.clip(egf_xmem_static_veto, 0.0, 1.2))),
+                "--xmem_geo_veto",
+                str(float(np.clip(egf_xmem_geo_veto, 0.0, 1.2))),
+                "--xmem_transient_boost",
+                str(float(max(0.0, egf_xmem_transient_boost))),
+                "--xmem_dyn_boost",
+                str(float(np.clip(egf_xmem_dyn_boost, 0.0, 1.5))),
+                "--xmem_decay",
+                str(float(np.clip(egf_xmem_decay, 0.80, 1.0))),
                 "--mesh_min_points",
                 str(int(egf_mesh_min_points)),
             ]
@@ -2217,6 +2337,28 @@ def main():
     parser.add_argument("--egf_wdsg_route_enable", action="store_true")
     parser.add_argument("--egf_spg_enable", action="store_true")
     parser.add_argument("--egf_otv_enable", action="store_true")
+    parser.add_argument("--egf_xmem_enable", action="store_true")
+    parser.add_argument("--egf_obl_enable", action="store_true")
+    parser.add_argument("--egf_dual_map_enable", action="store_true")
+    parser.add_argument("--egf_cmct_enable", action="store_true")
+    parser.add_argument("--egf_cgcc_enable", action="store_true")
+    parser.add_argument("--egf_pfv_enable", action="store_true")
+    parser.add_argument("--egf_pfvp_enable", action="store_true")
+    parser.add_argument("--egf_xmem_sep_ref_vox", type=float, default=0.90)
+    parser.add_argument("--egf_xmem_occ_alpha", type=float, default=0.18)
+    parser.add_argument("--egf_xmem_free_alpha", type=float, default=0.14)
+    parser.add_argument("--egf_xmem_score_alpha", type=float, default=0.20)
+    parser.add_argument("--egf_xmem_support_ref", type=float, default=0.24)
+    parser.add_argument("--egf_xmem_commit_on", type=float, default=0.60)
+    parser.add_argument("--egf_xmem_commit_off", type=float, default=0.42)
+    parser.add_argument("--egf_xmem_age_ref", type=float, default=1.0)
+    parser.add_argument("--egf_xmem_static_guard", type=float, default=0.78)
+    parser.add_argument("--egf_xmem_free_gain", type=float, default=0.85)
+    parser.add_argument("--egf_xmem_static_veto", type=float, default=0.96)
+    parser.add_argument("--egf_xmem_geo_veto", type=float, default=0.92)
+    parser.add_argument("--egf_xmem_transient_boost", type=float, default=0.90)
+    parser.add_argument("--egf_xmem_dyn_boost", type=float, default=0.82)
+    parser.add_argument("--egf_xmem_decay", type=float, default=0.97)
     parser.add_argument("--egf_lzcd_enable", action="store_true")
     parser.add_argument("--egf_lzcd_interval", type=int, default=2)
     parser.add_argument("--egf_lzcd_radius_cells", type=int, default=1)
@@ -2416,6 +2558,14 @@ def main():
     parser.add_argument("--egf_surface_dual_layer_static_anchor_rho", type=float, default=0.90)
     parser.add_argument("--egf_surface_dual_layer_static_anchor_p", type=float, default=0.70)
     parser.add_argument("--egf_surface_dual_layer_static_anchor_ratio", type=float, default=1.70)
+    parser.add_argument("--egf_surface_csr_enable", action="store_true")
+    parser.add_argument("--egf_surface_csr_min_score", type=float, default=0.38)
+    parser.add_argument("--egf_surface_csr_geo_blend", type=float, default=0.18)
+    parser.add_argument("--egf_surface_csr_geo_agree_min", type=float, default=0.70)
+    parser.add_argument("--egf_surface_xmap_enable", action="store_true")
+    parser.add_argument("--egf_surface_xmap_dyn_min_score", type=float, default=0.52)
+    parser.add_argument("--egf_surface_xmap_static_min_score", type=float, default=0.42)
+    parser.add_argument("--egf_surface_xmap_sep_ref_vox", type=float, default=0.90)
     parser.add_argument("--egf_surface_omhs_enable", action="store_true")
     parser.add_argument("--egf_surface_zero_crossing_max_offset", type=float, default=0.06)
     parser.add_argument("--egf_surface_zero_crossing_phi_gate", type=float, default=0.05)
@@ -2724,6 +2874,28 @@ def main():
                     egf_wdsg_route_enable=bool(args.egf_wdsg_route_enable),
                     egf_spg_enable=bool(args.egf_spg_enable),
                     egf_otv_enable=bool(args.egf_otv_enable),
+                    egf_xmem_enable=bool(args.egf_xmem_enable),
+                    egf_obl_enable=bool(args.egf_obl_enable),
+                    egf_dual_map_enable=bool(args.egf_dual_map_enable),
+                    egf_cmct_enable=bool(args.egf_cmct_enable),
+                    egf_cgcc_enable=bool(args.egf_cgcc_enable),
+                    egf_pfv_enable=bool(args.egf_pfv_enable),
+                    egf_pfvp_enable=bool(args.egf_pfvp_enable),
+                    egf_xmem_sep_ref_vox=args.egf_xmem_sep_ref_vox,
+                    egf_xmem_occ_alpha=args.egf_xmem_occ_alpha,
+                    egf_xmem_free_alpha=args.egf_xmem_free_alpha,
+                    egf_xmem_score_alpha=args.egf_xmem_score_alpha,
+                    egf_xmem_support_ref=args.egf_xmem_support_ref,
+                    egf_xmem_commit_on=args.egf_xmem_commit_on,
+                    egf_xmem_commit_off=args.egf_xmem_commit_off,
+                    egf_xmem_age_ref=args.egf_xmem_age_ref,
+                    egf_xmem_static_guard=args.egf_xmem_static_guard,
+                    egf_xmem_free_gain=args.egf_xmem_free_gain,
+                    egf_xmem_static_veto=args.egf_xmem_static_veto,
+                    egf_xmem_geo_veto=args.egf_xmem_geo_veto,
+                    egf_xmem_transient_boost=args.egf_xmem_transient_boost,
+                    egf_xmem_dyn_boost=args.egf_xmem_dyn_boost,
+                    egf_xmem_decay=args.egf_xmem_decay,
                     egf_lzcd_enable=bool(args.egf_lzcd_enable),
                     egf_lzcd_interval=args.egf_lzcd_interval,
                     egf_lzcd_radius_cells=args.egf_lzcd_radius_cells,
@@ -2847,6 +3019,14 @@ def main():
                     egf_surface_dual_layer_static_anchor_rho=args.egf_surface_dual_layer_static_anchor_rho,
                     egf_surface_dual_layer_static_anchor_p=args.egf_surface_dual_layer_static_anchor_p,
                     egf_surface_dual_layer_static_anchor_ratio=args.egf_surface_dual_layer_static_anchor_ratio,
+                    egf_surface_csr_enable=bool(args.egf_surface_csr_enable),
+                    egf_surface_csr_min_score=args.egf_surface_csr_min_score,
+                    egf_surface_csr_geo_blend=args.egf_surface_csr_geo_blend,
+                    egf_surface_csr_geo_agree_min=args.egf_surface_csr_geo_agree_min,
+                    egf_surface_xmap_enable=bool(args.egf_surface_xmap_enable),
+                    egf_surface_xmap_dyn_min_score=args.egf_surface_xmap_dyn_min_score,
+                    egf_surface_xmap_static_min_score=args.egf_surface_xmap_static_min_score,
+                    egf_surface_xmap_sep_ref_vox=args.egf_surface_xmap_sep_ref_vox,
                     egf_surface_omhs_enable=args.egf_surface_omhs_enable,
                     egf_surface_zero_crossing_max_offset=args.egf_surface_zero_crossing_max_offset,
                     egf_surface_zero_crossing_phi_gate=args.egf_surface_zero_crossing_phi_gate,

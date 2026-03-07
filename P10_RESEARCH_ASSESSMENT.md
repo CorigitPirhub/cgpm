@@ -1,5 +1,26 @@
 # P10 阶段调研评估报告（代码审阅 + 顶会/顶刊文献映射）
 
+## Canonical 口径说明（2026-03-07）
+
+> 本文是 `P10` 研究与结构设计文档，内部会保留大量 profile / probe / 历史轮次数字，用于诊断模块行为与记录负结果链；这些数字**不自动等同于当前项目正式对外主结论**。
+
+当前正式对外数字统一以以下文件为准：
+- `output/summary_tables/paper_main_table_local_mapping.csv`
+- `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- `output/summary_tables/dual_protocol_multiseed_significance.csv`
+- `output/summary_tables/dual_protocol_multiseed_reconstruction_agg.csv`
+- `output/summary_tables/dual_protocol_multiseed_dynamic_agg.csv`
+
+按当前 `5-seed` canonical 口径：
+- TUM `oracle` dynamic（3 条 walking 均值）：EGF `F-score=0.7903`，`Chamfer=0.05317`，`ghost_ratio=0.2566`，`Acc=4.1655 cm`，`Comp-R(5cm)=100.0%`
+- Bonn `slam` dynamic（`balloon/balloon2/crowd2` 均值）：EGF `F-score=0.6463`，`Chamfer=0.10116`，`ghost_ratio=0.08613`，`Acc=6.1481 cm`，`Comp-R(5cm)=77.21%`
+- 显著性（EGF vs TSDF）：TUM `p_fscore=4.81e-10`, `p_ghost=1.72e-24`；Bonn `p_fscore=1.06e-18`, `p_ghost=5.35e-05`
+
+因此：
+- 若本文中的历史 profile / probe 数字与上述 canonical 表冲突，以 canonical 表为准；
+- 若本文讨论的是分支优劣、负结果、模块走向，则应把这些数字理解为**研究过程证据**，而不是最终投稿主表数字；
+- 截至 `2026-03-07`，`P10` 仍未过线，这一点以 canonical 主表与 `TASK_LOCAL_TOPTIER.md` 的最新口径为准。
+
 ## 1. 结论先行
 
 当前 P10 未过线的核心原因，不是参数没调够，而是**算子职责错位**：

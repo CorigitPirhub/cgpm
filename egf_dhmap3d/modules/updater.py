@@ -7,6 +7,19 @@ import numpy as np
 from egf_dhmap3d.core.config import EGF3DConfig
 from egf_dhmap3d.core.voxel_hash import VoxelHashMap3D, VoxelIndex
 from egf_dhmap3d.modules.associator import AssocMeasurement3D
+from egf_dhmap3d.P10_method.cgcc import transfer_cross_map_geometric_corridor as p10_transfer_cross_map_geometric_corridor
+from egf_dhmap3d.P10_method.cmct import transfer_cross_map_contradiction as p10_transfer_cross_map_contradiction
+from egf_dhmap3d.P10_method.obl import update_obl_state as p10_update_obl_state
+from egf_dhmap3d.P10_method.omhs import update_omhs_state as p10_update_omhs_state
+from egf_dhmap3d.P10_method.otv import update_otv_state as p10_update_otv_state
+from egf_dhmap3d.P10_method.pfv import update_persistent_free_space_volume as p10_update_persistent_free_space_volume
+from egf_dhmap3d.P10_method.ptdsf import write_time_dual_surface_targets as p10_write_time_dual_surface_targets
+from egf_dhmap3d.P10_method.rps import update_rps_state as p10_update_rps_state
+from egf_dhmap3d.P10_method.spg import update_spg_state as p10_update_spg_state
+from egf_dhmap3d.P10_method.wod import write_time_occlusion_split as p10_write_time_occlusion_split
+from egf_dhmap3d.P10_method.xmem import update_xmem_state as p10_update_xmem_state
+from egf_dhmap3d.P10_method.zcbf import local_zero_crossing_debias as p10_local_zero_crossing_debias
+from egf_dhmap3d.P10_method.zcbf import zero_crossing_bias_field as p10_zero_crossing_bias_field
 
 
 class Updater3D:
@@ -45,88 +58,8 @@ class Updater3D:
         return float(1.0 / (1.0 + np.exp(-x)))
 
     def _update_omhs_state(self, voxel_map: VoxelHashMap3D, cell) -> None:
-        if not bool(self.cfg.surface.omhs_enable):
-            cell.omhs_front_conf *= 0.96
-            cell.omhs_rear_conf *= 0.96
-            cell.omhs_gap *= 0.96
-            cell.omhs_active *= 0.94
-            return
-        if not (bool(self.cfg.update.dual_state_enable) and bool(self.cfg.update.ptdsf_enable)):
-            cell.omhs_front_conf *= 0.96
-            cell.omhs_rear_conf *= 0.96
-            cell.omhs_gap *= 0.96
-            cell.omhs_active *= 0.94
-            return
+        return p10_update_omhs_state(self, voxel_map, cell)
 
-        ws = float(max(0.0, cell.phi_static_w))
-        wt = float(max(0.0, cell.phi_transient_w))
-        if ws <= 1e-8 or wt <= 1e-8:
-            cell.omhs_front_conf *= 0.95
-            cell.omhs_rear_conf *= 0.96
-            cell.omhs_gap *= 0.95
-            cell.omhs_active *= 0.92
-            return
-
-        stats = voxel_map._ptdsf_state_stats(cell) if hasattr(voxel_map, '_ptdsf_state_stats') else {
-            'static_conf': 0.0,
-            'transient_conf': 0.0,
-            'dominance': 0.0,
-            'rho_static': 0.0,
-            'occ_frac': 0.0,
-        }
-        surf = float(max(1e-6, cell.surf_evidence))
-        free = float(max(0.0, cell.free_evidence))
-        occ_frac = float(np.clip(stats.get('occ_frac', surf / max(1e-6, surf + free)), 0.0, 1.0))
-        dyn_n = float(np.clip(max(cell.dyn_prob, getattr(cell, 'z_dyn', 0.0)), 0.0, 1.0))
-        trans_ratio = float(np.clip(wt / max(1e-6, ws + wt), 0.0, 1.0))
-        rho_rear = float(np.clip(float(stats.get('rho_rear', 0.0)) / max(1e-6, self.cfg.update.dual_state_static_protect_rho), 0.0, 1.5))
-        wg = float(max(0.0, cell.phi_geo_w))
-        if wg > 1e-8:
-            div_ref = float(max(1e-6, 2.0 * voxel_map.voxel_size))
-            div = float(abs(float(cell.phi_geo) - float(cell.phi_static)))
-            geo_agree = float(np.exp(-0.5 * (div / div_ref) * (div / div_ref)))
-        else:
-            geo_agree = 0.85
-
-        gap = float(abs(float(cell.phi_static) - float(cell.phi_transient)))
-        gap_ref = float(max(1.25 * voxel_map.voxel_size, 1e-3))
-        gap_n = float(np.clip(gap / gap_ref, 0.0, 1.5))
-        wod_front = float(np.clip(getattr(cell, 'wod_front_conf', 0.0), 0.0, 1.0))
-        wod_rear = float(np.clip(getattr(cell, 'wod_rear_conf', 0.0), 0.0, 1.0))
-        wod_shell = float(np.clip(getattr(cell, 'wod_shell_conf', 0.0), 0.0, 1.0))
-        front_obs = float(
-            np.clip(
-                0.24 * float(stats.get('transient_conf', 0.0))
-                + 0.18 * dyn_n
-                + 0.18 * float(np.clip(getattr(cell, 'dccm_commit', 0.0), 0.0, 1.0))
-                + 0.12 * float(np.clip(getattr(cell, 'dccm_rear', 0.0), 0.0, 1.0))
-                + 0.10 * trans_ratio
-                + 0.12 * wod_front
-                + 0.06 * wod_shell,
-                0.0,
-                1.0,
-            )
-        )
-        rear_obs = float(
-            np.clip(
-                0.24 * float(stats.get('static_conf', 0.0))
-                + 0.22 * float(stats.get('dominance', 0.0))
-                + 0.14 * occ_frac
-                + 0.14 * min(1.0, rho_rear)
-                + 0.12 * geo_agree
-                + 0.14 * wod_rear,
-                0.0,
-                1.0,
-            )
-        )
-        alpha = 0.18
-        cell.omhs_front_conf = float(np.clip((1.0 - alpha) * cell.omhs_front_conf + alpha * front_obs, 0.0, 1.0))
-        cell.omhs_rear_conf = float(np.clip((1.0 - alpha) * cell.omhs_rear_conf + alpha * rear_obs, 0.0, 1.0))
-        cell.omhs_gap = float((1.0 - alpha) * cell.omhs_gap + alpha * gap)
-        active_obs = 1.0 if (gap_n >= 0.75 and front_obs >= 0.30 and rear_obs >= 0.40) or (wod_front >= 0.32 and wod_rear >= 0.32) else 0.0
-        cell.omhs_active = float(np.clip(0.82 * cell.omhs_active + 0.18 * active_obs, 0.0, 1.0))
-        if rear_obs > 0.72 and front_obs < 0.18:
-            cell.omhs_active *= 0.90
 
     def _sse_em_responsibility(
         self,
@@ -285,495 +218,36 @@ class Updater3D:
         proj = float(np.clip(np.dot(view_axis, n), -1.0, 1.0))
         return view_axis, view_signed, proj
 
-    def _write_time_dual_surface_targets(
-        self,
-        voxel_map: VoxelHashMap3D,
-        measurement: AssocMeasurement3D,
-        rel: np.ndarray,
-        d_signed: float,
-        wod_front: float,
-        wod_rear: float,
-        wod_shell: float,
-        q_dyn_obs: float,
-    ) -> tuple[float, float, float]:
-        if not (bool(self.cfg.update.wdsg_enable) and bool(self.cfg.update.wod_enable) and bool(self.cfg.update.dual_state_enable)):
-            return d_signed, d_signed, d_signed
-        n = self._normalize(np.asarray(measurement.normal_world, dtype=float))
-        if float(np.linalg.norm(n)) < 1e-8:
-            return d_signed, d_signed, d_signed
-        _view_axis, _view_signed, proj = self._measurement_view_components(measurement, rel, n)
-        proj_floor = float(max(0.05, getattr(self.cfg.update, 'wdsg_proj_floor', 0.35)))
-        if abs(proj) < proj_floor:
-            proj_eff = (-proj_floor if proj <= 0.0 else proj_floor)
-        else:
-            proj_eff = proj
-        voxel = float(max(1e-6, voxel_map.voxel_size))
-        max_shift_vox = float(max(0.2, getattr(self.cfg.update, 'wdsg_max_shift_vox', 1.8)))
-        front_delta_vox = float(np.clip(
-            getattr(self.cfg.update, 'wdsg_front_shift_vox', 0.9) * wod_front
-            + 0.5 * getattr(self.cfg.update, 'wdsg_shell_shift_vox', 0.4) * wod_shell
-            + 0.15 * q_dyn_obs,
-            0.0,
-            max_shift_vox,
-        ))
-        rear_delta_vox = float(np.clip(
-            getattr(self.cfg.update, 'wdsg_rear_shift_vox', 1.1) * wod_rear
-            + 0.75 * getattr(self.cfg.update, 'wdsg_shell_shift_vox', 0.4) * wod_shell
-            + 0.12 * (1.0 - float(np.clip(q_dyn_obs, 0.0, 1.0))),
-            0.0,
-            max_shift_vox,
-        ))
-        front_delta = float(voxel * front_delta_vox)
-        rear_delta = float(voxel * rear_delta_vox)
-        d_front = float(d_signed + front_delta * proj_eff)
-        d_rear = float(d_signed - rear_delta * proj_eff)
-        front_mix = float(np.clip(getattr(self.cfg.update, 'wdsg_front_mix_gain', 0.95) * (wod_front + 0.5 * wod_shell), 0.0, 0.95))
-        rear_mix = float(np.clip(getattr(self.cfg.update, 'wdsg_rear_mix_gain', 1.0) * (wod_rear + 0.5 * wod_shell), 0.0, 0.95))
-        d_static = float((1.0 - rear_mix) * d_signed + rear_mix * d_rear)
-        d_transient = float((1.0 - front_mix) * d_signed + front_mix * d_front)
-        return d_static, d_transient, d_rear
-
-    def _write_time_occlusion_split(
-        self,
-        voxel_map: VoxelHashMap3D,
-        cell,
-        measurement: AssocMeasurement3D,
-        rel: np.ndarray,
-        d_signed: float,
-        q_dyn_obs: float,
-        assoc_risk: float,
-    ) -> tuple[float, float, float]:
-        if not (bool(self.cfg.update.wod_enable) and bool(self.cfg.update.dual_state_enable)):
-            return 0.0, 0.0, 0.0
-
-        n = self._normalize(np.asarray(measurement.normal_world, dtype=float))
-        view_axis, view_signed, _proj = self._measurement_view_components(measurement, rel, n)
-        voxel = float(max(1e-6, voxel_map.voxel_size))
-        front_margin = float(max(0.1 * voxel, self.cfg.update.wod_front_margin_vox * voxel))
-        rear_margin = float(max(0.1 * voxel, self.cfg.update.wod_rear_margin_vox * voxel))
-        shell_margin = float(max(0.6 * voxel, self.cfg.update.wod_shell_margin_vox * voxel))
-        front_pos = self._sigmoid((-view_signed - front_margin) / max(1e-6, shell_margin))
-        rear_pos = self._sigmoid((view_signed - rear_margin) / max(1e-6, shell_margin))
-        shell_pos = float(np.exp(-0.5 * (view_signed / max(1e-6, shell_margin)) ** 2))
-
-        rho_s_prev = float(max(0.0, getattr(cell, 'rho_static', 0.0)))
-        rho_t_prev = float(max(0.0, getattr(cell, 'rho_transient', 0.0)))
-        rho_r_prev = float(max(0.0, getattr(cell, 'rho_rear', 0.0)))
-        split_ratio_prev = float(np.clip(rho_s_prev / max(1e-6, rho_s_prev + rho_t_prev), 0.0, 1.0)) if (rho_s_prev + rho_t_prev) > 1e-8 else float(np.clip(cell.p_static, 0.0, 1.0))
-        rho_ref = float(max(1e-6, self.cfg.update.dual_state_static_protect_rho))
-        rho_stat_n = float(np.clip(rho_s_prev / rho_ref, 0.0, 1.5))
-        rho_rear_n = float(np.clip(rho_r_prev / max(1e-6, getattr(self.cfg.update, 'rps_rho_ref', rho_ref)), 0.0, 1.5))
-        hist_mix = float(np.clip(self.cfg.update.wod_history_mix, 0.0, 1.0))
-        rear_hist = float(
-            np.clip(
-                hist_mix * max(float(np.clip(cell.p_static, 0.0, 1.0)), split_ratio_prev)
-                + (1.0 - hist_mix) * min(1.0, rho_stat_n)
-                + 0.18 * min(1.0, rho_rear_n),
-                0.0,
-                1.0,
-            )
-        )
-        front_hist = float(
-            np.clip(
-                0.45 * max(float(np.clip(getattr(cell, 'omhs_front_conf', 0.0), 0.0, 1.0)), float(np.clip(getattr(cell, 'wod_front_conf', 0.0), 0.0, 1.0)))
-                + 0.35 * float(np.clip(rho_t_prev / max(1e-6, rho_s_prev + rho_t_prev), 0.0, 1.0))
-                + 0.20 * float(np.clip(getattr(cell, 'dccm_commit', 0.0), 0.0, 1.0)),
-                0.0,
-                1.0,
-            )
-        )
-        cons_ref = float(max(voxel, self.cfg.update.wod_rear_consistency_ref))
-        rear_cons = 0.5
-        if float(getattr(cell, 'phi_static_w', 0.0)) > 1e-8:
-            rear_cons = float(np.exp(-0.5 * ((d_signed - float(cell.phi_static)) / cons_ref) ** 2))
-        if float(getattr(cell, 'phi_geo_w', 0.0)) > 1e-8:
-            geo_cons = float(np.exp(-0.5 * ((d_signed - float(cell.phi_geo)) / cons_ref) ** 2))
-            rear_cons = float(0.55 * rear_cons + 0.45 * geo_cons)
-        if float(getattr(cell, 'phi_rear_w', 0.0)) > 1e-8:
-            rear_buf_cons = float(np.exp(-0.5 * ((d_signed - float(getattr(cell, 'phi_rear', 0.0))) / cons_ref) ** 2))
-            rear_cons = float(0.60 * rear_cons + 0.40 * rear_buf_cons)
-        trans_cons = 0.5
-        if float(getattr(cell, 'phi_transient_w', 0.0)) > 1e-8:
-            trans_cons = float(np.exp(-0.5 * ((d_signed - float(cell.phi_transient)) / cons_ref) ** 2))
-
-        front_raw = float(np.clip(0.38 * front_pos + 0.24 * q_dyn_obs + 0.14 * assoc_risk + 0.14 * front_hist + 0.10 * trans_cons, 0.0, 1.5))
-        front_raw *= float(np.clip(1.0 - 0.45 * rear_hist * rear_cons, 0.15, 1.0))
-        rear_raw = float(
-            np.clip(
-                0.34 * rear_pos
-                + 0.30 * rear_hist
-                + 0.20 * rear_cons
-                + 0.10 * max(float(np.clip(getattr(cell, 'omhs_rear_conf', 0.0), 0.0, 1.0)), float(np.clip(getattr(cell, 'wod_rear_conf', 0.0), 0.0, 1.0))),
-                0.0,
-                1.5,
-            )
-        )
-        rear_raw *= float(np.clip(1.0 - 0.30 * q_dyn_obs, 0.20, 1.0))
-        overlap = float(np.sqrt(max(0.0, front_raw) * max(0.0, rear_raw)))
-        shell_raw = float(np.clip(shell_pos * (0.70 * overlap + 0.30 * assoc_risk), 0.0, 1.5))
-        if rear_hist > 0.65 and rear_cons > 0.70:
-            shell_raw = float(max(shell_raw, 0.35 * front_raw * shell_pos))
-
-        raw_sum = float(front_raw + rear_raw + shell_raw)
-        if raw_sum <= 1e-9:
-            return 0.0, 0.0, 0.0
-        return (float(front_raw / raw_sum), float(rear_raw / raw_sum), float(shell_raw / raw_sum))
+    def _write_time_dual_surface_targets(self, voxel_map: VoxelHashMap3D, measurement: AssocMeasurement3D, rel: np.ndarray, d_signed: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float) -> tuple[float, float, float]:
+        return p10_write_time_dual_surface_targets(self, voxel_map, measurement, rel, d_signed, wod_front, wod_rear, wod_shell, q_dyn_obs)
 
 
-    def _update_rps_state(
-        self,
-        voxel_map: VoxelHashMap3D,
-        cell,
-        d_geo: float,
-        w_obs: float,
-        w_static: float,
-        w_geo: float,
-        static_mass: float,
-        wod_front: float,
-        wod_rear: float,
-        wod_shell: float,
-        q_dyn_obs: float,
-        assoc_risk: float,
-    ) -> None:
-        if not (bool(self.cfg.update.rps_enable) and bool(self.cfg.update.dual_state_enable) and bool(self.cfg.update.wod_enable)):
-            return
-        cons_ref = float(max(voxel_map.voxel_size, getattr(self.cfg.update, 'rps_consistency_ref', 0.03)))
-        static_cons = 0.5
-        if float(getattr(cell, 'phi_static_w', 0.0)) > 1e-8:
-            static_cons = float(np.exp(-0.5 * ((d_geo - float(cell.phi_static)) / cons_ref) ** 2))
-        geo_cons = 0.5
-        if float(getattr(cell, 'phi_geo_w', 0.0)) > 1e-8:
-            geo_cons = float(np.exp(-0.5 * ((d_geo - float(cell.phi_geo)) / cons_ref) ** 2))
-        bank_cons = 0.5
-        if float(getattr(cell, 'phi_rear_w', 0.0)) > 1e-8:
-            bank_cons = float(np.exp(-0.5 * ((d_geo - float(getattr(cell, 'phi_rear', 0.0))) / cons_ref) ** 2))
-        cand_cons = 0.5
-        if float(getattr(cell, 'phi_rear_cand_w', 0.0)) > 1e-8:
-            cand_cons = float(np.exp(-0.5 * ((d_geo - float(getattr(cell, 'phi_rear_cand', 0.0))) / cons_ref) ** 2))
-        rear_obs = float(
-            np.clip(
-                0.34 * wod_rear
-                + 0.20 * static_mass
-                + 0.16 * max(static_cons, geo_cons)
-                + 0.10 * bank_cons
-                + 0.10 * cand_cons
-                + 0.10 * float(np.clip(getattr(cell, 'dccm_rear', 0.0), 0.0, 1.0))
-                + 0.10 * (1.0 - float(np.clip(q_dyn_obs, 0.0, 1.0))),
-                0.0,
-                1.0,
-            )
-        )
-        front_pen = float(
-            np.clip(
-                wod_front
-                + 0.60 * wod_shell
-                + 0.35 * float(np.clip(q_dyn_obs, 0.0, 1.0))
-                + 0.15 * float(np.clip(assoc_risk, 0.0, 1.0)),
-                0.0,
-                1.5,
-            )
-        )
-        rear_gate = float(np.clip(rear_obs * (1.0 - float(getattr(self.cfg.update, 'rps_front_suppress', 0.60)) * front_pen), 0.0, 1.0))
-        w_base = float(max(w_geo, 0.35 * w_static))
-        if not bool(getattr(self.cfg.update, 'rps_hard_commit_enable', False)):
-            if rear_gate > 1e-6 and w_base > 1e-12:
-                w_rps = float(
-                    w_base
-                    * (float(getattr(self.cfg.update, 'rps_geo_mix', 0.65)) + (1.0 - float(getattr(self.cfg.update, 'rps_geo_mix', 0.65))) * static_mass)
-                    * (0.12 + float(getattr(self.cfg.update, 'rps_rear_boost', 0.85)) * rear_gate)
-                )
-                w_r_new = float(cell.phi_rear_w + w_rps)
-                if w_r_new > 1e-12:
-                    cell.phi_rear = float((cell.phi_rear_w * float(getattr(cell, 'phi_rear', 0.0)) + w_rps * d_geo) / w_r_new)
-                    cell.phi_rear_w = float(min(5000.0, w_r_new))
-                    cell.rho_rear = float(cell.rho_rear + float(getattr(self.cfg.update, 'rps_rho_alpha', 0.18)) * w_obs * rear_gate)
-            return
-
-        cand_min = float(np.clip(getattr(self.cfg.update, 'rps_candidate_gate_min', 0.16), 0.0, 0.8))
-        cand_gate = float(np.clip((rear_gate - cand_min) / max(1e-6, 1.0 - cand_min), 0.0, 1.0))
-        support_obs = float(
-            np.clip(
-                0.34 * rear_gate
-                + 0.18 * float(np.clip(getattr(cell, 'visibility_contradiction', 0.0), 0.0, 1.0))
-                + 0.14 * float(np.clip(getattr(cell, 'dccm_rear', 0.0), 0.0, 1.0))
-                + 0.10 * wod_shell
-                + 0.10 * cand_cons
-                + 0.08 * bank_cons
-                + 0.06 * (1.0 - float(np.clip(q_dyn_obs, 0.0, 1.0))),
-                0.0,
-                1.0,
-            )
-        )
-        penalty = float(
-            np.clip(
-                0.58 * wod_front
-                + 0.18 * float(np.clip(q_dyn_obs, 0.0, 1.0))
-                + 0.14 * float(np.clip(assoc_risk, 0.0, 1.0))
-                + 0.10 * max(0.0, 1.0 - max(static_cons, geo_cons)),
-                0.0,
-                1.0,
-            )
-        )
-        score_obs = float(self._sigmoid(3.2 * (support_obs - penalty - 0.10)))
-        alpha = float(np.clip(getattr(self.cfg.update, 'rps_score_alpha', 0.18), 0.01, 0.8))
-        cell.rps_commit_score = float(np.clip((1.0 - alpha) * float(getattr(cell, 'rps_commit_score', 0.0)) + alpha * score_obs, 0.0, 1.0))
-        if cand_gate > 1e-6 and w_base > 1e-12:
-            w_cand = float(
-                w_base
-                * (float(getattr(self.cfg.update, 'rps_geo_mix', 0.65)) + (1.0 - float(getattr(self.cfg.update, 'rps_geo_mix', 0.65))) * static_mass)
-                * (0.10 + float(getattr(self.cfg.update, 'rps_rear_boost', 0.85)) * cand_gate)
-            )
-            w_c_new = float(float(getattr(cell, 'phi_rear_cand_w', 0.0)) + w_cand)
-            if w_c_new > 1e-12:
-                cell.phi_rear_cand = float((float(getattr(cell, 'phi_rear_cand_w', 0.0)) * float(getattr(cell, 'phi_rear_cand', 0.0)) + w_cand * d_geo) / w_c_new)
-                cell.phi_rear_cand_w = float(min(5000.0, w_c_new))
-                cell.rho_rear_cand = float(float(getattr(cell, 'rho_rear_cand', 0.0)) + float(getattr(self.cfg.update, 'rps_rho_alpha', 0.18)) * w_obs * cand_gate)
-        age_ref = float(max(1.0, getattr(self.cfg.update, 'rps_commit_age_ref', 2.0)))
-        if cand_gate >= 0.22 and support_obs >= (penalty + 0.06):
-            cell.rps_commit_age = float(min(20.0, float(getattr(cell, 'rps_commit_age', 0.0)) + 1.0))
-        else:
-            cell.rps_commit_age = float(max(0.0, 0.82 * float(getattr(cell, 'rps_commit_age', 0.0))))
-        on = float(np.clip(getattr(self.cfg.update, 'rps_commit_on', 0.62), 0.0, 1.0))
-        off = float(np.clip(getattr(self.cfg.update, 'rps_commit_off', 0.40), 0.0, 1.0))
-        active_prev = float(np.clip(getattr(cell, 'rps_active', 0.0), 0.0, 1.0))
-        commit_ready = bool(
-            cell.rps_commit_score >= on
-            and cell.rps_commit_age >= age_ref
-            and float(getattr(cell, 'phi_rear_cand_w', 0.0)) > 1e-6
-            and float(getattr(cell, 'rho_rear_cand', 0.0)) >= 0.10
-        )
-        if commit_ready:
-            blend = float(np.clip(getattr(self.cfg.update, 'rps_commit_blend', 0.78), 0.0, 1.0))
-            w_commit = float(float(getattr(cell, 'phi_rear_cand_w', 0.0)) * blend)
-            w_bank_new = float(float(getattr(cell, 'phi_rear_w', 0.0)) + w_commit)
-            if w_bank_new > 1e-12:
-                cell.phi_rear = float((float(getattr(cell, 'phi_rear_w', 0.0)) * float(getattr(cell, 'phi_rear', 0.0)) + w_commit * float(getattr(cell, 'phi_rear_cand', 0.0))) / w_bank_new)
-                cell.phi_rear_w = float(min(5000.0, w_bank_new))
-                cell.rho_rear = float(float(getattr(cell, 'rho_rear', 0.0)) + blend * float(getattr(cell, 'rho_rear_cand', 0.0)))
-            cell.phi_rear_cand_w = float((1.0 - blend) * float(getattr(cell, 'phi_rear_cand_w', 0.0)))
-            cell.rho_rear_cand = float((1.0 - blend) * float(getattr(cell, 'rho_rear_cand', 0.0)))
-            cell.rps_active = 1.0
-        elif cell.rps_commit_score < off:
-            cell.rps_active = float(0.5 * active_prev)
-        else:
-            cell.rps_active = active_prev
+    def _write_time_occlusion_split(self, voxel_map: VoxelHashMap3D, cell, measurement: AssocMeasurement3D, rel: np.ndarray, d_signed: float, q_dyn_obs: float, assoc_risk: float) -> tuple[float, float, float]:
+        return p10_write_time_occlusion_split(self, voxel_map, cell, measurement, rel, d_signed, q_dyn_obs, assoc_risk)
 
 
-    def _update_spg_state(
-        self,
-        voxel_map: VoxelHashMap3D,
-        cell,
-        w_static: float,
-        w_geo: float,
-        static_mass: float,
-        wod_front: float,
-        wod_rear: float,
-        wod_shell: float,
-        q_dyn_obs: float,
-        assoc_risk: float,
-    ) -> None:
-        if not (bool(self.cfg.update.spg_enable) and bool(self.cfg.update.dual_state_enable) and bool(self.cfg.update.ptdsf_enable)):
-            return
-        ws = float(max(0.0, getattr(cell, 'phi_static_w', 0.0)))
-        wg = float(max(0.0, getattr(cell, 'phi_geo_w', 0.0)))
-        if ws <= 1e-12 and wg <= 1e-12:
-            return
-        cons_ref = float(max(voxel_map.voxel_size, getattr(self.cfg.update, 'rps_consistency_ref', 0.03)))
-        if ws > 1e-12 and wg > 1e-12:
-            geo_agree = float(np.exp(-0.5 * ((float(cell.phi_geo) - float(cell.phi_static)) / cons_ref) ** 2))
-            w_s = float(ws * (1.0 + 0.20 * static_mass + 0.10 * wod_rear))
-            w_g = float(wg * (0.22 + 0.78 * geo_agree))
-            phi_cand = float((w_s * float(cell.phi_static) + w_g * float(cell.phi_geo)) / max(1e-9, w_s + w_g))
-            w_cand = float(w_s + w_g)
-        elif ws > 1e-12:
-            geo_agree = 0.82
-            phi_cand = float(cell.phi_static)
-            w_cand = float(ws)
-        else:
-            geo_agree = 0.82
-            phi_cand = float(cell.phi_geo)
-            w_cand = float(wg)
-        age_ref = float(max(1.0, getattr(self.cfg.update, 'ptdsf_commit_age_ref', 3.0)))
-        commit_n = float(np.clip(getattr(cell, 'ptdsf_commit_age', 0.0) / age_ref, 0.0, 1.0))
-        rho_ref = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
-        rho_n = float(np.clip(float(getattr(cell, 'rho', 0.0)) / rho_ref, 0.0, 1.5))
-        p_static = float(np.clip(getattr(cell, 'p_static', 0.5), 0.0, 1.0))
-        front_dyn = float(
-            np.clip(
-                max(
-                    wod_front + 0.40 * wod_shell,
-                    float(np.clip(q_dyn_obs, 0.0, 1.0)),
-                    float(np.clip(assoc_risk, 0.0, 1.0)),
-                    float(np.clip(getattr(cell, 'dyn_prob', 0.0), 0.0, 1.0)),
-                    float(np.clip(getattr(cell, 'z_dyn', 0.0), 0.0, 1.0)),
-                    float(np.clip(getattr(cell, 'st_mem', 0.0), 0.0, 1.0)),
-                    float(np.clip(getattr(cell, 'visibility_contradiction', 0.0), 0.0, 1.0)),
-                ),
-                0.0,
-                1.0,
-            )
-        )
-        support_obs = float(
-            np.clip(
-                0.28 * static_mass
-                + 0.22 * p_static
-                + 0.16 * commit_n
-                + 0.14 * min(1.0, rho_n)
-                + 0.10 * geo_agree
-                + 0.10 * wod_rear
-                + 0.08 * (1.0 - front_dyn),
-                0.0,
-                1.0,
-            )
-        )
-        penalty_obs = float(
-            np.clip(
-                0.38 * wod_front
-                + 0.14 * wod_shell
-                + 0.14 * float(np.clip(q_dyn_obs, 0.0, 1.0))
-                + 0.10 * float(np.clip(assoc_risk, 0.0, 1.0))
-                + 0.12 * float(np.clip(getattr(cell, 'visibility_contradiction', 0.0), 0.0, 1.0))
-                + 0.06 * float(np.clip(getattr(cell, 'st_mem', 0.0), 0.0, 1.0))
-                + 0.06 * float(np.clip(getattr(cell, 'z_dyn', 0.0), 0.0, 1.0)),
-                0.0,
-                1.0,
-            )
-        )
-        score_obs = float(self._sigmoid(3.4 * (support_obs - penalty_obs - 0.04)))
-        alpha = float(np.clip(getattr(self.cfg.update, 'spg_score_alpha', 0.18), 0.01, 0.8))
-        cell.spg_score = float(np.clip((1.0 - alpha) * float(getattr(cell, 'spg_score', 0.0)) + alpha * score_obs, 0.0, 1.0))
-        if score_obs >= 0.54 and support_obs >= (penalty_obs + 0.04):
-            cell.spg_age = float(min(20.0, float(getattr(cell, 'spg_age', 0.0)) + 1.0))
-        else:
-            cell.spg_age = float(max(0.0, 0.82 * float(getattr(cell, 'spg_age', 0.0))))
-        on = float(np.clip(getattr(self.cfg.update, 'spg_commit_on', 0.62), 0.0, 1.0))
-        off = float(np.clip(getattr(self.cfg.update, 'spg_commit_off', 0.40), 0.0, 1.0))
-        age_gate = float(max(1.0, getattr(self.cfg.update, 'spg_commit_age_ref', 1.5)))
-        active_prev = float(np.clip(getattr(cell, 'spg_active', 0.0), 0.0, 1.0))
-        commit_ready = bool(
-            ((cell.spg_score >= on and cell.spg_age >= age_gate) or (active_prev >= 0.5 and cell.spg_score >= off))
-            and w_cand > 1e-6
-        )
-        if commit_ready:
-            blend = float(np.clip(getattr(self.cfg.update, 'spg_commit_blend', 0.60), 0.0, 1.0))
-            w_commit = float(blend * max(0.35 * w_static, w_geo, 0.30 * w_cand))
-            w_new = float(float(getattr(cell, 'phi_spg_w', 0.0)) + w_commit)
-            if w_new > 1e-12:
-                cell.phi_spg = float((float(getattr(cell, 'phi_spg_w', 0.0)) * float(getattr(cell, 'phi_spg', 0.0)) + w_commit * phi_cand) / w_new)
-                cell.phi_spg_w = float(min(5000.0, w_new))
-                cell.rho_spg = float(float(getattr(cell, 'rho_spg', 0.0)) + 0.18 * w_commit)
-            cell.spg_active = 1.0
-        else:
-            if cell.spg_score < off or penalty_obs > (support_obs + 0.10):
-                decay = float(np.clip(getattr(self.cfg.update, 'spg_bank_decay', 0.96), 0.80, 1.0))
-                cell.phi_spg_w = float(decay * float(getattr(cell, 'phi_spg_w', 0.0)))
-                cell.rho_spg = float(decay * float(getattr(cell, 'rho_spg', 0.0)))
-                cell.spg_active = float(0.70 * active_prev)
-            else:
-                cell.spg_active = active_prev
 
-    def _update_otv_state(
-        self,
-        voxel_map: VoxelHashMap3D,
-        cell: VoxelCell3D,
-        *,
-        w_obs: float,
-        d_transient_obs: float,
-        d_rear_obs: float,
-        wod_front: float,
-        wod_rear: float,
-        wod_shell: float,
-        q_dyn_obs: float,
-        assoc_risk: float,
-    ) -> Tuple[float, float, float, float]:
-        if not bool(self.cfg.update.otv_enable):
-            return 0.0, 1.0, 1.0, 0.0
-        if w_obs <= 1e-12:
-            return 0.0, 1.0, 1.0, 0.0
+    def _update_rps_state(self, voxel_map: VoxelHashMap3D, cell, d_geo: float, w_obs: float, w_static: float, w_geo: float, static_mass: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> None:
+        return p10_update_rps_state(self, voxel_map, cell, d_geo, w_obs, w_static, w_geo, static_mass, wod_front, wod_rear, wod_shell, q_dyn_obs, assoc_risk)
 
-        sep_ref = float(max(0.25, getattr(self.cfg.update, 'otv_sep_ref_vox', 0.90)))
-        sep_n = float(
-            np.clip(
-                abs(float(d_rear_obs) - float(d_transient_obs))
-                / max(1e-6, sep_ref * voxel_map.voxel_size),
-                0.0,
-                1.5,
-            )
-        )
-        front_dom = float(np.clip(wod_front + 0.55 * wod_shell + 0.20 * q_dyn_obs, 0.0, 1.0))
-        rho_ref = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
-        spg_score = float(np.clip(getattr(cell, 'spg_score', 0.0), 0.0, 1.0))
-        spg_active = float(np.clip(getattr(cell, 'spg_active', 0.0), 0.0, 1.0))
-        spg_rho = float(np.clip(getattr(cell, 'rho_spg', 0.0) / rho_ref, 0.0, 1.0))
-        rear_rho = float(np.clip(getattr(cell, 'rho_rear', 0.0) / rho_ref, 0.0, 1.0))
-        p_static = float(np.clip(getattr(cell, 'p_static', 0.0), 0.0, 1.0))
-        rho_s = float(max(0.0, getattr(cell, 'rho_static', 0.0)))
-        rho_t = float(max(0.0, getattr(cell, 'rho_transient', 0.0)))
-        ptdsf_dom = float(np.clip(rho_s / max(1e-6, rho_s + rho_t), 0.0, 1.0)) if (rho_s + rho_t) > 1e-8 else p_static
-        surf = float(max(1e-6, getattr(cell, 'surf_evidence', 0.0)))
-        free = float(max(0.0, getattr(cell, 'free_evidence', 0.0)))
-        static_occ = float(np.clip(surf / max(1e-6, surf + free), 0.0, 1.0))
-        rear_support = float(
-            np.clip(
-                0.22 * spg_active
-                + 0.20 * spg_score
-                + 0.16 * spg_rho
-                + 0.14 * rear_rho
-                + 0.14 * p_static
-                + 0.08 * ptdsf_dom
-                + 0.06 * wod_rear
-                + 0.10 * static_occ,
-                0.0,
-                1.0,
-            )
-        )
-        score_raw = float(
-            np.clip(
-                front_dom * (0.55 + 0.45 * min(1.0, sep_n)) * rear_support
-                + 0.08 * assoc_risk,
-                0.0,
-                1.0,
-            )
-        )
-        score_ref = float(np.clip(getattr(self.cfg.update, 'otv_support_ref', 0.26), 0.05, 0.85))
-        score_obs = float(self._sigmoid(5.2 * (score_raw - score_ref)))
-        alpha = float(np.clip(getattr(self.cfg.update, 'otv_score_alpha', 0.18), 0.01, 0.8))
-        cell.otv_score = float(np.clip((1.0 - alpha) * float(getattr(cell, 'otv_score', 0.0)) + alpha * score_obs, 0.0, 1.0))
 
-        active_obs = bool(score_obs >= max(0.50, float(getattr(self.cfg.update, 'otv_commit_off', 0.38))) and rear_support >= 0.40 and front_dom >= 0.35 and sep_n >= 0.35)
-        if active_obs:
-            cell.otv_age = float(min(20.0, float(getattr(cell, 'otv_age', 0.0)) + 1.0))
-        else:
-            decay = float(np.clip(getattr(self.cfg.update, 'otv_decay', 0.96), 0.80, 1.0))
-            cell.otv_age = float(max(0.0, decay * float(getattr(cell, 'otv_age', 0.0))))
 
-        on = float(np.clip(getattr(self.cfg.update, 'otv_commit_on', 0.58), 0.0, 1.0))
-        off = float(np.clip(getattr(self.cfg.update, 'otv_commit_off', 0.38), 0.0, 1.0))
-        age_ref = float(max(1.0, getattr(self.cfg.update, 'otv_age_ref', 1.0)))
-        active_prev = float(np.clip(getattr(cell, 'otv_active', 0.0), 0.0, 1.0))
-        active = bool((score_obs >= on and cell.otv_age >= age_ref) or (active_prev >= 0.5 and cell.otv_score >= off))
-        if active:
-            cell.otv_active = 1.0
-        else:
-            decay = float(np.clip(getattr(self.cfg.update, 'otv_decay', 0.96), 0.80, 1.0))
-            cell.otv_active = float(decay * active_prev)
+    def _update_spg_state(self, voxel_map: VoxelHashMap3D, cell, w_static: float, w_geo: float, static_mass: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> None:
+        return p10_update_spg_state(self, voxel_map, cell, w_static, w_geo, static_mass, wod_front, wod_rear, wod_shell, q_dyn_obs, assoc_risk)
 
-        q_route = float(np.clip(max(score_obs, cell.otv_score, cell.otv_active), 0.0, 1.0))
-        if q_route <= 1e-6:
-            return 0.0, 1.0, 1.0, 0.0
 
-        w_otv = float(w_obs * q_route * np.clip(0.35 + 0.65 * front_dom, 0.20, 1.0))
-        w_new = float(float(getattr(cell, 'phi_otv_w', 0.0)) + w_otv)
-        if w_new > 1e-12:
-            cell.phi_otv = float((float(getattr(cell, 'phi_otv_w', 0.0)) * float(getattr(cell, 'phi_otv', 0.0)) + w_otv * float(d_transient_obs)) / w_new)
-            cell.phi_otv_w = float(min(5000.0, w_new))
-            cell.rho_otv = float(float(getattr(cell, 'rho_otv', 0.0)) + 0.18 * w_otv)
+    def _update_otv_state(self, voxel_map: VoxelHashMap3D, cell: VoxelCell3D, *, w_obs: float, d_transient_obs: float, d_rear_obs: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> Tuple[float, float, float, float]:
+        return p10_update_otv_state(self, voxel_map, cell, w_obs=w_obs, d_transient_obs=d_transient_obs, d_rear_obs=d_rear_obs, wod_front=wod_front, wod_rear=wod_rear, wod_shell=wod_shell, q_dyn_obs=q_dyn_obs, assoc_risk=assoc_risk)
 
-        strength = float(q_route * (0.55 + 0.45 * min(1.0, sep_n)))
-        static_keep = float(np.clip(1.0 - getattr(self.cfg.update, 'otv_static_veto', 0.92) * strength, 0.02, 1.0))
-        transient_boost = float(np.clip(1.0 + getattr(self.cfg.update, 'otv_transient_boost', 0.85) * strength, 1.0, 2.0))
-        dyn_boost = float(np.clip(getattr(self.cfg.update, 'otv_dyn_boost', 0.75) * strength, 0.0, 1.0))
-        return q_route, static_keep, transient_boost, dyn_boost
+
+
+    def _update_obl_state(self, voxel_map: VoxelHashMap3D, cell: VoxelCell3D, *, w_obs: float, d_static_obs: float, d_rear_obs: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> Tuple[float, float, float]:
+        return p10_update_obl_state(self, voxel_map, cell, w_obs=w_obs, d_static_obs=d_static_obs, d_rear_obs=d_rear_obs, wod_front=wod_front, wod_rear=wod_rear, wod_shell=wod_shell, q_dyn_obs=q_dyn_obs, assoc_risk=assoc_risk)
+
+
+    def _update_xmem_state(self, voxel_map: VoxelHashMap3D, cell: VoxelCell3D, *, d_signed: float, surf_band: float, trunc_eff: float, w_obs: float, d_transient_obs: float, d_rear_obs: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> Tuple[float, float, float, float, float]:
+        return p10_update_xmem_state(self, voxel_map, cell, d_signed=d_signed, surf_band=surf_band, trunc_eff=trunc_eff, w_obs=w_obs, d_transient_obs=d_transient_obs, d_rear_obs=d_rear_obs, wod_front=wod_front, wod_rear=wod_rear, wod_shell=wod_shell, q_dyn_obs=q_dyn_obs, assoc_risk=assoc_risk)
+
 
     def _integrate_measurement(
         self,
@@ -781,11 +255,15 @@ class Updater3D:
         measurement: AssocMeasurement3D,
         touched: Set[VoxelIndex],
         frame_id: int,
+        map_role: str = "joint",
     ) -> None:
         p = measurement.point_world
         n = self._normalize(measurement.normal_world)
         if float(np.linalg.norm(n)) < 1e-8:
             return
+
+        bg_role = str(map_role).lower() == "background"
+        fg_role = str(map_role).lower() == "foreground"
 
         trunc = float(self.cfg.map3d.truncation)
         trunc_scale = float(np.clip(self.cfg.update.integration_radius_scale, 0.20, 1.0))
@@ -857,10 +335,18 @@ class Updater3D:
             w_shell = 0.0
             q_otv_route = 0.0
             otv_dyn_boost = 0.0
+            q_xmem_route = 0.0
+            xmem_static_keep = 1.0
+            xmem_geo_keep = 1.0
+            xmem_transient_boost = 1.0
+            xmem_dyn_boost = 0.0
+            q_obl_route = 0.0
+            obl_geo_keep = 1.0
             if bool(self.cfg.update.dual_state_enable):
                 q_dyn = float(np.clip(q_dyn_obs, 0.0, 1.0))
                 min_static = float(np.clip(self.cfg.update.dual_state_min_static_ratio, 0.0, 0.5))
                 static_prior = float(np.clip(1.0 - q_dyn, min_static, 1.0))
+
                 if bool(self.cfg.update.ptdsf_enable):
                     age_ref = float(max(1.0, self.cfg.update.ptdsf_commit_age_ref))
                     commit_n = float(np.clip(cell.ptdsf_commit_age / age_ref, 0.0, 1.0))
@@ -977,6 +463,91 @@ class Updater3D:
                         transient_mass = float(np.clip(w_transient / max(1e-9, w_obs), 0.0, 1.0))
                         shell_mass = float(np.clip(w_shell / max(1e-9, w_obs), 0.0, 1.0))
 
+                if bool(getattr(self.cfg.update, 'xmem_enable', False)) and bool(self.cfg.update.wod_enable):
+                    q_xmem_route, xmem_static_keep, xmem_geo_keep, xmem_transient_boost, xmem_dyn_boost = self._update_xmem_state(
+                        voxel_map,
+                        cell,
+                        d_signed=d_signed,
+                        surf_band=surf_band,
+                        trunc_eff=trunc_eff,
+                        w_obs=w_obs,
+                        d_transient_obs=d_transient_obs,
+                        d_rear_obs=d_rear_obs,
+                        wod_front=wod_front,
+                        wod_rear=wod_rear,
+                        wod_shell=wod_shell,
+                        q_dyn_obs=q_dyn_obs,
+                        assoc_risk=assoc_risk,
+                    )
+                    if q_xmem_route > 1e-6:
+                        w_static *= xmem_static_keep
+                        w_transient *= xmem_transient_boost
+                        w_sum_xmem = float(w_static + w_transient + w_shell)
+                        if w_sum_xmem > max(1e-9, w_obs):
+                            xmem_scale = float(w_obs / w_sum_xmem)
+                            w_static *= xmem_scale
+                            w_transient *= xmem_scale
+                            w_shell *= xmem_scale
+                        static_mass = float(np.clip(w_static / max(1e-9, w_obs), 0.0, 1.0))
+                        transient_mass = float(np.clip(w_transient / max(1e-9, w_obs), 0.0, 1.0))
+                        shell_mass = float(np.clip(w_shell / max(1e-9, w_obs), 0.0, 1.0))
+
+                if bool(getattr(self.cfg.update, 'obl_enable', False)) and bool(self.cfg.update.wod_enable):
+                    q_obl_route, obl_static_keep, obl_geo_keep = self._update_obl_state(
+                        voxel_map,
+                        cell,
+                        w_obs=w_obs,
+                        d_static_obs=d_static_obs,
+                        d_rear_obs=d_rear_obs,
+                        wod_front=wod_front,
+                        wod_rear=wod_rear,
+                        wod_shell=wod_shell,
+                        q_dyn_obs=q_dyn_obs,
+                        assoc_risk=assoc_risk,
+                    )
+                    if q_obl_route > 1e-6:
+                        w_static *= obl_static_keep
+                        w_sum_obl = float(w_static + w_transient + w_shell)
+                        if w_sum_obl > max(1e-9, w_obs):
+                            obl_scale = float(w_obs / w_sum_obl)
+                            w_static *= obl_scale
+                            w_transient *= obl_scale
+                            w_shell *= obl_scale
+                        static_mass = float(np.clip(w_static / max(1e-9, w_obs), 0.0, 1.0))
+                        transient_mass = float(np.clip(w_transient / max(1e-9, w_obs), 0.0, 1.0))
+                        shell_mass = float(np.clip(w_shell / max(1e-9, w_obs), 0.0, 1.0))
+
+                if bool(getattr(self.cfg.update, 'dual_map_enable', False)) and (bg_role or fg_role):
+                    if bg_role:
+                        front_dyn = float(np.clip(wod_front + 0.50 * wod_shell + 0.35 * q_dyn_obs + 0.20 * assoc_risk + 0.15 * q_xmem_route, 0.0, 1.0))
+                        rear_bg = float(np.clip(wod_rear + 0.35 * static_ratio + 0.20 * q_obl_route + 0.10 * (1.0 - q_dyn_obs), 0.0, 1.0))
+                        bg_floor = float(np.clip(getattr(self.cfg.update, 'dual_map_bg_static_floor', 0.08), 0.0, 0.5))
+                        bg_keep = float(np.clip(bg_floor + float(getattr(self.cfg.update, 'dual_map_bg_rear_gain', 1.0)) * rear_bg - float(getattr(self.cfg.update, 'dual_map_bg_front_veto', 0.90)) * front_dyn, 0.0, 1.0))
+                        w_static *= bg_keep
+                        w_transient = 0.0
+                        w_shell = 0.0
+                        static_mass = float(np.clip(w_static / max(1e-9, w_obs), 0.0, 1.0))
+                        transient_mass = 0.0
+                        shell_mass = 0.0
+                        d_bg_obs = float(d_rear_obs if rear_bg >= max(0.20, 0.75 * front_dyn) else d_static_obs)
+                        w_bg = float(w_obs * max(bg_floor, bg_keep))
+                        if w_bg > 1e-12:
+                            w_bg_new = float(float(getattr(cell, 'phi_bg_w', 0.0)) + w_bg)
+                            if w_bg_new > 1e-12:
+                                cell.phi_bg = float((float(getattr(cell, 'phi_bg_w', 0.0)) * float(getattr(cell, 'phi_bg', 0.0)) + w_bg * d_bg_obs) / w_bg_new)
+                                cell.phi_bg_w = float(min(5000.0, w_bg_new))
+                                cell.rho_bg = float(float(getattr(cell, 'rho_bg', 0.0)) + float(np.clip(getattr(self.cfg.update, 'obl_rho_alpha', 0.20), 0.01, 1.0)) * w_bg)
+                    elif fg_role:
+                        front_fg = float(np.clip(wod_front + 0.60 * wod_shell + 0.35 * q_dyn_obs + 0.20 * assoc_risk + 0.15 * q_xmem_route, 0.0, 1.0))
+                        fg_boost = float(max(0.0, getattr(self.cfg.update, 'dual_map_fg_front_boost', 1.10)))
+                        static_leak = float(np.clip(getattr(self.cfg.update, 'dual_map_fg_static_leak', 0.04), 0.0, 0.5))
+                        w_transient = float((w_transient + 0.60 * w_shell + 0.20 * w_obs * front_fg) * (0.30 + fg_boost * front_fg))
+                        w_static *= static_leak * max(0.0, 1.0 - front_fg)
+                        w_shell *= 0.35
+                        static_mass = float(np.clip(w_static / max(1e-9, w_obs), 0.0, 1.0))
+                        transient_mass = float(np.clip(w_transient / max(1e-9, w_obs), 0.0, 1.0))
+                        shell_mass = float(np.clip(w_shell / max(1e-9, w_obs), 0.0, 1.0))
+
                 if bool(self.cfg.update.ptdsf_enable):
                     rho_alpha = float(np.clip(self.cfg.update.ptdsf_rho_alpha, 0.01, 1.0))
                     cell.rho_static = float(cell.rho_static + rho_alpha * w_static)
@@ -1068,6 +639,15 @@ class Updater3D:
                     w_geo *= float(np.clip(1.0 - 0.80 * assoc_risk, 0.05, 1.0))
                 if bool(self.cfg.update.otv_enable) and q_otv_route > 1e-6:
                     w_geo *= float(np.clip(1.0 - self.cfg.update.otv_geo_veto * q_otv_route, 0.02, 1.0))
+                if bool(getattr(self.cfg.update, 'xmem_enable', False)) and q_xmem_route > 1e-6:
+                    w_geo *= float(np.clip(xmem_geo_keep, 0.02, 1.0))
+                if bool(getattr(self.cfg.update, 'obl_enable', False)) and q_obl_route > 1e-6:
+                    w_geo *= float(np.clip(obl_geo_keep, 0.05, 1.0))
+                if bool(getattr(self.cfg.update, 'dual_map_enable', False)) and bg_role:
+                    bg_front = float(np.clip(wod_front + 0.50 * wod_shell + 0.35 * q_dyn_obs, 0.0, 1.0))
+                    w_geo *= float(np.clip(1.0 - 0.95 * bg_front, 0.02, 1.0))
+                if bool(getattr(self.cfg.update, 'dual_map_enable', False)) and fg_role:
+                    w_geo *= 0.02
                 w_geo_new = cell.phi_geo_w + w_geo
                 if w_geo_new > 1e-9:
                     cell.phi_geo = float((cell.phi_geo_w * cell.phi_geo + w_geo * d_geo) / w_geo_new)
@@ -1118,6 +698,8 @@ class Updater3D:
                     dyn_obs = float(np.clip(max(dyn_obs, 0.45 * float(np.clip(getattr(cell, 'dccm_commit', 0.0), 0.0, 1.0))), 0.0, 1.0))
                 if bool(self.cfg.update.otv_enable) and q_otv_route > 1e-6:
                     dyn_obs = float(np.clip(max(dyn_obs, otv_dyn_boost), 0.0, 1.0))
+                if bool(getattr(self.cfg.update, 'xmem_enable', False)) and q_xmem_route > 1e-6:
+                    dyn_obs = float(np.clip(max(dyn_obs, xmem_dyn_boost), 0.0, 1.0))
                 if bool(self.cfg.update.wdsg_route_enable) and bool(self.cfg.update.wdsg_enable) and bool(self.cfg.update.wod_enable):
                     sep_dyn = float(np.clip(abs(d_rear_obs - d_transient_obs) / max(1e-6, voxel_map.voxel_size), 0.0, 1.5))
                     dyn_obs = float(np.clip(dyn_obs + self.cfg.update.wdsg_route_dyn_boost * sep_dyn * float(np.clip(wod_front + 0.5 * wod_shell, 0.0, 1.0)), 0.0, 1.0))
@@ -1596,427 +1178,13 @@ class Updater3D:
                 else:
                     c.d_score = float(np.clip(c.dyn_prob, 0.0, 1.0))
 
-    def _local_zero_crossing_debias(
-        self,
-        voxel_map: VoxelHashMap3D,
-        touched: Iterable[VoxelIndex],
-        frame_id: int,
-    ) -> None:
-        if not bool(self.cfg.update.lzcd_enable):
-            return
-        interval = max(1, int(self.cfg.update.lzcd_interval))
-        if (int(frame_id) % interval) != 0:
-            return
+    def _local_zero_crossing_debias(self, voxel_map: VoxelHashMap3D, touched: Iterable[VoxelIndex], frame_id: int) -> None:
+        return p10_local_zero_crossing_debias(self, voxel_map, touched, frame_id)
 
-        radius = max(1, int(self.cfg.update.lzcd_radius_cells))
-        min_n = max(3, int(self.cfg.update.lzcd_min_neighbors))
-        min_w = float(max(0.0, self.cfg.update.lzcd_min_phi_w))
-        min_rho = float(max(0.0, self.cfg.update.lzcd_min_rho))
-        max_d = float(np.clip(self.cfg.update.lzcd_max_dscore, 0.0, 1.0))
-        cos_min = float(np.clip(self.cfg.update.lzcd_normal_cos_min, 0.0, 1.0))
-        phi_gate = float(max(1e-4, self.cfg.update.lzcd_neighbor_phi_gate))
-        bias_alpha = float(np.clip(self.cfg.update.lzcd_bias_alpha, 0.01, 0.8))
-        corr_gain = float(np.clip(self.cfg.update.lzcd_correction_gain, 0.0, 1.0))
-        max_bias = float(max(1e-4, self.cfg.update.lzcd_max_bias))
-        max_step = float(max(1e-4, self.cfg.update.lzcd_max_step))
-        trim_q = float(np.clip(self.cfg.update.lzcd_trim_quantile, 0.55, 1.0))
-        use_geo = bool(self.cfg.update.lzcd_use_geo_channel)
-        dual_enable = bool(self.cfg.update.dual_state_enable)
-        rho_ref = float(max(1e-6, self.cfg.update.dual_state_static_protect_rho))
-        global_alpha = float(np.clip(0.5 * bias_alpha, 0.02, 0.35))
-        local_mix = 0.82
-        global_mix = 0.18
-        min_improve = 0.995
-        solver_iters = int(max(1, self.cfg.update.lzcd_solver_iters))
-        solver_lambda = float(max(0.0, self.cfg.update.lzcd_solver_lambda_smooth))
-        solver_step = float(np.clip(self.cfg.update.lzcd_solver_step, 0.10, 1.0))
-        solver_tol = float(max(1e-6, self.cfg.update.lzcd_solver_tol))
-        residual_anchor_w = float(np.clip(self.cfg.update.lzcd_residual_anchor_weight, 0.0, 0.95))
-        residual_hit_ref = float(max(1.0, self.cfg.update.lzcd_residual_hit_ref))
-        affine_enable = bool(self.cfg.update.lzcd_affine_enable)
-        affine_mix = float(np.clip(self.cfg.update.lzcd_affine_mix, 0.0, 1.0))
-        affine_slope_min = float(min(self.cfg.update.lzcd_affine_slope_min, self.cfg.update.lzcd_affine_slope_max))
-        affine_slope_max = float(max(self.cfg.update.lzcd_affine_slope_min, self.cfg.update.lzcd_affine_slope_max))
-        affine_min_samples = int(max(4, self.cfg.update.lzcd_affine_min_samples))
 
-        touched_ext: Set[VoxelIndex] = set()
-        for idx in touched:
-            touched_ext.add(idx)
-            touched_ext.update(voxel_map.neighbor_indices(idx, radius))
+    def _zero_crossing_bias_field(self, voxel_map: VoxelHashMap3D, touched: Iterable[VoxelIndex]) -> None:
+        return p10_zero_crossing_bias_field(self, voxel_map, touched)
 
-        records = []
-        global_vals: List[float] = []
-        global_w: List[float] = []
-        for idx in touched_ext:
-            c = voxel_map.get_cell(idx)
-            if c is None:
-                continue
-            if c.rho < min_rho:
-                continue
-            if float(np.clip(c.dyn_prob, 0.0, 1.0)) > max_d:
-                continue
-            if use_geo and c.phi_geo_w >= min_w:
-                phi_i = float(c.phi_geo)
-                w_i = float(c.phi_geo_w)
-            elif dual_enable and c.phi_static_w >= min_w:
-                phi_i = float(c.phi_static)
-                w_i = float(c.phi_static_w)
-            else:
-                phi_i = float(c.phi)
-                w_i = float(c.phi_w)
-            if w_i < min_w:
-                continue
-            n_i = self._normalize(np.asarray(c.g_mean, dtype=float))
-            if float(np.linalg.norm(n_i)) < 1e-8:
-                continue
-            center_i = voxel_map.index_to_center(idx)
-            est_vals: List[float] = []
-            est_w: List[float] = []
-            est_delta: List[float] = []
-            est_phi: List[float] = []
-            for nidx in voxel_map.neighbor_indices(idx, radius):
-                if nidx == idx:
-                    continue
-                cj = voxel_map.get_cell(nidx)
-                if cj is None:
-                    continue
-                if use_geo and cj.phi_geo_w >= min_w:
-                    phi_j = float(cj.phi_geo)
-                    w_j = float(cj.phi_geo_w)
-                elif dual_enable and cj.phi_static_w >= min_w:
-                    phi_j = float(cj.phi_static)
-                    w_j = float(cj.phi_static_w)
-                else:
-                    phi_j = float(cj.phi)
-                    w_j = float(cj.phi_w)
-                if w_j < min_w:
-                    continue
-                if abs(phi_j) > phi_gate:
-                    continue
-                n_j = self._normalize(np.asarray(cj.g_mean, dtype=float))
-                if float(np.linalg.norm(n_j)) < 1e-8:
-                    continue
-                cos_ij = float(abs(np.dot(n_i, n_j)))
-                if cos_ij < cos_min:
-                    continue
-                center_j = voxel_map.index_to_center(nidx)
-                delta_ij = float(np.dot(n_i, center_j - center_i))
-                phi_est = float(phi_j - delta_ij)
-                # Confidence uses neighbor weight/rho and normal consistency.
-                w = float(min(w_j, 5.0) * (0.2 + 0.8 * cos_ij) * (0.35 + 0.65 * np.clip(cj.rho, 0.0, 1.0)))
-                est_vals.append(phi_est)
-                est_w.append(w)
-                est_delta.append(delta_ij)
-                est_phi.append(phi_j)
-            if len(est_vals) < min_n:
-                continue
-            vals = np.asarray(est_vals, dtype=float)
-            ws = np.asarray(est_w, dtype=float)
-            deltas = np.asarray(est_delta, dtype=float)
-            phi_obs = np.asarray(est_phi, dtype=float)
-            phi_ref0 = self._weighted_median(vals, ws)
-            abs_res = np.abs(vals - phi_ref0)
-            if trim_q < 0.999:
-                thr = float(np.quantile(abs_res, trim_q))
-                mask = abs_res <= max(1e-6, thr)
-                if int(np.count_nonzero(mask)) >= min_n:
-                    vals = vals[mask]
-                    ws = ws[mask]
-                    abs_res = abs_res[mask]
-                    deltas = deltas[mask]
-                    phi_obs = phi_obs[mask]
-            # Huber-like attenuation for outliers.
-            scale = float(max(1e-4, 1.4826 * np.median(abs_res)))
-            huber = 1.0 / (1.0 + (abs_res / scale) ** 2)
-            ws = ws * huber
-            phi_ref_med = self._weighted_median(vals, ws)
-
-            # LZCD affine local debias:
-            # robustly fit phi ~= a * <n, delta_x> + b and use intercept b as
-            # local zero-level estimate. This addresses local signed-distance bias
-            # without coupling to dynamic suppression states.
-            phi_ref = float(phi_ref_med)
-            slope_n = 1.0
-            if affine_enable and vals.size >= affine_min_samples:
-                x = np.column_stack((deltas, np.ones_like(deltas)))
-                y = phi_obs
-                wfit = np.clip(ws, 1e-8, None)
-                wx = x * wfit[:, None]
-                # Mild slope prior around 1.0 to avoid degenerate fits in tiny neighborhoods.
-                lam = 0.03
-                a = wx.T @ x + np.array([[lam, 0.0], [0.0, 1e-6]], dtype=float)
-                b = wx.T @ y + np.array([lam * 1.0, 0.0], dtype=float)
-                try:
-                    sol = np.linalg.solve(a, b)
-                except np.linalg.LinAlgError:
-                    sol = np.array([1.0, phi_ref_med], dtype=float)
-                slope = float(np.clip(sol[0], affine_slope_min, affine_slope_max))
-                intercept = float(np.clip(sol[1], -max_bias, max_bias))
-                slope_dev = abs(slope - 1.0)
-                slope_n = float(np.clip(1.0 - slope_dev / max(1e-6, (affine_slope_max - affine_slope_min)), 0.0, 1.0))
-                # Static-confidence gated affine mixing:
-                # reduce affine influence in dynamic / low-confidence cells to avoid
-                # over-correction in high-motion regions (Bonn-like dynamics).
-                dyn_n = float(np.clip(c.dyn_prob, 0.0, 1.0))
-                rho_n_aff = float(np.clip(c.rho / rho_ref, 0.0, 1.2))
-                static_conf = float(np.clip(0.55 * rho_n_aff + 0.45 * (1.0 - dyn_n), 0.15, 1.0))
-                mix_eff = float(affine_mix * (0.35 + 0.65 * slope_n) * static_conf)
-                phi_ref = float(np.clip((1.0 - mix_eff) * phi_ref_med + mix_eff * intercept, -max_bias, max_bias))
-            bias_local = float(np.clip(phi_i - phi_ref, -max_bias, max_bias))
-            # Residual anchor term (association signed residual history on source voxels).
-            # This is geometry-only and does not consume dynamic scores.
-            res_hits_n = float(np.clip(c.geo_res_hits / residual_hit_ref, 0.0, 1.0))
-            res_anchor = float(np.clip(c.geo_res_ema, -max_bias, max_bias))
-            wa = float(np.clip(residual_anchor_w * res_hits_n, 0.0, 0.95))
-            bias_obs = float(np.clip((1.0 - wa) * bias_local + wa * res_anchor, -max_bias, max_bias))
-            rho_n = float(np.clip(c.rho / rho_ref, 0.0, 1.2))
-            w_n = float(np.clip(w_i / max(1e-6, 2.0 * min_w), 0.0, 1.2))
-            geo_conf = float(np.clip((0.55 * w_n + 0.45 * rho_n) * (0.82 + 0.18 * slope_n), 0.25, 1.0))
-            use_geo_cell = bool(use_geo and c.phi_geo_w >= min_w)
-            dual_static_cell = bool(dual_enable and c.phi_static_w >= min_w)
-            rec = {
-                "idx": idx,
-                "cell": c,
-                "phi_i": phi_i,
-                "vals": vals,
-                "ws": ws,
-                "bias_obs": bias_obs,
-                "geo_conf": geo_conf,
-                "use_geo_cell": use_geo_cell,
-                "dual_static_cell": dual_static_cell,
-                "n_i": n_i,
-            }
-            records.append(rec)
-            global_vals.append(float(bias_obs))
-            global_w.append(float(geo_conf * np.clip(np.sum(ws), 0.1, 20.0)))
-
-        if not records:
-            return
-
-        # Runtime-aware candidate capping: keep highest-confidence geometry cells.
-        max_candidates = int(max(0, self.cfg.update.lzcd_max_candidates))
-        if max_candidates > 0 and len(records) > max_candidates:
-            scores = np.asarray(
-                [
-                    float(
-                        r["geo_conf"]
-                        * np.clip(np.sum(r["ws"]), 0.2, 24.0)
-                        * (0.85 + 0.15 * np.clip(r["cell"].geo_res_hits / residual_hit_ref, 0.0, 1.0))
-                    )
-                    for r in records
-                ],
-                dtype=float,
-            )
-            keep = np.argpartition(scores, -max_candidates)[-max_candidates:]
-            keep = keep[np.argsort(scores[keep])[::-1]]
-            records = [records[int(i)] for i in keep]
-
-        idx_to_record = {r["idx"]: i for i, r in enumerate(records)}
-
-        # Geometry-only convergence solver:
-        # solve local debias on a voxel graph with data term + smoothness term.
-        cur = np.asarray([float(r["bias_obs"]) for r in records], dtype=float)
-        nxt = cur.copy()
-        for _ in range(solver_iters):
-            max_delta = 0.0
-            for i, rec in enumerate(records):
-                idx = rec["idx"]
-                n_i = rec["n_i"]
-                s_num = 0.0
-                s_den = 0.0
-                for nidx in voxel_map.neighbor_indices(idx, 1):
-                    j = idx_to_record.get(nidx)
-                    if j is None or j == i:
-                        continue
-                    n_j = records[j]["n_i"]
-                    cos_ij = float(abs(np.dot(n_i, n_j)))
-                    if cos_ij < cos_min:
-                        continue
-                    w_ij = float(0.25 + 0.75 * cos_ij)
-                    s_num += w_ij * float(cur[j])
-                    s_den += w_ij
-                b_data = float(rec["bias_obs"])
-                w_data = float(0.45 + 0.55 * rec["geo_conf"])
-                b_smooth = b_data if s_den <= 1e-9 else float(s_num / s_den)
-                target = float((w_data * b_data + solver_lambda * s_den * b_smooth) / max(1e-9, w_data + solver_lambda * s_den))
-                b_new = float(np.clip(cur[i] + solver_step * (target - cur[i]), -max_bias, max_bias))
-                nxt[i] = b_new
-                max_delta = max(max_delta, abs(b_new - float(cur[i])))
-            cur[:] = nxt
-            if max_delta < solver_tol:
-                break
-
-        # Geometry-only global bias estimate; no dynamic terms involved.
-        gb_obs = self._weighted_median(cur, np.asarray(global_w, dtype=float))
-        self.geo_bias_global = float(
-            np.clip((1.0 - global_alpha) * self.geo_bias_global + global_alpha * gb_obs, -max_bias, max_bias)
-        )
-
-        for i, rec in enumerate(records):
-            c = rec["cell"]
-            phi_i = float(rec["phi_i"])
-            vals = rec["vals"]
-            ws = rec["ws"]
-            geo_conf = float(rec["geo_conf"])
-            use_geo_cell = bool(rec["use_geo_cell"])
-            dual_static_cell = bool(rec["dual_static_cell"])
-            bias_obs = float(cur[i])
-            if use_geo_cell:
-                c.phi_geo_bias = float((1.0 - bias_alpha) * c.phi_geo_bias + bias_alpha * bias_obs)
-                local_bias = float(c.phi_geo_bias)
-            else:
-                c.phi_bias = float((1.0 - bias_alpha) * c.phi_bias + bias_alpha * bias_obs)
-                local_bias = float(c.phi_bias)
-
-            bias_mix = float(np.clip(local_mix * local_bias + global_mix * self.geo_bias_global, -max_bias, max_bias))
-            corr_eff = float(corr_gain * (0.70 + 0.30 * geo_conf))
-            step_eff = float(max_step * (0.70 + 0.30 * geo_conf))
-            corr_base = float(np.clip(corr_eff * bias_mix, -step_eff, step_eff))
-            if abs(corr_base) <= 1e-7:
-                continue
-
-            # Trust-region backtracking using local residual energy.
-            err0 = phi_i - vals
-            e0 = float(np.sum(ws * np.abs(err0)))
-            chosen_corr = 0.0
-            for step_scale in (1.0, 0.5, 0.25):
-                corr_try = float(step_scale * corr_base)
-                phi_try = float(phi_i - corr_try)
-                e1 = float(np.sum(ws * np.abs(phi_try - vals)))
-                if e1 <= min_improve * e0:
-                    chosen_corr = corr_try
-                    break
-            if abs(chosen_corr) <= 1e-9:
-                continue
-
-            if use_geo_cell:
-                c.phi_geo = float(np.clip(c.phi_geo - chosen_corr, -0.8, 0.8))
-                c.phi = float(np.clip(c.phi - 0.30 * chosen_corr, -0.8, 0.8))
-            elif dual_static_cell:
-                static_share = float(np.clip(0.45 + 0.25 * np.clip(c.p_static, 0.0, 1.0), 0.30, 0.78))
-                c.phi_static = float(np.clip(c.phi_static - static_share * chosen_corr, -0.8, 0.8))
-                c.phi_geo = float(np.clip(c.phi_geo - (0.55 + 0.20 * np.clip(c.p_static, 0.0, 1.0)) * chosen_corr, -0.8, 0.8))
-                voxel_map._sync_legacy_channels(c)
-            else:
-                c.phi = float(np.clip(c.phi - chosen_corr, -0.8, 0.8))
-
-    def _zero_crossing_bias_field(
-        self,
-        voxel_map: VoxelHashMap3D,
-        touched: Iterable[VoxelIndex],
-    ) -> None:
-        if not bool(self.cfg.update.zcbf_enable):
-            return
-        block_size = int(max(1, self.cfg.update.zcbf_block_size_cells))
-        min_rho = float(max(0.0, self.cfg.update.zcbf_min_rho))
-        min_w = float(max(0.0, self.cfg.update.zcbf_min_phi_w))
-        max_d = float(np.clip(self.cfg.update.zcbf_max_dscore, 0.0, 1.0))
-        alpha = float(np.clip(self.cfg.update.zcbf_alpha, 0.01, 0.8))
-        trim_q = float(np.clip(self.cfg.update.zcbf_trim_quantile, 0.55, 1.0))
-        gain = float(np.clip(self.cfg.update.zcbf_apply_gain, 0.0, 1.0))
-        max_bias = float(max(1e-5, self.cfg.update.zcbf_max_bias))
-
-        touched_ext: Set[VoxelIndex] = set()
-        for idx in touched:
-            touched_ext.add(idx)
-            touched_ext.update(voxel_map.neighbor_indices(idx, 1))
-
-        blocks: dict[tuple[int, int, int], list[tuple[float, float, float, VoxelCell3D]]] = {}
-        rho_ref_local = float(max(min_rho, self.cfg.update.zcbf_static_rho_ref))
-        for idx in touched_ext:
-            c = voxel_map.get_cell(idx)
-            if c is None or c.rho < min_rho or float(np.clip(c.d_score, 0.0, 1.0)) > max_d:
-                continue
-            bias_obs = float(c.phi_geo_bias if c.phi_geo_w >= min_w else c.phi_bias)
-            w_raw = float(c.phi_geo_w if c.phi_geo_w >= min_w else c.phi_static_w if c.phi_static_w >= min_w else c.phi_w)
-            if w_raw < min_w:
-                continue
-            ptdsf_stats = voxel_map._ptdsf_state_stats(c) if hasattr(voxel_map, '_ptdsf_state_stats') else {"static_conf": 0.0, "dominance": 0.0, "rho_static": 0.0}
-            persist_n = float(np.clip(0.55 * float(ptdsf_stats.get('static_conf', 0.0)) + 0.45 * float(ptdsf_stats.get('dominance', 0.0)), 0.0, 1.0))
-            rho_n = float(np.clip(max(c.rho, float(ptdsf_stats.get('rho_static', 0.0))) / max(1e-6, rho_ref_local), 0.0, 1.5))
-            obs_conf = float(np.clip(0.45 * persist_n + 0.35 * min(1.0, rho_n) + 0.20 * (1.0 - float(np.clip(c.d_score, 0.0, 1.0))), 0.05, 1.0))
-            w_obs = float(w_raw * obs_conf)
-            bx = (idx[0] // block_size, idx[1] // block_size, idx[2] // block_size)
-            blocks.setdefault(bx, []).append((bias_obs, w_obs, obs_conf, c))
-
-        if not blocks:
-            return
-
-        block_bias: dict[tuple[int, int, int], tuple[float, float]] = {}
-        for bidx, vals in blocks.items():
-            arr = np.asarray([v for v, _, _, _ in vals], dtype=float)
-            ws = np.asarray([w for _, w, _, _ in vals], dtype=float)
-            confs = np.asarray([cf for _, _, cf, _ in vals], dtype=float)
-            if arr.size == 0:
-                continue
-            if arr.size >= 4:
-                q = float(np.quantile(np.abs(arr), trim_q))
-                keep = np.abs(arr) <= max(q, 1e-6)
-                if np.any(keep):
-                    arr = arr[keep]
-                    ws = ws[keep]
-                    confs = confs[keep]
-            b = self._weighted_median(arr, ws)
-            conf_mass = float(np.sum(ws) / max(1.0, 4.0 * min_w))
-            conf_norm = float(np.mean(confs)) if confs.size else 0.0
-            conf = float(np.clip(conf_mass * (0.35 + 0.65 * conf_norm), 0.0, 1.0))
-            block_bias[bidx] = (float(np.clip(b, -max_bias, max_bias)), conf)
-
-        # Confidence-normalized propagation:
-        # keep high-confidence blocks anchored while letting nearby static-consistent
-        # blocks absorb a smoothed bias field instead of a one-hop median only.
-        smooth_bias = dict(block_bias)
-        for _ in range(2):
-            next_bias: dict[tuple[int, int, int], tuple[float, float]] = {}
-            for bidx, (b0, c0) in smooth_bias.items():
-                bx, by, bz = bidx
-                num = 1.35 * max(1e-6, c0) * b0
-                den = 1.35 * max(1e-6, c0)
-                conf_acc = c0
-                for dz in (-1, 0, 1):
-                    for dy in (-1, 0, 1):
-                        for dx in (-1, 0, 1):
-                            nb = (bx + dx, by + dy, bz + dz)
-                            if nb == bidx or nb not in smooth_bias:
-                                continue
-                            bj, cj = smooth_bias[nb]
-                            dist = max(abs(dx), abs(dy), abs(dz))
-                            base_w = 0.70 if dist == 1 else 0.40
-                            compat = float(np.exp(-abs(float(bj) - float(b0)) / max(1e-6, 0.50 * max_bias)))
-                            w_nb = float(base_w * max(1e-6, cj) * (0.35 + 0.65 * compat))
-                            num += w_nb * bj
-                            den += w_nb
-                            conf_acc += 0.25 * cj
-                b_hat = float(np.clip(num / max(1e-9, den), -max_bias, max_bias))
-                c_hat = float(np.clip(conf_acc / max(1.0, 1.0 + 0.25 * 26.0), 0.0, 1.0))
-                next_bias[bidx] = (b_hat, c_hat)
-            smooth_bias = next_bias
-
-        rho_ref = float(max(1e-6, self.cfg.update.zcbf_static_rho_ref))
-        for idx in touched_ext:
-            c = voxel_map.get_cell(idx)
-            if c is None:
-                continue
-            bidx = (idx[0] // block_size, idx[1] // block_size, idx[2] // block_size)
-            item = smooth_bias.get(bidx)
-            if item is None:
-                continue
-            b_s, conf = item
-            ptdsf_stats = voxel_map._ptdsf_state_stats(c) if hasattr(voxel_map, '_ptdsf_state_stats') else {"static_conf": 0.0, "dominance": 0.0}
-            rho_n = float(np.clip(max(c.rho, getattr(c, 'rho_static', 0.0)) / rho_ref, 0.0, 1.0))
-            persist_n = float(np.clip(0.55 * float(ptdsf_stats.get('static_conf', 0.0)) + 0.45 * float(ptdsf_stats.get('dominance', 0.0)), 0.0, 1.0))
-            conf_eff = float(np.clip(conf * (0.35 + 0.35 * rho_n + 0.30 * persist_n), 0.0, 1.0))
-            c.zcbf_bias = float(np.clip((1.0 - alpha) * c.zcbf_bias + alpha * b_s, -max_bias, max_bias))
-            c.zcbf_bias_conf = float(np.clip((1.0 - alpha) * c.zcbf_bias_conf + alpha * conf_eff, 0.0, 1.0))
-            corr = float(np.clip(gain * c.zcbf_bias * c.zcbf_bias_conf, -max_bias, max_bias))
-            if abs(corr) <= 1e-7:
-                continue
-            if c.phi_geo_w > min_w:
-                c.phi_geo = float(np.clip(c.phi_geo - corr, -0.8, 0.8))
-            if bool(self.cfg.update.dual_state_enable) and c.phi_static_w > min_w:
-                static_gain = float(np.clip(0.75 + 0.20 * persist_n, 0.75, 0.95))
-                c.phi_static = float(np.clip(c.phi_static - static_gain * corr, -0.8, 0.8))
-                voxel_map._sync_legacy_channels(c)
 
     def _raycast_clear(
         self,
@@ -2028,7 +1196,8 @@ class Updater3D:
         if sensor_origin is None:
             return
         gain = float(max(0.0, self.cfg.update.raycast_clear_gain))
-        if gain <= 1e-9 or not accepted:
+        xmem_gain = float(max(0.0, getattr(self.cfg.update, 'xmem_raycast_gain', 0.0))) if bool(getattr(self.cfg.update, 'xmem_enable', False)) else 0.0
+        if (gain <= 1e-9 and xmem_gain <= 1e-9) or not accepted:
             return
         origin = np.asarray(sensor_origin, dtype=float).reshape(3)
         step = float(max(0.5 * voxel_map.voxel_size, self.cfg.update.raycast_step_scale * voxel_map.voxel_size))
@@ -2057,6 +1226,22 @@ class Updater3D:
                 idx = voxel_map.world_to_index(x)
                 c = voxel_map.get_cell(idx)
                 if c is not None and (c.rho <= rho_max or c.phi_w <= phiw_max or c.dyn_prob >= 0.2):
+                    xgate = float(
+                        np.clip(
+                            max(
+                                float(np.clip(getattr(c, 'xmem_active', 0.0), 0.0, 1.0)),
+                                float(np.clip(getattr(c, 'xmem_occ', 0.0), 0.0, 1.0)),
+                                float(np.clip(getattr(c, 'xmem_clear_active', 0.0), 0.0, 1.0)),
+                                float(np.clip(getattr(c, 'xmem_clear', 0.0), 0.0, 1.0)),
+                            ),
+                            0.0,
+                            1.0,
+                        )
+                    )
+                    xgate_on = bool(xmem_gain > 1e-9 and xgate >= float(max(0.0, getattr(self.cfg.update, 'xmem_raycast_gate', 0.22))))
+                    if gain <= 1e-9 and not xgate_on:
+                        s += step
+                        continue
                     # Free-space consistency gate: only clear strongly when the voxel has
                     # persistent free-space evidence across frames.
                     free_ratio = float(c.free_evidence / max(1e-6, c.surf_evidence))
@@ -2099,6 +1284,11 @@ class Updater3D:
                         clear = clear_base * 1.15 * occ_att
                     else:
                         clear = clear_base * 0.55 * occ_att
+                    if xgate_on:
+                        xmem_clear = xmem_gain * (0.40 + 0.60 * xgate) * (0.55 + 0.45 * endpoint_conf)
+                        if consistent_free:
+                            xmem_clear *= 1.20
+                        clear = max(clear, xmem_clear * occ_att)
                     clear = float(np.clip(clear, 0.0, 0.85))
                     if clear <= 1e-4:
                         s += step
@@ -2115,7 +1305,15 @@ class Updater3D:
                         if hasattr(c, 'rho_transient'):
                             c.rho_transient = max(rho_floor, c.rho_transient * (1.0 - trans_clear))
                         if hasattr(c, 'rho_static'):
-                            c.rho_static = max(0.0, c.rho_static * (1.0 - 0.08 * clear * max(0.0, 1.0 - endpoint_conf)))
+                            static_decay = 0.08 * clear * max(0.0, 1.0 - endpoint_conf)
+                            if xgate_on:
+                                static_decay = max(static_decay, float(getattr(self.cfg.update, 'xmem_raycast_static_decay', 0.32)) * clear * (0.45 + 0.55 * xgate))
+                            c.rho_static = max(0.0, c.rho_static * (1.0 - static_decay))
+                        if xgate_on:
+                            stat_clear = float(np.clip(float(getattr(self.cfg.update, 'xmem_raycast_static_decay', 0.32)) * clear * (0.45 + 0.55 * xgate), 0.0, 0.92))
+                            c.phi_static_w = max(phiw_floor, c.phi_static_w * (1.0 - stat_clear))
+                            c.phi_geo_w = max(phiw_floor, c.phi_geo_w * (1.0 - 0.85 * stat_clear))
+                            c.phi_w = max(phiw_floor, c.phi_w * (1.0 - 0.70 * stat_clear))
                         voxel_map._sync_legacy_channels(c)
                         c.rho = max(rho_floor, max(float(getattr(c, 'rho_static', 0.0)), 0.0) + 0.20 * max(float(getattr(c, 'rho_transient', 0.0)), 0.0))
                     else:
@@ -2126,11 +1324,31 @@ class Updater3D:
                     c.occ_hit_ema = float(np.clip(0.96 * c.occ_hit_ema, 0.0, 1.0))
                     c.visibility_contradiction = float(np.clip(c.free_hit_ema - c.occ_hit_ema, 0.0, 1.0))
                     c.residual_evidence = float(np.clip(c.residual_evidence + 0.6 * clear, 0.0, 1.0))
-                    c.dyn_prob = float(np.clip(c.dyn_prob + dyn_boost * clear, 0.0, 1.0))
+                    if xgate_on:
+                        c.xmem_free = float(np.clip(max(c.xmem_free, (1.0 - 0.18) * float(getattr(c, 'xmem_free', 0.0)) + 0.18 * min(1.0, clear + 0.25 * xgate)), 0.0, 1.0))
+                        c.xmem_clear = float(np.clip(max(c.xmem_clear, (1.0 - 0.22) * float(getattr(c, 'xmem_clear', 0.0)) + 0.22 * min(1.0, clear * (0.8 + 0.2 * xgate))), 0.0, 1.0))
+                        if consistent_free:
+                            c.xmem_clear_active = float(np.clip(max(float(getattr(c, 'xmem_clear_active', 0.0)), 0.55 + 0.45 * min(1.0, xgate)), 0.0, 1.0))
+                    c.dyn_prob = float(np.clip(c.dyn_prob + dyn_boost * clear + (0.15 * clear if xgate_on else 0.0), 0.0, 1.0))
                     c.d_score = float(np.clip(c.dyn_prob, 0.0, 1.0))
                     c.clear_hits += 1.0
                     touched.add(idx)
                 s += step
+
+
+
+
+    def update_persistent_free_space_volume(self, background_map: VoxelHashMap3D, foreground_map: VoxelHashMap3D, accepted: List[AssocMeasurement3D]) -> dict:
+        return p10_update_persistent_free_space_volume(self, background_map, foreground_map, accepted)
+
+
+    def transfer_cross_map_geometric_corridor(self, background_map: VoxelHashMap3D, foreground_map: VoxelHashMap3D, accepted: List[AssocMeasurement3D]) -> dict:
+        return p10_transfer_cross_map_geometric_corridor(self, background_map, foreground_map, accepted)
+
+
+    def transfer_cross_map_contradiction(self, background_map: VoxelHashMap3D, foreground_map: VoxelHashMap3D, accepted: List[AssocMeasurement3D]) -> dict:
+        return p10_transfer_cross_map_contradiction(self, background_map, foreground_map, accepted)
+
 
     def _apply_rbi_reintegration(self, voxel_map: VoxelHashMap3D, touched: Iterable[VoxelIndex]) -> None:
         if not bool(self.cfg.update.rbi_enable):
@@ -2256,12 +1474,14 @@ class Updater3D:
         sensor_origin: np.ndarray | None = None,
         frame_id: int = 0,
         pose_cov: np.ndarray | None = None,
+        map_role: str = "joint",
     ) -> dict:
         touched: Set[VoxelIndex] = set()
         for m in accepted:
             m.dynamic_prob = self._estimate_dynamic_prob(voxel_map, m, pose_cov=pose_cov)
-            self._integrate_measurement(voxel_map, m, touched, frame_id=frame_id)
-        self._raycast_clear(voxel_map, accepted, touched, sensor_origin)
+            self._integrate_measurement(voxel_map, m, touched, frame_id=frame_id, map_role=map_role)
+        if str(map_role).lower() != "background":
+            self._raycast_clear(voxel_map, accepted, touched, sensor_origin)
         # Frontier activation: unmatched points become growth hints for next frames.
         frontier_boost = float(max(0.0, self.cfg.update.frontier_boost))
         for m in rejected:

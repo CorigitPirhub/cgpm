@@ -265,6 +265,14 @@ def main():
     parser.add_argument("--surface_dual_layer_static_anchor_rho", type=float, default=0.90)
     parser.add_argument("--surface_dual_layer_static_anchor_p", type=float, default=0.70)
     parser.add_argument("--surface_dual_layer_static_anchor_ratio", type=float, default=1.70)
+    parser.add_argument("--surface_csr_enable", action="store_true")
+    parser.add_argument("--surface_csr_min_score", type=float, default=0.38)
+    parser.add_argument("--surface_csr_geo_blend", type=float, default=0.18)
+    parser.add_argument("--surface_csr_geo_agree_min", type=float, default=0.70)
+    parser.add_argument("--surface_xmap_enable", action="store_true")
+    parser.add_argument("--surface_xmap_dyn_min_score", type=float, default=0.52)
+    parser.add_argument("--surface_xmap_static_min_score", type=float, default=0.42)
+    parser.add_argument("--surface_xmap_sep_ref_vox", type=float, default=0.90)
     parser.add_argument("--surface_omhs_enable", action="store_true")
     parser.add_argument("--poisson_depth", type=int, default=8)
     parser.add_argument("--poisson_iters", type=int, default=1)
@@ -353,6 +361,28 @@ def main():
     parser.add_argument("--wdsg_route_enable", action="store_true")
     parser.add_argument("--spg_enable", action="store_true")
     parser.add_argument("--otv_enable", action="store_true")
+    parser.add_argument("--xmem_enable", action="store_true")
+    parser.add_argument("--obl_enable", action="store_true")
+    parser.add_argument("--dual_map_enable", action="store_true")
+    parser.add_argument("--cmct_enable", action="store_true")
+    parser.add_argument("--cgcc_enable", action="store_true")
+    parser.add_argument("--pfv_enable", action="store_true")
+    parser.add_argument("--pfvp_enable", action="store_true")
+    parser.add_argument("--xmem_sep_ref_vox", type=float, default=0.90)
+    parser.add_argument("--xmem_occ_alpha", type=float, default=0.18)
+    parser.add_argument("--xmem_free_alpha", type=float, default=0.14)
+    parser.add_argument("--xmem_score_alpha", type=float, default=0.20)
+    parser.add_argument("--xmem_support_ref", type=float, default=0.24)
+    parser.add_argument("--xmem_commit_on", type=float, default=0.60)
+    parser.add_argument("--xmem_commit_off", type=float, default=0.42)
+    parser.add_argument("--xmem_age_ref", type=float, default=1.0)
+    parser.add_argument("--xmem_static_guard", type=float, default=0.78)
+    parser.add_argument("--xmem_free_gain", type=float, default=0.85)
+    parser.add_argument("--xmem_static_veto", type=float, default=0.96)
+    parser.add_argument("--xmem_geo_veto", type=float, default=0.92)
+    parser.add_argument("--xmem_transient_boost", type=float, default=0.90)
+    parser.add_argument("--xmem_dyn_boost", type=float, default=0.82)
+    parser.add_argument("--xmem_decay", type=float, default=0.97)
     parser.add_argument("--decay_interval_frames", type=int, default=1)
     parser.add_argument("--lzcd_enable", action="store_true")
     parser.add_argument("--lzcd_interval", type=int, default=2)
@@ -606,6 +636,14 @@ def main():
     cfg.surface.dual_layer_static_anchor_rho = float(max(0.0, args.surface_dual_layer_static_anchor_rho))
     cfg.surface.dual_layer_static_anchor_p = float(np.clip(args.surface_dual_layer_static_anchor_p, 0.0, 1.0))
     cfg.surface.dual_layer_static_anchor_ratio = float(max(1e-6, args.surface_dual_layer_static_anchor_ratio))
+    cfg.surface.csr_enable = bool(args.surface_csr_enable)
+    cfg.surface.csr_min_score = float(np.clip(args.surface_csr_min_score, 0.0, 1.0))
+    cfg.surface.csr_geo_blend = float(np.clip(args.surface_csr_geo_blend, 0.0, 1.0))
+    cfg.surface.csr_geo_agree_min = float(np.clip(args.surface_csr_geo_agree_min, 0.0, 1.0))
+    cfg.surface.xmap_enable = bool(args.surface_xmap_enable)
+    cfg.surface.xmap_dyn_min_score = float(np.clip(args.surface_xmap_dyn_min_score, 0.0, 1.0))
+    cfg.surface.xmap_static_min_score = float(np.clip(args.surface_xmap_static_min_score, 0.0, 1.0))
+    cfg.surface.xmap_sep_ref_vox = float(max(0.1, args.surface_xmap_sep_ref_vox))
     cfg.surface.omhs_enable = bool(args.surface_omhs_enable)
     cfg.surface.poisson_depth = int(args.poisson_depth)
     cfg.update.poisson_iters = int(max(0, args.poisson_iters))
@@ -685,6 +723,28 @@ def main():
     cfg.update.wdsg_route_enable = bool(args.wdsg_route_enable)
     cfg.update.spg_enable = bool(args.spg_enable)
     cfg.update.otv_enable = bool(args.otv_enable)
+    cfg.update.xmem_enable = bool(args.xmem_enable)
+    cfg.update.obl_enable = bool(args.obl_enable)
+    cfg.update.dual_map_enable = bool(args.dual_map_enable)
+    cfg.update.cmct_enable = bool(args.cmct_enable)
+    cfg.update.cgcc_enable = bool(args.cgcc_enable)
+    cfg.update.pfv_enable = bool(args.pfv_enable)
+    cfg.update.pfvp_enable = bool(args.pfvp_enable)
+    cfg.update.xmem_sep_ref_vox = float(max(0.1, args.xmem_sep_ref_vox))
+    cfg.update.xmem_occ_alpha = float(np.clip(args.xmem_occ_alpha, 0.01, 0.95))
+    cfg.update.xmem_free_alpha = float(np.clip(args.xmem_free_alpha, 0.01, 0.95))
+    cfg.update.xmem_score_alpha = float(np.clip(args.xmem_score_alpha, 0.01, 0.95))
+    cfg.update.xmem_support_ref = float(np.clip(args.xmem_support_ref, 0.01, 0.95))
+    cfg.update.xmem_commit_on = float(np.clip(args.xmem_commit_on, 0.0, 1.0))
+    cfg.update.xmem_commit_off = float(np.clip(args.xmem_commit_off, 0.0, 1.0))
+    cfg.update.xmem_age_ref = float(max(1.0, args.xmem_age_ref))
+    cfg.update.xmem_static_guard = float(np.clip(args.xmem_static_guard, 0.0, 1.0))
+    cfg.update.xmem_free_gain = float(max(0.0, args.xmem_free_gain))
+    cfg.update.xmem_static_veto = float(np.clip(args.xmem_static_veto, 0.0, 1.2))
+    cfg.update.xmem_geo_veto = float(np.clip(args.xmem_geo_veto, 0.0, 1.2))
+    cfg.update.xmem_transient_boost = float(max(0.0, args.xmem_transient_boost))
+    cfg.update.xmem_dyn_boost = float(np.clip(args.xmem_dyn_boost, 0.0, 1.5))
+    cfg.update.xmem_decay = float(np.clip(args.xmem_decay, 0.80, 1.0))
     cfg.update.decay_interval_frames = int(max(1, args.decay_interval_frames))
     cfg.update.lzcd_enable = bool(args.lzcd_enable)
     cfg.update.lzcd_interval = int(max(1, args.lzcd_interval))
@@ -1128,6 +1188,14 @@ def main():
         "surface_dual_layer_static_anchor_rho": float(cfg.surface.dual_layer_static_anchor_rho),
         "surface_dual_layer_static_anchor_p": float(cfg.surface.dual_layer_static_anchor_p),
         "surface_dual_layer_static_anchor_ratio": float(cfg.surface.dual_layer_static_anchor_ratio),
+        "surface_csr_enable": bool(cfg.surface.csr_enable),
+        "surface_csr_min_score": float(cfg.surface.csr_min_score),
+        "surface_csr_geo_blend": float(cfg.surface.csr_geo_blend),
+        "surface_csr_geo_agree_min": float(cfg.surface.csr_geo_agree_min),
+        "surface_xmap_enable": bool(cfg.surface.xmap_enable),
+        "surface_xmap_dyn_min_score": float(cfg.surface.xmap_dyn_min_score),
+        "surface_xmap_static_min_score": float(cfg.surface.xmap_static_min_score),
+        "surface_xmap_sep_ref_vox": float(cfg.surface.xmap_sep_ref_vox),
         "surface_omhs_enable": bool(cfg.surface.omhs_enable),
         "wod_enable": bool(cfg.update.wod_enable),
         "rps_enable": bool(cfg.update.rps_enable),
@@ -1137,6 +1205,94 @@ def main():
         "wdsg_route_enable": bool(cfg.update.wdsg_route_enable),
         "spg_enable": bool(cfg.update.spg_enable),
         "otv_enable": bool(cfg.update.otv_enable),
+        "xmem_enable": bool(cfg.update.xmem_enable),
+        "obl_enable": bool(cfg.update.obl_enable),
+        "obl_sep_ref_vox": float(cfg.update.obl_sep_ref_vox),
+        "obl_rear_gain": float(cfg.update.obl_rear_gain),
+        "obl_static_gain": float(cfg.update.obl_static_gain),
+        "obl_commit_on": float(cfg.update.obl_commit_on),
+        "obl_commit_off": float(cfg.update.obl_commit_off),
+        "obl_static_veto": float(cfg.update.obl_static_veto),
+        "obl_geo_veto": float(cfg.update.obl_geo_veto),
+        "obl_extract_gain": float(cfg.update.obl_extract_gain),
+        "obl_dyn_static_guard": float(cfg.update.obl_dyn_static_guard),
+        "dual_map_enable": bool(cfg.update.dual_map_enable),
+        "dual_map_bg_front_veto": float(cfg.update.dual_map_bg_front_veto),
+        "dual_map_bg_rear_gain": float(cfg.update.dual_map_bg_rear_gain),
+        "dual_map_bg_static_floor": float(cfg.update.dual_map_bg_static_floor),
+        "dual_map_fg_front_boost": float(cfg.update.dual_map_fg_front_boost),
+        "dual_map_fg_static_leak": float(cfg.update.dual_map_fg_static_leak),
+        "dual_map_fg_dynamic_score_bias": float(cfg.update.dual_map_fg_dynamic_score_bias),
+        "cmct_enable": bool(cfg.update.cmct_enable),
+        "cmct_alpha": float(cfg.update.cmct_alpha),
+        "cmct_commit_on": float(cfg.update.cmct_commit_on),
+        "cmct_commit_off": float(cfg.update.cmct_commit_off),
+        "cmct_bg_decay": float(cfg.update.cmct_bg_decay),
+        "cmct_geo_decay": float(cfg.update.cmct_geo_decay),
+        "cmct_rho_decay": float(cfg.update.cmct_rho_decay),
+        "cmct_static_guard": float(cfg.update.cmct_static_guard),
+        "cmct_bg_rho_protect": float(cfg.update.cmct_bg_rho_protect),
+        "cmct_radius_cells": int(cfg.update.cmct_radius_cells),
+        "cgcc_enable": bool(cfg.update.cgcc_enable),
+        "cgcc_conf_on": float(cfg.update.cgcc_conf_on),
+        "cgcc_conf_off": float(cfg.update.cgcc_conf_off),
+        "cgcc_front_margin_vox": float(cfg.update.cgcc_front_margin_vox),
+        "cgcc_rear_margin_vox": float(cfg.update.cgcc_rear_margin_vox),
+        "cgcc_step_scale": float(cfg.update.cgcc_step_scale),
+        "cgcc_lateral_radius_cells": int(cfg.update.cgcc_lateral_radius_cells),
+        "cgcc_bg_decay": float(cfg.update.cgcc_bg_decay),
+        "cgcc_geo_decay": float(cfg.update.cgcc_geo_decay),
+        "cgcc_rho_decay": float(cfg.update.cgcc_rho_decay),
+        "cgcc_bg_layer_decay": float(cfg.update.cgcc_bg_layer_decay),
+        "cgcc_static_guard": float(cfg.update.cgcc_static_guard),
+        "cgcc_fg_weight_floor": float(cfg.update.cgcc_fg_weight_floor),
+        "pfv_enable": bool(cfg.update.pfv_enable),
+        "pfv_alpha": float(cfg.update.pfv_alpha),
+        "pfv_commit_on": float(cfg.update.pfv_commit_on),
+        "pfv_commit_off": float(cfg.update.pfv_commit_off),
+        "pfv_step_scale": float(cfg.update.pfv_step_scale),
+        "pfv_end_margin": float(cfg.update.pfv_end_margin),
+        "pfv_bg_support_ref": float(cfg.update.pfv_bg_support_ref),
+        "pfv_fg_guard": float(cfg.update.pfv_fg_guard),
+        "pfv_static_guard": float(cfg.update.pfv_static_guard),
+        "pfv_extract_thresh": float(cfg.update.pfv_extract_thresh),
+        "pfv_bg_decay": float(cfg.update.pfv_bg_decay),
+        "pfv_geo_decay": float(cfg.update.pfv_geo_decay),
+        "pfv_rho_decay": float(cfg.update.pfv_rho_decay),
+        "pfvp_enable": bool(cfg.update.pfvp_enable),
+        "pfvp_margin": float(cfg.update.pfvp_margin),
+        "pfvp_fg_on": float(cfg.update.pfvp_fg_on),
+        "pfvp_bg_on": float(cfg.update.pfvp_bg_on),
+        "pfvp_bg_keep_floor": float(cfg.update.pfvp_bg_keep_floor),
+        "pfvp_pfv_weight": float(cfg.update.pfvp_pfv_weight),
+        "pfvp_fg_hist_weight": float(cfg.update.pfvp_fg_hist_weight),
+        "pfvp_assoc_weight": float(cfg.update.pfvp_assoc_weight),
+        "pfvp_static_weight": float(cfg.update.pfvp_static_weight),
+        "pfvp_bg_rho_weight": float(cfg.update.pfvp_bg_rho_weight),
+        "pfvp_bg_obl_weight": float(cfg.update.pfvp_bg_obl_weight),
+        "xmem_sep_ref_vox": float(cfg.update.xmem_sep_ref_vox),
+        "xmem_occ_alpha": float(cfg.update.xmem_occ_alpha),
+        "xmem_free_alpha": float(cfg.update.xmem_free_alpha),
+        "xmem_score_alpha": float(cfg.update.xmem_score_alpha),
+        "xmem_support_ref": float(cfg.update.xmem_support_ref),
+        "xmem_commit_on": float(cfg.update.xmem_commit_on),
+        "xmem_commit_off": float(cfg.update.xmem_commit_off),
+        "xmem_age_ref": float(cfg.update.xmem_age_ref),
+        "xmem_static_guard": float(cfg.update.xmem_static_guard),
+        "xmem_free_gain": float(cfg.update.xmem_free_gain),
+        "xmem_static_veto": float(cfg.update.xmem_static_veto),
+        "xmem_geo_veto": float(cfg.update.xmem_geo_veto),
+        "xmem_transient_boost": float(cfg.update.xmem_transient_boost),
+        "xmem_dyn_boost": float(cfg.update.xmem_dyn_boost),
+        "xmem_decay": float(cfg.update.xmem_decay),
+        "xmem_clear_alpha": float(cfg.update.xmem_clear_alpha),
+        "xmem_clear_on": float(cfg.update.xmem_clear_on),
+        "xmem_clear_off": float(cfg.update.xmem_clear_off),
+        "xmem_clear_static_release": float(cfg.update.xmem_clear_static_release),
+        "xmem_clear_weight_decay": float(cfg.update.xmem_clear_weight_decay),
+        "xmem_raycast_gain": float(cfg.update.xmem_raycast_gain),
+        "xmem_raycast_gate": float(cfg.update.xmem_raycast_gate),
+        "xmem_raycast_static_decay": float(cfg.update.xmem_raycast_static_decay),
         "surface_dual_p_static_min": float(cfg.surface.dual_p_static_min),
         "huber_delta_n": float(cfg.assoc.huber_delta_n),
         "poisson_iters": int(cfg.update.poisson_iters),

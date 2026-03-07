@@ -846,6 +846,70 @@ def main() -> None:
         missing.append(str(p5_bonn_sig))
         missing.append(str(p4_bonn_sig))
 
+    oracle_tables_root = p4_tum_recon.parent if p4_tum_recon.exists() and p4_tum_dyn.exists() else None
+    slam_tables_root = None
+    if p5_bonn_recon.exists() and p5_bonn_dyn.exists():
+        slam_tables_root = p5_bonn_recon.parent
+    elif p4_bonn_recon.exists() and p4_bonn_dyn.exists():
+        slam_tables_root = p4_bonn_recon.parent
+
+    if oracle_tables_root is not None and slam_tables_root is not None:
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/build_dual_protocol_multiseed_summary.py",
+            script_args=[
+                "--summary_root",
+                str(summary_root),
+                "--oracle_tables_root",
+                str(oracle_tables_root),
+                "--slam_tables_root",
+                str(slam_tables_root),
+            ],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+    else:
+        if oracle_tables_root is None:
+            missing.append(str(p4_tum_recon.parent))
+        if slam_tables_root is None:
+            missing.append(str(p5_bonn_recon.parent))
+            missing.append(str(p4_bonn_recon.parent))
+
+    if (
+        (summary_root / "tum_reconstruction_metrics_multiseed_agg.csv").exists()
+        and (summary_root / "bonn_reconstruction_metrics_multiseed_agg.csv").exists()
+        and dual_sig.exists()
+    ):
+        ok, err = run_python_script(
+            python_exe=str(args.python_exe),
+            script_rel="scripts/build_paper_main_table.py",
+            script_args=[
+                "--tum_agg",
+                str(summary_root / "tum_reconstruction_metrics_multiseed_agg.csv"),
+                "--bonn_agg",
+                str(summary_root / "bonn_reconstruction_metrics_multiseed_agg.csv"),
+                "--dual_sig",
+                str(dual_sig),
+                "--out_csv",
+                str(paper_main_csv),
+                "--out_md",
+                str(paper_main_md),
+            ],
+            project_root=project_root,
+            verbose=bool(args.verbose),
+        )
+        if not ok:
+            missing.append(err)
+    else:
+        if not (summary_root / "tum_reconstruction_metrics_multiseed_agg.csv").exists():
+            missing.append(str(summary_root / "tum_reconstruction_metrics_multiseed_agg.csv"))
+        if not (summary_root / "bonn_reconstruction_metrics_multiseed_agg.csv").exists():
+            missing.append(str(summary_root / "bonn_reconstruction_metrics_multiseed_agg.csv"))
+        if not dual_sig.exists():
+            missing.append(str(dual_sig))
+
     # Combined TUM+Bonn multi-seed tables for paper-facing summaries.
     tum_sig_path = summary_root / "tum_significance_multiseed.csv"
     bonn_sig_path = summary_root / "bonn_significance_multiseed.csv"

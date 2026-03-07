@@ -73,6 +73,17 @@ class Assoc3DConfig:
     contra_static_guard: float = 0.70
     contra_rho_guard: float = 0.55
     contra_d2_boost_max: float = 2.2
+    # PFAG: PFV-guided association gating. Disabled by default after
+    # focused probes showed that hard pre-association rejection hurts late-frame
+    # dynamic suppression despite improving geometry.
+    pfv_gate_enable: bool = False
+    pfv_seed_block_on: float = 0.42
+    pfv_gate_on: float = 0.30
+    pfv_gate_off: float = 0.18
+    pfv_d2_boost_max: float = 2.8
+    pfv_static_guard: float = 0.84
+    pfv_bg_rho_guard: float = 0.82
+    pfv_view_align_weight: float = 0.25
 
 
 @dataclass
@@ -200,6 +211,135 @@ class Update3DConfig:
     otv_transient_boost: float = 0.85
     otv_dyn_boost: float = 0.75
     otv_decay: float = 0.96
+    # XMem: Exclusion Memory. Unlike OTV, it keeps a reversible dynamic-front
+    # exclusion state using both front occupancy support and later free-space
+    # clearing evidence, so suppression is decided at state-time rather than
+    # only at export-time.
+    xmem_enable: bool = False
+    xmem_sep_ref_vox: float = 0.90
+    xmem_occ_alpha: float = 0.18
+    xmem_free_alpha: float = 0.14
+    xmem_score_alpha: float = 0.20
+    xmem_support_ref: float = 0.24
+    xmem_commit_on: float = 0.60
+    xmem_commit_off: float = 0.42
+    xmem_age_ref: float = 1.0
+    xmem_static_guard: float = 0.78
+    xmem_free_gain: float = 0.85
+    xmem_static_veto: float = 0.96
+    xmem_geo_veto: float = 0.92
+    xmem_transient_boost: float = 0.90
+    xmem_dyn_boost: float = 0.82
+    xmem_decay: float = 0.97
+    xmem_clear_alpha: float = 0.18
+    xmem_clear_on: float = 0.42
+    xmem_clear_off: float = 0.28
+    xmem_clear_static_release: float = 0.76
+    xmem_clear_weight_decay: float = 0.92
+    xmem_raycast_gain: float = 0.24
+    xmem_raycast_gate: float = 0.22
+    xmem_raycast_static_decay: float = 0.32
+    # OBL-3D: write a dedicated background layer under front/rear separation.
+    obl_enable: bool = False
+    obl_sep_ref_vox: float = 0.90
+    obl_rho_alpha: float = 0.20
+    obl_score_alpha: float = 0.18
+    obl_rear_gain: float = 0.92
+    obl_static_gain: float = 0.38
+    obl_commit_on: float = 0.58
+    obl_commit_off: float = 0.40
+    obl_age_ref: float = 1.0
+    obl_static_veto: float = 0.78
+    obl_geo_veto: float = 0.62
+    obl_extract_gain: float = 1.10
+    obl_dyn_static_guard: float = 0.60
+    # DMBG-3D: true dual-map background/foreground split.
+    dual_map_enable: bool = False
+    dual_map_bg_front_veto: float = 0.90
+    dual_map_bg_rear_gain: float = 1.00
+    dual_map_bg_static_floor: float = 0.08
+    dual_map_fg_front_boost: float = 1.10
+    dual_map_fg_static_leak: float = 0.04
+    dual_map_fg_dynamic_score_bias: float = 0.20
+    # PFVP: PFV-guided proposal routing. Observations are first associated, then
+    # routed to background / foreground / dual write based on persistent free-space
+    # prior and current foreground history instead of being dropped upfront.
+    pfvp_enable: bool = False
+    pfvp_margin: float = 0.08
+    pfvp_fg_on: float = 0.38
+    pfvp_bg_on: float = 0.28
+    pfvp_bg_keep_floor: float = 0.08
+    pfvp_pfv_weight: float = 0.55
+    pfvp_fg_hist_weight: float = 0.25
+    pfvp_assoc_weight: float = 0.20
+    pfvp_static_weight: float = 0.55
+    pfvp_bg_rho_weight: float = 0.25
+    pfvp_bg_obl_weight: float = 0.20
+    # CMCT: Cross-Map Contradiction Transfer. Stable foreground contradiction
+    # is projected back to the background map as explicit negative evidence.
+    cmct_enable: bool = False
+    cmct_alpha: float = 0.18
+    cmct_commit_on: float = 0.46
+    cmct_commit_off: float = 0.30
+    cmct_bg_decay: float = 0.68
+    cmct_geo_decay: float = 0.52
+    cmct_rho_decay: float = 0.40
+    cmct_static_guard: float = 0.78
+    cmct_bg_rho_protect: float = 0.85
+    cmct_radius_cells: int = 1
+    # CGCC: Cross-Map Geometric Carving Corridor. Expand a stable foreground
+    # surface into a short ray-aligned corridor and carve weak background support
+    # in that corridor. This moves contradiction transfer from voxel-local to
+    # geometric/line-of-sight domain.
+    cgcc_enable: bool = False
+    cgcc_conf_on: float = 0.42
+    cgcc_conf_off: float = 0.28
+    cgcc_front_margin_vox: float = 0.35
+    cgcc_rear_margin_vox: float = 1.40
+    cgcc_step_scale: float = 0.75
+    cgcc_lateral_radius_cells: int = 1
+    cgcc_bg_decay: float = 0.72
+    cgcc_geo_decay: float = 0.58
+    cgcc_rho_decay: float = 0.46
+    cgcc_bg_layer_decay: float = 0.22
+    cgcc_static_guard: float = 0.84
+    cgcc_fg_weight_floor: float = 0.18
+    # PFV: Persistent Free-space Volume. Stable background hits accumulate a
+    # persistent free-space bank along the line of sight; background surfaces
+    # are only exported when they are not contradicted by the accumulated free volume.
+    pfv_enable: bool = False
+    pfv_alpha: float = 0.18
+    pfv_commit_on: float = 0.44
+    pfv_commit_off: float = 0.28
+    pfv_step_scale: float = 0.75
+    pfv_end_margin: float = 0.18
+    pfv_bg_support_ref: float = 0.38
+    pfv_fg_guard: float = 0.35
+    pfv_static_guard: float = 0.82
+    pfv_extract_thresh: float = 0.36
+    pfv_bg_decay: float = 0.55
+    pfv_geo_decay: float = 0.42
+    pfv_rho_decay: float = 0.28
+    pfv_long_alpha: float = 0.10
+    pfv_long_on: float = 0.34
+    pfv_release_rho: float = 0.92
+    pfv_depth_gain: float = 0.30
+    pfv_cluster_radius: int = 1
+    pfv_cluster_weight: float = 0.35
+    pfv_cluster_thresh: float = 0.42
+    pfv_bg_decay_long: float = 0.68
+    pfv_geo_decay_long: float = 0.52
+    # Banked PFV: decompose persistent free-space into near / mid / far banks.
+    # This lets export distinguish a truly cleared foreground corridor from generic
+    # weak free-space support and is more structural than sharpening one scalar.
+    pfv_bank_alpha: float = 0.16
+    pfv_bank_near_split: float = 0.35
+    pfv_bank_far_split: float = 0.72
+    pfv_bank_weight_near: float = 0.95
+    pfv_bank_weight_mid: float = 0.80
+    pfv_bank_weight_far: float = 0.55
+    pfv_bank_cluster_weight: float = 0.45
+    pfv_bank_extract_thresh: float = 0.48
     rps_score_alpha: float = 0.18
     rps_commit_on: float = 0.62
     rps_commit_off: float = 0.40
@@ -517,6 +657,18 @@ class Surface3DConfig:
     dual_layer_static_anchor_rho: float = 0.90
     dual_layer_static_anchor_p: float = 0.70
     dual_layer_static_anchor_ratio: float = 1.70
+    # CSR-XMap: Counterfactual Static Readout + explicit dynamic exclusion map.
+    # CSR builds a static-only readout from persistent channels; XMap builds a
+    # front transient surface from dynamic channels and uses geometric
+    # separation, rather than scalar gating, to exclude dynamic fronts.
+    csr_enable: bool = False
+    csr_min_score: float = 0.38
+    csr_geo_blend: float = 0.18
+    csr_geo_agree_min: float = 0.70
+    xmap_enable: bool = False
+    xmap_dyn_min_score: float = 0.52
+    xmap_static_min_score: float = 0.42
+    xmap_sep_ref_vox: float = 0.90
     # OMHS: occlusion-aware multi-hypothesis surface readout.
     omhs_enable: bool = False
     # EBCut: local energy-based extraction (module-5).

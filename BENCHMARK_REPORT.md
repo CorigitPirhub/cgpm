@@ -129,16 +129,34 @@ Output: updated static map M_t and extracted static surface S_t
 - Dynamic: `ghost_count`, `ghost_ratio`, `ghost_tail_ratio`, `background_recovery`
 - Temporal mechanism: `mean_rho_dynamic`, `mean_rho_static`
 
-## 3. Main Quantitative Results (TUM v6, Post-Cleanup)
+## 3. Main Quantitative Results (Canonical, 2026-03-07 Refresh)
 
-数据来源: `output/post_cleanup/benchmark_tum/tables/reconstruction_metrics.csv`。
+当前正式对外口径统一以以下文件为准：
+- `output/summary_tables/paper_main_table_local_mapping.csv`
+- `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- `output/summary_tables/dual_protocol_multiseed_significance.csv`
 
-| Sequence | Method | F-score ↑ | Accuracy ↓ | Chamfer ↓ | Ghost Ratio ↓ | Background Recovery ↑ |
-|---|---:|---:|---:|---:|---:|---:|
-| `walking_xyz` | EGF-v6 | **0.8919** | 0.0316 | **0.0413** | **0.3979** | 1.0000 |
-| `walking_xyz` | TSDF | 0.8725 | **0.0090** | 0.0466 | 0.7211 | 1.0000 |
+### 3.0 Dynamic Main Table（按数据集聚合后的 canonical 均值）
 
-结论：在删除 legacy 后的复现实验中，EGF 在该动态序列上同时取得更高 F-score 和更低 ghost ratio；TSDF 在 point-to-GT 精度（accuracy）上仍更低。
+| Dataset | Protocol | Method | F-score ↑ | Chamfer ↓ | Ghost Ratio ↓ |
+|---|---|---:|---:|---:|---:|
+| `tum` | `oracle` | `EGF` | **0.7903** | **0.05317** | **0.2566** |
+| `tum` | `oracle` | `TSDF` | 0.4137 | 0.13146 | 0.8657 |
+| `bonn` | `slam` | `EGF` | **0.6463** | **0.10116** | **0.08613** |
+| `bonn` | `slam` | `TSDF` | 0.06973 | 0.25664 | 0.21227 |
+
+### 3.0b Top-tier Main Metrics（按数据集聚合后的 canonical 均值）
+
+| Dataset | Protocol | Method | Acc(cm) ↓ | Comp(cm) ↓ | Comp-R(5cm) ↑ |
+|---|---|---:|---:|---:|---:|
+| `tum` | `oracle` | `EGF` | 4.1655 | **1.1517** | **100.0** |
+| `tum` | `oracle` | `TSDF` | **0.8607** | 12.2855 | 26.31 |
+| `bonn` | `slam` | `EGF` | 6.1481 | **3.9675** | **77.21** |
+| `bonn` | `slam` | `TSDF` | **3.2790** | 22.3848 | 3.66 |
+
+结论：
+- 在当前 canonical 口径下，EGF 在 `F-score / Chamfer / Ghost Ratio` 上仍显著优于 TSDF（TUM `oracle` 与 Bonn `slam` 均成立）。
+- 但顶刊主口径的剩余差距也同样清晰：TUM `Acc` 仍约 `4.17 cm`，Bonn `Acc` 仍约 `6.15 cm`，且 Bonn `Comp-R(5cm)` 仅 `77.21%`，说明当前版本离 `P10` 硬门槛仍有明显距离。
 
 ### 3.1 SNEF: Static Narrow-Band Evidence Fusion (freiburg1_xyz)
 
@@ -149,15 +167,15 @@ Output: updated static map M_t and extracted static surface S_t
 
 复现实验目录：`output/post_cleanup/static_target_v1/oracle/`；约束核验表：`output/summary_tables/static_target_constraint_check.csv`。
 
-| Sequence | Method | F-score (base) | F-score (SNEF) | Delta | Chamfer (base) | Chamfer (SNEF) | Target Check |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| `freiburg1_xyz` | EGF | 0.8416 | **0.9410** | **+0.0994** | 0.0464 | **0.0373** | ✅ `F>=0.93`, ✅ `C<=0.040` |
-| `freiburg1_xyz` | TSDF | 0.9474 | 0.9474 | 0.0000 | 0.0355 | 0.0355 | - |
+| Sequence | Method | F-score | Chamfer | Target Check |
+|---|---:|---:|---:|---:|
+| `freiburg1_xyz` | EGF | **0.9410** | **0.0373** | ✅ `F>=0.93`, ✅ `C<=0.040` |
+| `freiburg1_xyz` | TSDF | 0.9474 | 0.0355 | - |
 
-动态非退化约束（EGF `ghost_ratio_new - ghost_ratio_base <= +0.03`）：
-- `walking_xyz`: `+0.00310` ✅
-- `walking_static`: `+0.00284` ✅
-- `walking_halfsphere`: `+0.00202` ✅
+动态非退化约束（当前核验表中的 `ghost_ratio_new - ghost_ratio_base`）：
+- `walking_xyz`: `-0.04377` ✅
+- `walking_static`: `-0.06393` ✅
+- `walking_halfsphere`: `-0.05222` ✅
 
 ## 4. Deep Ablation Study (walking_xyz)
 
@@ -197,7 +215,9 @@ Output: updated static map M_t and extracted static surface S_t
 
 ## 6. Generalization to Bonn
 
-数据来源: `output/post_cleanup/benchmark_bonn/summary.csv`（sequence: `rgbd_bonn_balloon2`）。
+数据来源: `output/post_cleanup/benchmark_bonn/summary.csv`（single-sequence example: `rgbd_bonn_balloon2`）。
+
+> 说明：本节保留单序列可视化示例；正式对外主结论以 `output/summary_tables/paper_main_table_local_mapping.csv` 与 `output/summary_tables/local_mapping_main_metrics_toptier.csv` 为准。
 
 | Sequence | Method | F-score ↑ | Chamfer ↓ | Ghost Ratio ↓ |
 |---|---:|---:|---:|---:|
@@ -317,7 +337,7 @@ Output: updated static map M_t and extracted static surface S_t
   --egf_static_surface_no_zero_crossing \
   --force
 
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/update_summary_tables.py --verbose
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/update_summary_tables.py --prefer_p4_final --verbose
 ```
 
 ## 11. Post-Cleanup Verification (2026-02-24)
@@ -517,93 +537,91 @@ Output: updated static map M_t and extracted static surface S_t
 
 ## 18. Round Update (2026-03-02): Static Fix + SLAM Repro + Multi-Seed Significance
 
-本轮按三项硬目标补齐，结果均通过验收（见 `output/summary_tables/round20260302_goal_check.csv`）。
+> 说明：本节保留 round log 属性，但其中“正式对外主结论”已按 `2026-03-07` canonical 口径回写；若与更早执行日志冲突，以 `output/summary_tables/paper_main_table_local_mapping.csv`、`output/summary_tables/local_mapping_main_metrics_toptier.csv`、`output/summary_tables/dual_protocol_multiseed_significance.csv` 为准。
 
 ### 18.1 Goal-1 静态追平 TSDF（不牺牲动态）
-- 主表：`output/summary_tables/tum_reconstruction_metrics.csv`
+- 主表：`output/summary_tables/tum_reconstruction_metrics_static_target_v1.csv`
 - 静态结果（`rgbd_dataset_freiburg1_xyz`，EGF）：
-  - `F-score = 0.949940`
-  - `Chamfer = 0.035905`
-- 动态约束（3 条 walking）：
-  - `ghost_ratio` 相对 TSDF 降幅：`50.62% / 46.36% / 52.55%`（均 `>= 40%`）
-  - `F-score(EGF)-F-score(TSDF)`：`+0.0430 / -0.0059 / +0.0605`（均 `>= -0.01`）
+  - `F-score = 0.941005`
+  - `Chamfer = 0.037296`
+- 动态约束（当前 `static_target_constraint_check.csv`）：
+  - `walking_xyz ghost_delta = -0.04377`
+  - `walking_static ghost_delta = -0.06393`
+  - `walking_halfsphere ghost_delta = -0.05222`
 
-### 18.2 Goal-2 主结论推进到 SLAM 口径
-- 验收表：
+### 18.2 Goal-2 主结论推进到严格协议口径
+- 单次 `slam` 验收结果仍保留在：
   - `output/summary_tables/tum_reconstruction_metrics_slam.csv`
   - `output/summary_tables/tum_dynamic_metrics_slam.csv`
-- 3 条 walking 均值：
-  - `F-score_mean`: `EGF=0.8311`, `TSDF=0.3986`
-  - `ghost_ratio_mean`: `EGF=0.2279`, `TSDF=0.6854`
-- 轨迹稳定性：
-  - `traj_finite_ratio=1.0`（3 序列）
-  - `ATE/RPE` 有限且连续（无发散）
+- 但正式对外主结论已切换到双协议 `5-seed` canonical 表：
+  - `output/summary_tables/paper_main_table_local_mapping.csv`
+  - `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- 因此本节不再引用单次 `slam` 数字作为主结论，而统一以双协议 canonical 汇总表为准。
 
-### 18.3 Goal-3 TUM + Bonn 3-seed 显著性
-- TUM 多 seed（oracle, 3 walking × 3 seeds）：
+### 18.3 Goal-3 TUM + Bonn 5-seed 显著性（当前 canonical）
+- TUM 多 seed（oracle, 3 walking × 5 seeds）：
   - 数据：`output/summary_tables/tum_reconstruction_metrics_multiseed.csv`
   - 显著性：`output/summary_tables/tum_significance_multiseed.csv`
   - 结果（EGF vs TSDF, dynamic）：
-    - `fscore`: `mean_improvement=+0.0543`, `p=6.16e-4`
-    - `ghost_ratio`: `mean_improvement=+0.3022`, `p=2.53e-10`
-- Bonn 多 seed（slam, `rgbd_bonn_balloon2` × 3 seeds）：
+    - `fscore`: `mean_improvement = +0.3766`, `p = 4.81e-10`
+    - `ghost_ratio`: `mean_improvement = +0.6091`, `p = 1.72e-24`
+- Bonn 多 seed（slam, all3 × 5 seeds）：
   - 数据：`output/summary_tables/bonn_reconstruction_metrics_multiseed.csv`
   - 显著性：`output/summary_tables/bonn_significance_multiseed.csv`
   - 结果（EGF vs TSDF, dynamic）：
-    - `fscore`: `mean_improvement=+0.3885`, `p=5.18e-5`
-    - `ghost_ratio`: `mean_improvement=+0.3649`, `p=1.98e-4`
-- 跨数据集汇总：`output/summary_tables/multiseed_significance_tum_bonn.csv`
+    - `fscore`: `mean_improvement = +0.5765`, `p = 1.06e-18`
+    - `ghost_ratio`: `mean_improvement = +0.1261`, `p = 5.35e-05`
+- 双协议汇总：`output/summary_tables/dual_protocol_multiseed_significance.csv`
 
 ### 18.4 Repro Commands (this round)
 ```bash
-# 1) TUM dynamic multi-seed (3 walking × 3 seeds, oracle)
+# 1) TUM dynamic multi-seed (3 walking × 5 seeds, oracle; canonical)
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind tum \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/p4_multiseed_tum_final_v2 \
+  --out_root output/post_cleanup/p13_tum_oracle_5seed_fast \
   --protocol oracle \
-  --static_sequences rgbd_dataset_freiburg1_xyz \
+  --static_sequences "" \
   --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
-  --frames 80 --stride 3 --max_points_per_frame 3000 \
-  --voxel_size 0.02 --eval_thresh 0.05 --dynamic_ref_max_ratio 0.42 \
-  --methods egf,tsdf --seeds 40,41,42 \
-  --egf_sigma_n0 0.26 --egf_truncation 0.08 \
-  --egf_dyn_forget_gain 0.0 --egf_raycast_clear_gain 0.0 \
-  --egf_surface_adaptive_enable
+  --frames 40 --stride 3 --max_points_per_frame 900 \
+  --voxel_size 0.02 --eval_thresh 0.05 \
+  --methods egf,tsdf --seeds 40,41,42,43,44 \
+  --egf_poisson_iters 0 \
+  --force
 
-# 2) Bonn multi-seed (balloon2 × 3 seeds, slam)
+# 2) Bonn multi-seed (all3 × 5 seeds, slam; canonical)
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind bonn \
   --dataset_root data/bonn \
-  --out_root output/post_cleanup/p4_multiseed_bonn_final \
+  --out_root output/post_cleanup/p5_multiseed_bonn_all3 \
   --protocol slam \
-  --dynamic_sequences rgbd_bonn_balloon2 \
-  --frames 80 --stride 3 --max_points_per_frame 3000 \
+  --static_sequences "" \
+  --dynamic_sequences rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2 \
+  --frames 40 --stride 3 --max_points_per_frame 900 \
   --voxel_size 0.02 --eval_thresh 0.05 \
-  --methods egf,tsdf --seeds 40,41,42 \
-  --egf_sigma_n0 0.26 --egf_truncation 0.08 \
-  --egf_dyn_forget_gain 0.0 --egf_raycast_clear_gain 0.0 \
-  --egf_surface_adaptive_enable \
-  --egf_bonn_surface_adaptive_enable
+  --methods egf,tsdf --seeds 40,41,42,43,44 \
+  --egf_poisson_iters 0 \
+  --egf_slam_no_gt_delta_odom \
+  --force
 
 # 3) significance + consolidated checks
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
-  --root output/post_cleanup/p4_multiseed_tum_final_v2 \
-  --out output/post_cleanup/p4_multiseed_tum_final_v2/tables/significance.csv
+  --root output/post_cleanup/p13_tum_oracle_5seed_fast \
+  --out output/post_cleanup/p13_tum_oracle_5seed_fast/tables/significance.csv
 
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
-  --root output/post_cleanup/p4_multiseed_bonn_final \
-  --out output/post_cleanup/p4_multiseed_bonn_final/tables/significance.csv
+  --root output/post_cleanup/p5_multiseed_bonn_all3 \
+  --out output/post_cleanup/p5_multiseed_bonn_all3/tables/significance.csv
 ```
 
 ## 19. Round Update (2026-03-02, Follow-up): Bonn All-3 Multi-Seed + Summary Tooling
 
 本次补齐了上一轮“建议目标”的三项执行：  
-1) Bonn 从 `balloon2` 扩展到 `balloon2 + balloon + crowd2` 的 3-seed；  
+1) Bonn 从 `balloon2` 扩展到 `balloon2 + balloon + crowd2` 的 `5-seed` canonical 统计；  
 2) `update_summary_tables.py` 增加 `--prefer_p4_final`；  
 3) 新增双协议多 seed 统一汇总脚本，消除 oracle/slam 手工拼表。
 
-### 19.1 Bonn 三序列多 seed（slam）显著性
+### 19.1 Bonn 三序列 5-seed（slam）显著性
 
 - 实验根目录：`output/post_cleanup/p5_multiseed_bonn_all3/`
 - 主表：
@@ -612,16 +630,16 @@ Output: updated static map M_t and extracted static surface S_t
 - 显著性：
   - `output/summary_tables/bonn_significance_multiseed.csv`
 
-关键统计（EGF vs TSDF, dynamic, `n_pairs=9`）：
-- `fscore`: `mean_improvement=+0.3927`, `t_pvalue=3.68e-15`
-- `ghost_ratio`: `mean_improvement=+0.3792`, `t_pvalue=4.36e-09`
+关键统计（EGF vs TSDF, dynamic, `n_pairs=15`）：
+- `fscore`: `mean_improvement=+0.5765`, `t_pvalue=1.06e-18`
+- `ghost_ratio`: `mean_improvement=+0.1261`, `t_pvalue=5.35e-05`
 
 分序列均值（F-score）：
-- `rgbd_bonn_balloon`: `EGF=0.9402` vs `TSDF=0.5413`
-- `rgbd_bonn_balloon2`: `EGF=0.9467` vs `TSDF=0.5582`
-- `rgbd_bonn_crowd2`: `EGF=0.9315` vs `TSDF=0.5409`
+- `rgbd_bonn_balloon`: `EGF=0.7107` vs `TSDF=0.1082`
+- `rgbd_bonn_balloon2`: `EGF=0.6223` vs `TSDF=0.03833`
+- `rgbd_bonn_crowd2`: `EGF=0.6058` vs `TSDF=0.06268`
 
-结论：Bonn 扩展后，EGF 在三条高动态序列上仍保持稳定显著领先，不是单序列偶然收益。
+结论：在当前 `5-seed` canonical 口径下，EGF 在 Bonn 三条高动态序列上仍保持稳定显著领先，但正式对外应引用当前汇总表而不是旧版非 canonical 记录。
 
 ### 19.2 Summary Tooling 固化
 
@@ -640,21 +658,20 @@ Output: updated static map M_t and extracted static surface S_t
 ### 19.3 Repro Commands (follow-up)
 
 ```bash
-# 1) Bonn all-3 multi-seed (slam)
+# 1) Bonn all-3 multi-seed (slam; canonical)
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind bonn \
   --dataset_root data/bonn \
   --out_root output/post_cleanup/p5_multiseed_bonn_all3 \
   --protocol slam \
-  --static_sequences '' \
+  --static_sequences "" \
   --dynamic_sequences rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2 \
-  --frames 80 --stride 3 --max_points_per_frame 3000 \
+  --frames 40 --stride 3 --max_points_per_frame 900 \
   --voxel_size 0.02 --eval_thresh 0.05 \
-  --methods egf,tsdf --seeds 40,41,42 \
-  --egf_sigma_n0 0.26 --egf_truncation 0.08 \
-  --egf_dyn_forget_gain 0.0 --egf_raycast_clear_gain 0.0 \
-  --egf_surface_adaptive_enable \
-  --egf_bonn_surface_adaptive_enable
+  --methods egf,tsdf --seeds 40,41,42,43,44 \
+  --egf_poisson_iters 0 \
+  --egf_slam_no_gt_delta_odom \
+  --force
 
 # 2) significance (Bonn all-3)
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \

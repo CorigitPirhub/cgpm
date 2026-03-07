@@ -1,5 +1,26 @@
 # P10 专项方法设计书
 
+## Canonical 口径说明（2026-03-07）
+
+> 本文是 `P10` 研究与结构设计文档，内部会保留大量 profile / probe / 历史轮次数字，用于诊断模块行为与记录负结果链；这些数字**不自动等同于当前项目正式对外主结论**。
+
+当前正式对外数字统一以以下文件为准：
+- `output/summary_tables/paper_main_table_local_mapping.csv`
+- `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- `output/summary_tables/dual_protocol_multiseed_significance.csv`
+- `output/summary_tables/dual_protocol_multiseed_reconstruction_agg.csv`
+- `output/summary_tables/dual_protocol_multiseed_dynamic_agg.csv`
+
+按当前 `5-seed` canonical 口径：
+- TUM `oracle` dynamic（3 条 walking 均值）：EGF `F-score=0.7903`，`Chamfer=0.05317`，`ghost_ratio=0.2566`，`Acc=4.1655 cm`，`Comp-R(5cm)=100.0%`
+- Bonn `slam` dynamic（`balloon/balloon2/crowd2` 均值）：EGF `F-score=0.6463`，`Chamfer=0.10116`，`ghost_ratio=0.08613`，`Acc=6.1481 cm`，`Comp-R(5cm)=77.21%`
+- 显著性（EGF vs TSDF）：TUM `p_fscore=4.81e-10`, `p_ghost=1.72e-24`；Bonn `p_fscore=1.06e-18`, `p_ghost=5.35e-05`
+
+因此：
+- 若本文中的历史 profile / probe 数字与上述 canonical 表冲突，以 canonical 表为准；
+- 若本文讨论的是分支优劣、负结果、模块走向，则应把这些数字理解为**研究过程证据**，而不是最终投稿主表数字；
+- 截至 `2026-03-07`，`P10` 仍未过线，这一点以 canonical 主表与 `TASK_LOCAL_TOPTIER.md` 的最新口径为准。
+
 ## 1. 目标与结论先行
 
 `TASK_LOCAL_TOPTIER.md` 中的 `P10` 仍未过线，其核心矛盾不是参数空间没扫够，而是当前系统仍把两件本该分离的事情绑在同一条门控链上：
@@ -1080,3 +1101,544 @@ python scripts/run_p10_precision_profile.py   --profiles p10_ptdsf_zcbf_dccm_wds
 - iS-MAP ACCV 2024 OpenAccess: https://openaccess.thecvf.com/content/ACCV2024/html/Wang_iS-MAP_Neural_Implicit_Mapping_and_Positioning_for_Structural_Environments_ACCV_2024_paper.html
 - PlanarSplatting CVPR 2025 OpenAccess: https://openaccess.thecvf.com/content/CVPR2025/html/Tan_PlanarSplatting_Accurate_Planar_Surface_Reconstruction_in_3_Minutes_CVPR_2025_paper.html
 
+
+## 2026-03-06 OTV Probe Update
+
+### Implemented
+- Added `OTV (Observation-Time Transient Veto)` in `egf_dhmap3d/modules/updater.py`.
+  - Independent transient state: `phi_otv`, `phi_otv_w`, `rho_otv`, `otv_score`, `otv_age`, `otv_active`.
+  - Update-time routing: front-separated observations with rear static support are re-routed away from `phi_static` / `phi_geo` toward transient storage.
+- Added `OTV` dynamic-context integration in `egf_dhmap3d/core/voxel_hash.py`.
+- Added second-pass `front exclusion` variant based on `phi_otv` geometry itself.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output roots:
+  - `output/post_cleanup/p10_otv_probe_walking_xyz/`
+  - `output/post_cleanup/p10_otv_probe_walking_xyz_tfe/`
+- Comparison table:
+  - `output/summary_tables/p10_otv_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `OTV` write-time-only and `OTV + front exclusion` produced numerically identical results on the focused probe:
+  - `F-score = 0.981691`
+  - `ghost_ratio = 0.756281`
+  - `ghost_tail_ratio = 0.340002`
+- Conclusion: this branch is effectively inert with respect to the current ghost bottleneck.
+- Interpretation: attaching another veto/exclusion state to the existing candidate/readout chain is not sufficient. The bottleneck is deeper than write-time routing; the exported geometry still comes from the same persistent candidate pool, so scalar dynamic side-states remain diluted.
+
+### Decision
+- Archive `OTV` as a negative structural result.
+- Do not continue stacking threshold-style logic on top of `OTV`.
+- Next valid direction should be a stronger architectural split, e.g. true dual-layer readout / explicit dynamic exclusion map rather than score-only veto.
+
+## 2026-03-06 CSR-XMap Probe Update
+
+### Implemented
+- Added `CSR-XMap` extraction-side structural branch.
+  - `CSR (Counterfactual Static Readout)`: static-only readout from `phi_static / phi_rear / phi_spg` plus geometry agreement-gated `phi_geo`.
+  - `XMap (dynamic exclusion readout)`: transient/dynamic readout from `phi_transient / phi_dyn / phi_otv`.
+  - Export-time rule changed from scalar dynamic score stacking to explicit geometric competition: when `XMap` is strong and geometrically separated, either replace the candidate with `CSR` or reject it.
+- Wiring completed in:
+  - `egf_dhmap3d/core/config.py`
+  - `egf_dhmap3d/modules/pipeline.py`
+  - `scripts/run_egf_3d_tum.py`
+  - `scripts/run_benchmark.py`
+  - `scripts/run_p10_precision_profile.py`
+  - `egf_dhmap3d/core/voxel_hash.py`
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output root:
+  - `output/post_cleanup/p10_csr_xmap_probe_walking_xyz/`
+- Comparison table:
+  - `output/summary_tables/p10_csr_xmap_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `CSR-XMap` (`egf`) on the focused probe:
+  - `F-score = 0.995147`
+  - `Chamfer = 0.020893`
+  - `ghost_ratio = 0.810235`
+  - `ghost_tail_ratio = 0.338690`
+- Previous `OTV` reference on the same probe:
+  - `F-score = 0.981691`
+  - `Chamfer = 0.024224`
+  - `ghost_ratio = 0.756281`
+  - `ghost_tail_ratio = 0.340002`
+- `TSDF` reference:
+  - `F-score = 0.913703`
+  - `ghost_ratio = 0.687708`
+  - `ghost_tail_ratio = 0.146341`
+
+### Interpretation
+- `CSR-XMap` **does improve geometry**: both `Chamfer` and `F-score` are better than the `OTV` branch.
+- But it **does not improve the actual P10 bottleneck**:
+  - `ghost_tail_ratio` is essentially unchanged (`0.3400 -> 0.3387`).
+  - `ghost_ratio` becomes even worse (`0.7563 -> 0.8102`).
+- Runtime cost also increases:
+  - `OTV` probe wall time: about `784.9 s`
+  - `CSR-XMap` probe wall time: about `845.9 s`
+  - `extract_total_sec` rises from about `21.2 s` to `52.6 s`.
+
+### Conclusion
+- `CSR-XMap` is **not** the main fix for `P10`.
+- The branch is still useful as a research result because it shows a clean separation:
+  - export-time counterfactual static readout can improve geometric readout quality;
+  - however, the long-tail ghost bottleneck is **not** primarily caused by readout-stage front/rear competition.
+- Therefore the remaining bottleneck is deeper: the dynamic front needs an **independent persistent negative / exclusion state at write-time or state-time**, not just a stronger export-time competition rule.
+
+### Decision
+- Archive `CSR-XMap` as a second structural negative result for the ghost bottleneck.
+- Keep its ideas available as an `Acc`-oriented branch, but do not use it as the main `P10` line.
+- Next valid direction should move from readout competition to a stronger state split, e.g. true dual-map/static-dynamic state or explicit write-time exclusion occupancy.
+
+## 2026-03-06 XMem / BECM / RCCM Probe Update
+
+### Implemented
+- Added `XMem (Exclusion Memory)` as a write-time reversible exclusion state.
+  - State fields landed in `egf_dhmap3d/core/types.py`: `xmem_occ`, `xmem_free`, `xmem_score`, `xmem_age`, `xmem_active`.
+  - Config wiring landed in `egf_dhmap3d/core/config.py`, `scripts/run_egf_3d_tum.py`, `scripts/run_benchmark.py`, `scripts/run_p10_precision_profile.py`.
+  - Update-time routing landed in `egf_dhmap3d/modules/updater.py`.
+  - Extraction-side hooks landed in `egf_dhmap3d/core/voxel_hash.py`.
+- Then upgraded `XMem` into two stronger variants:
+  - `BECM (Bifurcated Exclusion-Clear Memory)`: split `front exclusion` and `clear-lock` into separate state branches so free evidence no longer directly cancels exclusion.
+  - `RCCM (Ray-Conditioned Clear Memory)`: inject line-of-sight free-space contradiction only into voxels that already carry front-dynamic memory, instead of enabling global aggressive ray-casting.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output roots:
+  - `output/post_cleanup/p10_xmem_probe_walking_xyz/`
+  - `output/post_cleanup/p10_xmem_becm_probe_walking_xyz/`
+  - `output/post_cleanup/p10_xmem_rccm_probe_walking_xyz/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `XMem v1` focused probe:
+  - `F-score = 0.992518`
+  - `Chamfer = 0.024049`
+  - `ghost_ratio = 0.820857`
+  - `ghost_tail_ratio = 0.366245`
+  - `mapping_fps = 0.0542`
+- `XMem + BECM clear-lock` focused probe:
+  - `F-score = 0.992518`
+  - `Chamfer = 0.024049`
+  - `ghost_ratio = 0.820857`
+  - `ghost_tail_ratio = 0.366245`
+  - `mapping_fps = 0.0602`
+- `XMem + RCCM targeted ray clear` focused probe:
+  - `F-score = 0.992518`
+  - `Chamfer = 0.024049`
+  - `ghost_ratio = 0.820857`
+  - `ghost_tail_ratio = 0.366245`
+  - `mapping_fps = 0.0439`
+- References on the same probe:
+  - `OTV`: `ghost_tail_ratio = 0.340002`
+  - `CSR-XMap`: `ghost_tail_ratio = 0.338690`
+  - `TSDF`: `ghost_tail_ratio = 0.146341`
+
+### Interpretation
+- `XMem` improves neither `ghost_ratio` nor `ghost_tail_ratio`; both are worse than `OTV/CSR-XMap`.
+- `BECM` and `RCCM` produced numerically identical reconstruction/dynamic metrics to `XMem v1` under the focused probe, despite adding more structure.
+- This is a strong negative result, and it is informative:
+  1. The remaining bottleneck is **not** just that free evidence was subtracted too early.
+  2. The bottleneck is also **not** solved by a targeted clear state that still lives on top of the same single persistent geometry pool.
+  3. In the current architecture, all these exclusion/clear states are still parasitic on a map whose dominant geometry is written into the same persistent channels; therefore the negative state never becomes a first-class background representation.
+  4. The exact metric identity of `XMem -> BECM -> RCCM` indicates the main missing ingredient is a **true background/static state that can be written and read independently**, not another veto memory stacked on top of the existing one-map fusion.
+
+### Decision
+- Archive `XMem`, `BECM`, and `RCCM` as the third structural negative chain for the P10 ghost bottleneck.
+- Do not continue stacking more veto/clear memories on the current single-map state.
+- Next valid direction should be a genuinely stronger architectural split:
+  - `explicit static background map / dynamic foreground map`, or
+  - `dual write graph` where background geometry is committed into its own state and dynamic/front evidence never contaminates that state in the first place.
+
+## 2026-03-07 OBL-3D Probe Update
+
+### Implemented
+- Added `OBL-3D (Occlusion-Buffered Background Layer)`.
+  - A dedicated background geometry state inside each voxel: `phi_bg`, `phi_bg_w`, `rho_bg`, `obl_score`, `obl_age`, `obl_active`.
+  - Update-time rule: under front/rear separation, rear/static support is written into the background layer while the same observation suppresses writes into the legacy static/geo channels.
+  - Readout-time rule: background participates as a first-class persistent surface source instead of being a side-score attached to the same front surface.
+- Added a stronger export variant:
+  - `background_hard` arbitration, which hard-selects `phi_bg` when background confidence and front dynamic conflict are both high.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output roots:
+  - `output/post_cleanup/p10_obl_probe_walking_xyz/`
+  - `output/post_cleanup/p10_obl_hardbg_probe_walking_xyz/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `OBL-3D` (`obl_soft`):
+  - `F-score = 0.989473`
+  - `Chamfer = 0.024445`
+  - `ghost_ratio = 0.806074`
+  - `ghost_tail_ratio = 0.368327`
+  - `mapping_fps = 0.0575`
+- `OBL-3D + background_hard` (`obl_hardbg`):
+  - numerically identical reconstruction / dynamic metrics
+  - slower: `mapping_fps = 0.0379`
+- Reference:
+  - `XMem ghost_tail_ratio = 0.366245`
+  - `CSR-XMap ghost_tail_ratio = 0.338690`
+  - `OTV ghost_tail_ratio = 0.340002`
+  - `TSDF ghost_tail_ratio = 0.146341`
+
+### Interpretation
+- `OBL-3D` is not inert: mid-run state statistics changed, active voxel count increased, and dynamic score rose earlier than the `XMem` chain.
+- But final metrics show that this is still not the `P10` fix.
+- The important negative conclusion is stronger than before:
+  1. a background layer that still lives **inside the same voxel map / same extraction graph** is not enough;
+  2. even when the update operator writes background separately and export can hard-select it, the final surface is still constrained by the same candidate pool, same surface extraction path, and same active map support;
+  3. therefore the bottleneck is no longer “missing background state”, but “missing background state with independent map-level persistence and readout”.
+
+### Decision
+- Archive `OBL-3D` and `background_hard` as another structural negative branch for the P10 ghost bottleneck.
+- Do not continue extending single-map multi-channel readout.
+- Next valid direction is now sharply defined:
+  - `true dual-map / dual-voxel-hash architecture`, with a dedicated `background_map` and a separate `foreground/exclusion_map`.
+
+## 2026-03-07 Dual-Map Probe Update
+
+### Implemented
+- Added `DMBG-3D (Dual-Map Background/Foreground Graph)`.
+  - `background_map`: the only map used for association and final local-map export.
+  - `foreground_map`: a separate voxel hash that absorbs front/transient writes.
+  - Update-time routing now depends on `map_role`:
+    - `background`: suppress front-dominant writes, keep rear/static writes, and commit a dedicated background state.
+    - `foreground`: absorb front/transient writes while allowing only minimal static leakage.
+- Added `BER (Background-Exclusive Readout)` for dual-map mode.
+  - In dual-map extraction, candidate readout prioritizes `phi_bg` / `rho_bg` instead of mixing back into the old persistent channels whenever a valid background state exists.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output roots:
+  - `output/post_cleanup/p10_dualmap_probe_walking_xyz/`
+  - `output/post_cleanup/p10_dualmap_ber_probe_walking_xyz/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `DMBG-3D` (`dual_map`):
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_ratio = 0.813839`
+  - `ghost_tail_ratio = 0.347614`
+  - `mapping_fps = 0.0383`
+- `DMBG-3D + BER` (`dual_map_ber`):
+  - numerically identical to `dual_map`
+  - slower: `mapping_fps = 0.0250`
+- References:
+  - `XMem chain`: `ghost_tail_ratio = 0.366245`
+  - `CSR-XMap`: `ghost_tail_ratio = 0.338690`
+  - `OTV`: `ghost_tail_ratio = 0.340002`
+
+### Interpretation
+- This is the first branch that is **not inert in state-time behavior**:
+  - association stayed very high (`assoc_ratio_mean ≈ 0.9843`),
+  - dynamic score in the exported background map decayed toward zero (`dynamic_score_mean ≈ 0.0403`),
+  - geometry improved further (`Chamfer/F-score` both better than previous branches).
+- Therefore the dual-map split is a structurally correct direction.
+- However it still does not solve the P10 ghost bottleneck:
+  - `ghost_tail_ratio` improved from `0.3662` to `0.3476`, but this is still far from the target line;
+  - `BER` produced no further gain, which means the remaining issue is not just readout mixing.
+- The remaining bottleneck is now narrower:
+  1. the dual maps are separated in storage, but negative evidence is still mostly local to each map;
+  2. background_map is cleaner, but it is not yet actively corrected by persistent contradiction transferred from foreground_map;
+  3. therefore the next valid innovation is **cross-map contradiction transfer / foreground-to-background negative projection**, not another single-map gating trick.
+
+### Decision
+- Keep `DMBG-3D` as the new mainline, since it is the first structurally positive branch.
+- Archive `BER` as a non-harmful but ineffective add-on.
+- Next module should be:
+  - `CMCT (Cross-Map Contradiction Transfer)` or equivalent, where stable foreground contradiction is explicitly projected back into background_map as negative background evidence.
+
+## 2026-03-07 CMCT / Cross-Map Foreground Arbitration Update
+
+### Implemented
+- Added `CMCT (Cross-Map Contradiction Transfer)`.
+  - After `foreground_map` update, stable foreground contradiction is projected back into `background_map` as explicit negative evidence.
+  - Background cells receive `cmct_score`, `cmct_age`, `cmct_active`, and their static / geo / bg channels are softly decayed when cross-map contradiction is strong and local background support is weak.
+- Added a stronger readout-side variant on top of `CMCT`:
+  - `cross-map foreground arbitration`, which consults `foreground_map` at the same / neighboring voxel during background extraction and rejects weak background candidates when a strong foreground transient surface exists.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output roots:
+  - `output/post_cleanup/p10_cmct_probe_walking_xyz/`
+  - `output/post_cleanup/p10_cmct_cfam_probe_walking_xyz/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `dual_map_cmct`:
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_ratio = 0.813839`
+  - `ghost_tail_ratio = 0.347614`
+  - `mapping_fps = 0.0366`
+- `dual_map_cmct_cfam`:
+  - numerically identical to `dual_map_cmct`
+  - `mapping_fps = 0.0380`
+- These are also numerically identical to the previous `dual_map` branch.
+
+### Interpretation
+- `CMCT` is an informative negative result.
+- It shows that even with two separate maps, **voxel-local contradiction transfer is still too weak** to move the final ghost metric.
+- The companion readout-side foreground arbitration is also ineffective, which means the missing operation is not “same-voxel foreground veto”.
+- The remaining bottleneck is now sharply localized:
+  1. foreground/background are already separated in storage;
+  2. local voxel transfer and same-voxel cross-map masking do not change final geometry;
+  3. therefore the missing operator must live at the **geometry domain / line-of-sight domain**, not the local voxel domain.
+
+### Decision
+- Archive `CMCT` and `cross-map foreground arbitration` as a negative follow-up branch on top of `dual_map`.
+- Keep `dual_map` as the structurally positive mainline.
+- Next valid innovation should be a geometry-domain operator, e.g.:
+  - `CGCC (Cross-Map Geometric Carving Corridor)`, where a stable foreground surface is dilated into a short corridor along the viewing direction and used to carve / veto background support behind it.
+
+## 2026-03-08 CGCC Probe Update
+
+### Implemented
+- Added `CGCC (Cross-Map Geometric Carving Corridor)`.
+  - A stable foreground transient surface is expanded into a short ray-aligned corridor using the current observation ray.
+  - Background cells intersecting the corridor receive a dedicated `cgcc_score / cgcc_age / cgcc_active` state.
+  - Their `phi_static_w / phi_geo_w / phi_bg_w / rho_static / rho_bg` are decayed according to corridor strength and local background support.
+- `CGCC` is the first explicitly **geometry-domain** operator in the current chain; it is no longer voxel-local contradiction transfer.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output root:
+  - `output/post_cleanup/p10_cgcc_probe_walking_xyz/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `dual_map_cgcc`:
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_ratio = 0.813839`
+  - `ghost_tail_ratio = 0.347614`
+  - `mapping_fps = 0.0229`
+- These are numerically identical to `dual_map`.
+
+### Interpretation
+- This is another important negative result.
+- It shows that even a ray-aligned geometric corridor carved from foreground into background is still insufficient, at least when the corridor is instantiated from per-frame accepted observations and applied as a local weight decay on background cells.
+- Therefore the remaining bottleneck is even narrower than before:
+  1. storage-level split works (`dual_map`);
+  2. voxel-local cross-map transfer does not move the metric (`CMCT`);
+  3. short local ray corridor decay also does not move the metric (`CGCC`);
+  4. hence the missing piece is likely **persistent free-space world-modeling / explicit carving volume**, not just another short-range suppression operator.
+
+### Decision
+- Archive `CGCC` as a geometry-domain negative branch.
+- Keep `dual_map` as the only structurally positive mainline so far.
+- The next valid direction should move from local corridor decay to a true persistent free-space representation, e.g.:
+  - `PFV (Persistent Free-space Volume)` or
+  - `background-only carving volume` coupled to `background_map`.
+
+## 2026-03-08 PFV Probe Update
+
+### Implemented
+- Added `PFV (Persistent Free-space Volume)` on top of `dual_map`.
+- Unlike `raycast_clear`, `CMCT`, or `CGCC`, PFV does not directly treat free-space as a transient suppression cue. Instead, it accumulates a persistent free-space bank in `background_map` from stable background hits along the viewing ray, and export is forced to respect that bank.
+- PFV therefore turns negative evidence into a first-class world state rather than a local decay heuristic.
+
+### Focused Result
+- Probe scene: `TUM rgbd_dataset_freiburg3_walking_xyz`, `60` frames, oracle protocol.
+- Output root:
+  - `output/post_cleanup/p10_pfv_probe_walking_xyz/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `dual_map_pfv`:
+  - `F-score = 0.996541`
+  - `Chamfer = 0.020461`
+  - `ghost_ratio = 0.813677`
+  - `ghost_tail_ratio = 0.346503`
+  - `mapping_fps = 0.0289`
+- Reference `dual_map`:
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_tail_ratio = 0.347614`
+
+### Interpretation
+- PFV is the first module after `dual_map` that produces a measurable positive shift in the target metric, even though the gain is still small.
+- This matters structurally:
+  1. storage-level split (`dual_map`) was necessary;
+  2. voxel-local contradiction transfer (`CMCT`) was not enough;
+  3. local geometric corridor carving (`CGCC`) was not enough;
+  4. once negative evidence is promoted into a **persistent free-space state**, the ghost metric starts to move again.
+- Therefore the next valid direction should stay on the `PFV` line rather than returning to contradiction-only modules.
+
+### Decision
+- Keep `dual_map + PFV` as the new mainline.
+- Archive `CMCT / CFAM / CGCC` as negative side branches.
+- Next module should strengthen PFV itself, e.g. by:
+  - foreground-aware PFV confidence projection,
+  - longer-horizon free-space persistence,
+  - PFV-guided association gating or extraction exclusivity.
+
+## 2026-03-08 PFVP Probe Update
+
+### Implemented
+- Added `PFVP (PFV-guided Proposal Routing)`.
+- Instead of blocking observations in the associator, PFVP keeps the associations but routes each accepted proposal into:
+  - `background_map`,
+  - `foreground_map`, or
+  - both,
+  based on persistent free-space confidence, current background static support, and foreground history.
+- This is structurally different from `PFAG`:
+  - `PFAG` rejects observations before update;
+  - `PFVP` preserves observations but changes where they write.
+
+### Focused Result
+- Quick probe: `output/post_cleanup/p10_pfvp_quick/`
+- Full probe: `output/post_cleanup/p10_pfvp_probe_walking_xyz_v2/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `dual_map_pfvp`:
+  - `F-score = 0.997273`
+  - `Chamfer = 0.020437`
+  - `ghost_ratio = 0.816400`
+  - `ghost_tail_ratio = 0.352354`
+  - `mapping_fps = 0.0424`
+- Reference `dual_map_pfv`:
+  - `F-score = 0.996541`
+  - `Chamfer = 0.020461`
+  - `ghost_tail_ratio = 0.346503`
+
+### Interpretation
+- PFVP improves geometry slightly, but it still worsens the target dynamic metric.
+- This is an important negative result because it separates two ideas:
+  1. early hard rejection (`PFAG`) is too aggressive;
+  2. even softer map routing (`PFVP`) still moves proposals away from the background map too early, which hurts late-frame ghost suppression.
+- Therefore the next valid step is not “more proposal routing”.
+- The stronger story is now:
+  - `dual_map` is necessary,
+  - `PFV` is beneficial,
+  - but pushing PFV earlier than update/export degrades the target metric.
+
+### Decision
+- Keep `dual_map + PFV` as the mainline.
+- Archive `PFVP` as a negative branch, alongside `PFAG`.
+- Next valid module should strengthen PFV *within* the update/export path rather than earlier, e.g.:
+  - longer-horizon PFV persistence,
+  - PFV confidence sharpening,
+  - background-only persistent free-space bank for export.
+
+## 2026-03-08 PFVP Probe Update
+
+### Implemented
+- Added `PFVP (PFV-guided Proposal Routing)` on top of `dual_map + PFV`.
+- PFVP keeps associations intact, but routes each accepted observation into:
+  - `background_map`,
+  - `foreground_map`, or
+  - both,
+  according to persistent free-space confidence, foreground history, and local background support.
+- This is intentionally later than `PFAG`: it preserves observation availability and only changes the write target.
+
+### Focused Result
+- Quick probe:
+  - `output/post_cleanup/p10_pfvp_quick/`
+- Full probe:
+  - `output/post_cleanup/p10_pfvp_probe_walking_xyz_v2/`
+- Unified comparison table:
+  - `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### Outcome
+- `dual_map_pfvp`:
+  - `F-score = 0.997273`
+  - `Chamfer = 0.020437`
+  - `ghost_ratio = 0.816400`
+  - `ghost_tail_ratio = 0.352354`
+  - `mapping_fps = 0.0424`
+- Reference `dual_map_pfv`:
+  - `F-score = 0.996541`
+  - `Chamfer = 0.020461`
+  - `ghost_tail_ratio = 0.346503`
+
+### Interpretation
+- PFVP improves geometry slightly but degrades the target dynamic metric.
+- This confirms the stronger version of the earlier PFAG negative result:
+  1. not only pre-association hard rejection is too early;
+  2. even softer proposal routing still pushes PFV influence forward too much;
+  3. late-frame dynamic suppression benefits from letting observations reach the update/export path before PFV dominates decisions.
+- Therefore the best current story remains:
+  - `dual_map` is necessary,
+  - `PFV` is beneficial,
+  - but PFV should stay inside update/export rather than move earlier into routing.
+
+### Decision
+- Keep `dual_map + PFV` as the mainline.
+- Archive `PFVP` as a negative branch, together with `PFAG`.
+- Next useful work should strengthen PFV *inside* the persistent free-space state itself, not earlier in the pipeline.
+
+## 2026-03-08 PFV-Sharp Quick Probe Update
+
+### Implemented
+- Added a stronger PFV-internal variant with:
+  - long-horizon PFV memory (`pfv_long`, `pfv_long_age`),
+  - depth-aware PFV accumulation along the stable ray,
+  - clustered PFV export sharpening.
+- This keeps the innovation inside the update/export path and does not reintroduce early gating/routing.
+
+### Quick Result
+- Probe root:
+  - `output/post_cleanup/p10_pfv_sharp_quick/`
+- Scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Frames: `10`
+
+### Outcome
+- The quick probe is numerically indistinguishable from the current PFV branch on the 10-frame metric sheet:
+  - same `surface_points`,
+  - same `ghost_tail_ratio`,
+  - same `F-score` to numerical noise.
+- Therefore it was not promoted to a full 60-frame focused run.
+
+### Interpretation
+- This means the current PFV bottleneck is not simply “sharpen the PFV confidence harder” or “retain it longer” with the same local mechanism.
+- The useful information here is architectural:
+  - PFV itself is still the right family,
+  - but the next gain likely requires a different *structure* inside PFV rather than a stronger scalar state.
+
+### Decision
+- Archive `PFV-sharp` as a low-yield quick branch.
+- Keep `dual_map + PFV` unchanged as the mainline.
+- The next valid PFV-side innovation should likely be a structural split such as:
+  - `PFV bank decomposition` (near / mid / rear free-space banks), or
+  - `persistent free-space exclusivity map` used only at export.
+
+## 2026-03-08 PFV-Bank Quick Probe Update
+
+### Implemented
+- Added a structural `banked PFV` variant on top of the current PFV mainline:
+  - near / mid / far PFV banks,
+  - bank ages,
+  - bank-aware export clustering.
+- This is more structural than scalar sharpening because it tries to separate a true cleared foreground corridor from generic free-space support at different depths.
+
+### Quick Result
+- Probe root:
+  - `output/post_cleanup/p10_pfv_banks_quick/`
+- Scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Frames: `10`
+
+### Outcome
+- The 10-frame quick probe is numerically indistinguishable from the current PFV mainline on the exported metric sheet.
+- Therefore it was not promoted to a full 60-frame focused run.
+
+### Interpretation
+- This indicates the remaining PFV bottleneck is not solved by simply decomposing the current free-space scalar into depth banks while keeping the same local update/export mechanism.
+- The next PFV-side gain likely requires a different structural role for PFV, not just a richer decomposition of the same local signal.
+
+### Decision
+- Archive `PFV-bank` as another quick negative branch.
+- Keep `dual_map + PFV` as the active mainline.

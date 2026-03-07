@@ -16,11 +16,30 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 
 ## 核心结果（置顶）
 
-### Bonn 泛化结果（高动态）
-在 `rgbd_bonn_balloon2` 上：
+### 当前正式口径（2026-03-07）
+当前对外数字统一以以下文件为准：
+- `output/summary_tables/paper_main_table_local_mapping.csv`
+- `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- `output/summary_tables/dual_protocol_multiseed_significance.csv`
+
+按当前 `5-seed` canonical 口径：
+- TUM `oracle` dynamic（3 条 walking 均值）：
+  - EGF `F-score = 0.7903`，`Chamfer = 0.05317`，`ghost_ratio = 0.2566`
+  - TSDF `F-score = 0.4137`，`Chamfer = 0.13146`，`ghost_ratio = 0.8657`
+  - 顶刊主口径：EGF `Acc = 4.1655 cm`，`Comp-R(5cm) = 100.0%`
+- Bonn `slam` dynamic（`balloon/balloon2/crowd2` 均值）：
+  - EGF `F-score = 0.6463`，`Chamfer = 0.10116`，`ghost_ratio = 0.08613`
+  - TSDF `F-score = 0.06973`，`Chamfer = 0.25664`，`ghost_ratio = 0.21227`
+  - 顶刊主口径：EGF `Acc = 6.1481 cm`，`Comp-R(5cm) = 77.21%`
+- 显著性（EGF vs TSDF）：
+  - TUM `oracle`：`p_fscore = 4.81e-10`，`p_chamfer = 1.96e-08`，`p_ghost = 1.72e-24`
+  - Bonn `slam`：`p_fscore = 1.06e-18`，`p_chamfer = 8.21e-12`，`p_ghost = 5.35e-05`
+
+### 单序列 Bonn 示例（非 canonical 主表）
+在 `rgbd_bonn_balloon2` 的单序列示例运行中：
 - EGF: `F-score = 0.9452`
 - TSDF: `F-score = 0.5612`
-- 相对提升：`(0.9452 - 0.5612) / 0.5612 = 68.4%`（约 69%）
+- 该结果仍可作为可视化示例，但正式对外主结论以多 seed canonical 表为准。
 
 ![Bonn Comparison](assets/bonn_comparison.png)
 
@@ -30,8 +49,8 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 ### Static 场景修复（freiburg1_xyz）
 - 问题：EGF 在纯静态场景精度低于 TSDF。
 - 方法（SNEF）：`Static Narrow-Band Evidence Fusion`，仅在静态分支启用窄截断带和时间持久性门控（不改动态分支）。
-- 结果：EGF `F-score 0.8416 -> 0.9410`，`Chamfer 0.0464 -> 0.0373`，达到目标 `F>=0.93, Chamfer<=0.040`。
-- 动态约束：3 条 walking 的 `ghost_ratio` 仅小幅变化（`+0.00310/+0.00284/+0.00202`），均满足 `<= +0.03`。
+- 当前结果：EGF `F-score = 0.9410`，`Chamfer = 0.0373`，满足目标 `F>=0.93, Chamfer<=0.040`；TSDF 对应为 `F-score = 0.9474`，`Chamfer = 0.0355`。
+- 动态约束：3 条 walking 的 `ghost_ratio` 在当前约束表中均未退化，且分别下降 `-0.04377 / -0.06393 / -0.05222`。
 - 结果目录：`output/post_cleanup/static_target_v1/oracle/`
 - 约束汇总：`output/summary_tables/static_target_constraint_check.csv`
 
@@ -116,7 +135,7 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 
 ### 4) 一键刷新 `output/summary_tables`
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/update_summary_tables.py --verbose
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/update_summary_tables.py --prefer_p4_final --verbose
 ```
 
 ### 5) 多 seed + 强基线适配（DynaSLAM/MID-Fusion/Neural）
@@ -252,6 +271,8 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 ## 结果文件
 - 主报告：`BENCHMARK_REPORT.md`
 - 合并总文档：`MERGED_DOCS.md`
+- 当前正式主表：`output/summary_tables/paper_main_table_local_mapping.csv`, `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- 双协议显著性：`output/summary_tables/dual_protocol_multiseed_significance.csv`
 - TUM 汇总：`output/summary_tables/tum_reconstruction_metrics.csv`, `output/summary_tables/tum_dynamic_metrics.csv`
 - TUM 静态修复专项：`output/summary_tables/tum_reconstruction_metrics_static_fix.csv`, `output/summary_tables/tum_dynamic_metrics_static_fix.csv`
 - 时间维 CSV：`output/summary_tables/temporal_ablation_summary.csv`

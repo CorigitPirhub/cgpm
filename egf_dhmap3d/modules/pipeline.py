@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import time
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import open3d as o3d
@@ -13,12 +13,16 @@ from egf_dhmap3d.data.tum_rgbd import TUMFrame3D
 from egf_dhmap3d.modules.associator import Associator3D
 from egf_dhmap3d.modules.predictor import Predictor3D
 from egf_dhmap3d.modules.updater import Updater3D
+from egf_dhmap3d.P10_method.pfv import map_static_support as p10_map_static_support
+from egf_dhmap3d.P10_method.pfv import route_measurements_with_pfv as p10_route_measurements_with_pfv
 
 
 class EGFDHMap3D:
     def __init__(self, cfg: EGF3DConfig):
         self.cfg = cfg
-        self.voxel_map = VoxelHashMap3D(cfg)
+        self.background_map = VoxelHashMap3D(cfg)
+        self.foreground_map = VoxelHashMap3D(cfg) if bool(getattr(cfg.update, 'dual_map_enable', False)) else None
+        self.voxel_map = self.background_map
         self.predictor = Predictor3D(cfg)
         self.associator = Associator3D(cfg)
         self.updater = Updater3D(cfg)
@@ -94,6 +98,15 @@ class EGFDHMap3D:
             "mopc_err_rej": float(err_rej),
             "mopc_ctrl": float(ctrl),
         }
+
+
+    def _map_static_support(self, voxel_map: VoxelHashMap3D, cell) -> float:
+        return p10_map_static_support(self, voxel_map, cell)
+
+
+    def _route_measurements_with_pfv(self, accepted: List) -> Tuple[List, List, Dict[str, float]]:
+        return p10_route_measurements_with_pfv(self, accepted)
+
 
     def _delta_from_gt(self, t_wc: np.ndarray) -> np.ndarray:
         if self.prev_gt_pose is None:
@@ -350,6 +363,8 @@ class EGFDHMap3D:
             dual_layer_static_anchor_p=float(self.cfg.surface.dual_layer_static_anchor_p),
             dual_layer_static_anchor_ratio=float(self.cfg.surface.dual_layer_static_anchor_ratio),
             omhs_enable=bool(self.cfg.surface.omhs_enable),
+            dual_map_background_only=bool(self.foreground_map is not None),
+            foreground_map=self.foreground_map,
             ebcut_enable=bool(self.cfg.surface.ebcut_enable),
             ebcut_energy_thresh=float(self.cfg.surface.ebcut_energy_thresh),
             ebcut_w_phi=float(self.cfg.surface.ebcut_w_phi),
@@ -434,7 +449,10 @@ class EGFDHMap3D:
             self.predictor.predict(delta_t=delta, dt=frame.dt)
 
         t_predict0 = time.perf_counter()
-        self.predictor.apply_field_prediction(self.voxel_map, dynamic_score=self.dynamic_score)
+        self.predictor.apply_field_prediction(self.background_map, dynamic_score=self.dynamic_score)
+        if self.foreground_map is not None:
+            fg_bias = float(max(0.0, getattr(self.cfg.update, 'dual_map_fg_dynamic_score_bias', 0.20)))
+            self.predictor.apply_field_prediction(self.foreground_map, dynamic_score=float(np.clip(max(self.dynamic_score, fg_bias), 0.0, 1.0)))
         t_predict1 = time.perf_counter()
         map_refine_sec = 0.0
         if (not use_gt_pose) and (not bool(self.cfg.predict.slam_use_gt_delta_odom)):
@@ -450,22 +468,61 @@ class EGFDHMap3D:
             points_world, normals_world = self._transform_from_current_pose(frame.points_cam, frame.normals_cam)
             sensor_origin = self.predictor.pose.as_matrix()[:3, 3]
         t_assoc0 = time.perf_counter()
+        assoc_map = self.background_map if self.foreground_map is not None else self.voxel_map
         accepted, rejected, assoc_stats = self.associator.associate(
-            self.voxel_map,
+            assoc_map,
             points_world,
             normals_world,
             sensor_origin=sensor_origin,
         )
         t_assoc1 = time.perf_counter()
         t_upd0 = time.perf_counter()
-        update_stats = self.updater.update(
-            self.voxel_map,
-            accepted,
-            rejected,
-            sensor_origin=sensor_origin,
-            frame_id=self.frame_counter,
-            pose_cov=self.predictor.pose.cov,
-        )
+        if self.foreground_map is None:
+            update_stats = self.updater.update(
+                self.voxel_map,
+                accepted,
+                rejected,
+                sensor_origin=sensor_origin,
+                frame_id=self.frame_counter,
+                pose_cov=self.predictor.pose.cov,
+            )
+        else:
+            bg_accepted, fg_accepted, pfvp_stats = self._route_measurements_with_pfv(accepted)
+            update_bg = self.updater.update(
+                self.background_map,
+                bg_accepted,
+                rejected,
+                sensor_origin=sensor_origin,
+                frame_id=self.frame_counter,
+                pose_cov=self.predictor.pose.cov,
+                map_role="background",
+            )
+            update_fg = self.updater.update(
+                self.foreground_map,
+                fg_accepted,
+                [],
+                sensor_origin=sensor_origin,
+                frame_id=self.frame_counter,
+                pose_cov=self.predictor.pose.cov,
+                map_role="foreground",
+            )
+            update_stats = dict(update_bg)
+            update_stats.update(pfvp_stats)
+            if bool(getattr(self.cfg.update, 'cmct_enable', False)):
+                cmct_stats = self.updater.transfer_cross_map_contradiction(self.background_map, self.foreground_map, accepted)
+                update_stats.update(cmct_stats)
+            if bool(getattr(self.cfg.update, 'cgcc_enable', False)):
+                cgcc_stats = self.updater.transfer_cross_map_geometric_corridor(self.background_map, self.foreground_map, accepted)
+                update_stats.update(cgcc_stats)
+            if bool(getattr(self.cfg.update, 'pfv_enable', False)):
+                pfv_stats = self.updater.update_persistent_free_space_volume(self.background_map, self.foreground_map, accepted)
+                update_stats.update(pfv_stats)
+            update_stats["active_voxels_bg"] = float(len(self.background_map))
+            update_stats["active_voxels_fg"] = float(len(self.foreground_map))
+            update_stats["active_voxels"] = float(len(self.background_map) + len(self.foreground_map))
+            update_stats["mean_d_score_fg"] = float(update_fg.get("mean_d_score", 0.0))
+            update_stats["mean_d_score"] = float(max(update_bg.get("mean_d_score", 0.0), 0.65 * update_fg.get("mean_d_score", 0.0)))
+            update_stats["touched_voxels_fg"] = float(update_fg.get("touched_voxels", 0.0))
         t_upd1 = time.perf_counter()
 
         # Global dynamic score (used only in legacy global forgetting mode + debug).
@@ -613,6 +670,14 @@ class EGFDHMap3D:
             dual_layer_static_anchor_rho=float(self.cfg.surface.dual_layer_static_anchor_rho),
             dual_layer_static_anchor_p=float(self.cfg.surface.dual_layer_static_anchor_p),
             dual_layer_static_anchor_ratio=float(self.cfg.surface.dual_layer_static_anchor_ratio),
+            csr_enable=bool(self.cfg.surface.csr_enable),
+            csr_min_score=float(self.cfg.surface.csr_min_score),
+            csr_geo_blend=float(self.cfg.surface.csr_geo_blend),
+            csr_geo_agree_min=float(self.cfg.surface.csr_geo_agree_min),
+            xmap_enable=bool(self.cfg.surface.xmap_enable),
+            xmap_dyn_min_score=float(self.cfg.surface.xmap_dyn_min_score),
+            xmap_static_min_score=float(self.cfg.surface.xmap_static_min_score),
+            xmap_sep_ref_vox=float(self.cfg.surface.xmap_sep_ref_vox),
             ebcut_enable=bool(self.cfg.surface.ebcut_enable),
             ebcut_energy_thresh=float(self.cfg.surface.ebcut_energy_thresh),
             ebcut_w_phi=float(self.cfg.surface.ebcut_w_phi),

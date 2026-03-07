@@ -111,6 +111,43 @@ class VoxelCell3D:
     otv_score: float = 0.0
     otv_age: float = 0.0
     otv_active: float = 0.0
+    # XMem: write-time exclusion memory. It stores dynamic-front occupancy
+    # evidence and later free-space clearing evidence as a reversible state.
+    xmem_occ: float = 0.0
+    xmem_free: float = 0.0
+    xmem_score: float = 0.0
+    xmem_age: float = 0.0
+    xmem_active: float = 0.0
+    xmem_clear: float = 0.0
+    xmem_clear_age: float = 0.0
+    xmem_clear_active: float = 0.0
+    # OBL-3D: independent occlusion-buffered background layer.
+    phi_bg: float = 0.0
+    phi_bg_w: float = 0.0
+    rho_bg: float = 0.0
+    obl_score: float = 0.0
+    obl_age: float = 0.0
+    obl_active: float = 0.0
+    # CMCT: foreground-to-background contradiction transfer state.
+    cmct_score: float = 0.0
+    cmct_age: float = 0.0
+    cmct_active: float = 0.0
+    # CGCC: cross-map geometric carving corridor state.
+    cgcc_score: float = 0.0
+    cgcc_age: float = 0.0
+    cgcc_active: float = 0.0
+    # PFV: persistent free-space volume state.
+    pfv_score: float = 0.0
+    pfv_age: float = 0.0
+    pfv_active: float = 0.0
+    pfv_long: float = 0.0
+    pfv_long_age: float = 0.0
+    pfv_near: float = 0.0
+    pfv_mid: float = 0.0
+    pfv_far: float = 0.0
+    pfv_near_age: float = 0.0
+    pfv_mid_age: float = 0.0
+    pfv_far_age: float = 0.0
     rho_prev: float = 0.0
     rho_osc: float = 0.0
     free_hit_ema: float = 0.0

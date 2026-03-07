@@ -25,6 +25,8 @@ class AssocMeasurement3D:
     dynamic_prob: float = 0.0
     assoc_risk: float = 0.0
     sensor_origin: np.ndarray | None = None
+    seed_blocked: bool = False
+    pfv_penalty: float = 0.0
 
 
 class Associator3D:
@@ -75,6 +77,50 @@ class Associator3D:
         )
         return risk
 
+
+    def _static_support(self, voxel_map: VoxelHashMap3D, cell) -> float:
+        if cell is None:
+            return 0.0
+        rho_ref = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
+        surf = float(max(1e-6, getattr(cell, 'surf_evidence', 0.0)))
+        free = float(max(0.0, getattr(cell, 'free_evidence', 0.0)))
+        occ = float(np.clip(surf / max(1e-6, surf + free), 0.0, 1.0))
+        rho_s = float(np.clip(getattr(cell, 'rho_static', 0.0) / rho_ref, 0.0, 1.0))
+        rho_bg = float(np.clip(getattr(cell, 'rho_bg', 0.0) / rho_ref, 0.0, 1.0))
+        p_static = float(np.clip(getattr(cell, 'p_static', 0.5), 0.0, 1.0))
+        obl = float(voxel_map._obl_conf(cell)) if hasattr(voxel_map, '_obl_conf') else 0.0
+        return float(np.clip(max(0.30 * occ + 0.25 * p_static + 0.20 * rho_s + 0.20 * rho_bg + 0.15 * obl, max(occ, p_static, rho_s, rho_bg, obl)), 0.0, 1.0))
+
+    def _pfv_penalty(self, voxel_map: VoxelHashMap3D, cell, near_cell, point_world: np.ndarray, sensor_origin: np.ndarray | None = None) -> tuple[float, bool]:
+        if not bool(getattr(self.cfg.assoc, 'pfv_gate_enable', True)):
+            return 0.0, False
+        pfv = 0.0
+        if cell is not None and hasattr(voxel_map, '_pfv_conf'):
+            pfv = max(pfv, float(voxel_map._pfv_conf(cell)))
+        if near_cell is not None and hasattr(voxel_map, '_pfv_conf'):
+            pfv = max(pfv, float(voxel_map._pfv_conf(near_cell)))
+        if pfv <= 1e-6:
+            return 0.0, False
+        support = max(self._static_support(voxel_map, cell), self._static_support(voxel_map, near_cell))
+        rho_ref = float(max(1e-6, self.cfg.assoc.contra_rho_ref))
+        rho_bg = float(np.clip(max(getattr(cell, 'rho_bg', 0.0) if cell is not None else 0.0, getattr(near_cell, 'rho_bg', 0.0) if near_cell is not None else 0.0) / rho_ref, 0.0, 1.0))
+        view_align = 0.0
+        if sensor_origin is not None:
+            v = np.asarray(point_world, dtype=float).reshape(3) - np.asarray(sensor_origin, dtype=float).reshape(3)
+            d = float(np.linalg.norm(v))
+            if d > 1e-9:
+                n = v / d
+                if cell is not None and float(np.linalg.norm(getattr(cell, 'g_mean', np.zeros(3)))) > 1e-9:
+                    g = np.asarray(cell.g_mean, dtype=float)
+                    g = g / max(1e-9, float(np.linalg.norm(g)))
+                    view_align = float(np.clip(abs(np.dot(g, -n)), 0.0, 1.0))
+        guard = float(np.clip(getattr(self.cfg.assoc, 'pfv_static_guard', 0.84), 0.0, 1.0))
+        rho_guard = float(np.clip(getattr(self.cfg.assoc, 'pfv_bg_rho_guard', 0.82), 0.0, 1.0))
+        view_w = float(np.clip(getattr(self.cfg.assoc, 'pfv_view_align_weight', 0.25), 0.0, 1.0))
+        penalty = float(np.clip(pfv * (1.0 - guard * support) * (1.0 - rho_guard * rho_bg) * (1.0 + view_w * view_align), 0.0, 1.0))
+        seed_block = bool(pfv >= float(np.clip(getattr(self.cfg.assoc, 'pfv_seed_block_on', 0.42), 0.0, 1.0)) and support < 0.72)
+        return penalty, seed_block
+
     def _find_surface_source(self, voxel_map: VoxelHashMap3D, seed_idx: VoxelIndex) -> VoxelIndex | None:
         radius = max(0, int(self.cfg.assoc.search_radius_cells))
         best_idx = None
@@ -115,6 +161,7 @@ class Associator3D:
 
         if cell is None or cell.phi_w <= 1e-6:
             sigma_n_seed = self.cfg.assoc.sigma_n0 * (1.15 if frontier_flag else 1.0)
+            pfv_penalty, seed_block = self._pfv_penalty(voxel_map, cell, near_cell, point_world, sensor_origin=sensor_origin)
             return AssocMeasurement3D(
                 point_world=point_world,
                 normal_world=normal_world,
@@ -127,6 +174,10 @@ class Associator3D:
                 phi=0.0,
                 seed=True,
                 frontier=frontier_flag,
+                assoc_risk=float(pfv_penalty),
+                seed_blocked=bool(seed_block),
+                pfv_penalty=float(pfv_penalty),
+                sensor_origin=None if sensor_origin is None else np.asarray(sensor_origin, dtype=float).reshape(3),
             )
 
         g = np.asarray(cell.g_mean, dtype=float)
@@ -210,6 +261,12 @@ class Associator3D:
             assoc_risk = self._contra_risk(cell)
             boost_max = float(max(1.0, self.cfg.assoc.contra_d2_boost_max))
             d2 *= float(1.0 + assoc_risk * (boost_max - 1.0))
+        pfv_penalty, _seed_block = self._pfv_penalty(voxel_map, cell, near_cell, point_world, sensor_origin=sensor_origin)
+        # PFAG v2: treat PFV as admissibility prior rather than a generic residual inflator.
+        # Keep a very mild cost bump for bookkeeping, but do not hard-reject mature matches here.
+        if pfv_penalty > float(np.clip(getattr(self.cfg.assoc, 'pfv_gate_off', 0.18), 0.0, 1.0)):
+            d2 *= float(1.0 + 0.20 * pfv_penalty)
+            assoc_risk = float(max(assoc_risk, 0.65 * pfv_penalty))
         return AssocMeasurement3D(
             point_world=point_world,
             normal_world=normal_world,
@@ -223,6 +280,7 @@ class Associator3D:
             seed=False,
             frontier=frontier_flag,
             assoc_risk=float(assoc_risk),
+            pfv_penalty=float(pfv_penalty),
             sensor_origin=None if sensor_origin is None else np.asarray(sensor_origin, dtype=float).reshape(3),
         )
 
@@ -236,6 +294,7 @@ class Associator3D:
         accepted: List[AssocMeasurement3D] = []
         rejected: List[AssocMeasurement3D] = []
         d2_vals: List[float] = []
+        pfv_blocks = 0
 
         gate = float(self.cfg.assoc.gate_threshold)
         relax_gate = float(self.cfg.assoc.relax_gate_scale * gate)
@@ -244,6 +303,10 @@ class Associator3D:
             if m is None:
                 continue
             if m.seed:
+                if bool(m.seed_blocked):
+                    rejected.append(m)
+                    pfv_blocks += 1
+                    continue
                 accepted.append(m)
                 continue
             local_gate = gate
@@ -268,6 +331,10 @@ class Associator3D:
                     and near.frontier_score >= float(self.cfg.assoc.seed_fallback_frontier_scale) * self.cfg.assoc.frontier_activate_thresh
                 )
                 if low_support or frontier_hot:
+                    if m.pfv_penalty >= float(np.clip(getattr(self.cfg.assoc, 'pfv_seed_block_on', 0.42), 0.0, 1.0)):
+                        rejected.append(m)
+                        pfv_blocks += 1
+                        continue
                     m.seed = True
                     m.frontier = True
                     m.d2 = float(local_gate)
@@ -281,5 +348,6 @@ class Associator3D:
             "mean_d2": float(np.mean(d2_vals)) if d2_vals else 0.0,
             "accepted": float(len(accepted)),
             "rejected": float(len(rejected)),
+            "pfv_blocked": float(pfv_blocks),
         }
         return accepted, rejected, stats

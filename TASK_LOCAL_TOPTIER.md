@@ -410,33 +410,33 @@
 ### 下一步目标（本轮完成后）
 
 1. `[已完成]` 静态追平 + 动态约束同持  
-   - 主表来源：`output/post_cleanup/p4_final_merged/oracle/tables/`  
-   - 固化主表：`output/summary_tables/tum_reconstruction_metrics.csv`、`output/summary_tables/tum_dynamic_metrics.csv`  
-   - 结果：`freiburg1_xyz` 上 `F-score=0.94994`、`Chamfer=0.03590`；3 条 walking `ghost_ratio` 相对 TSDF 降幅均 `>40%`，且 `walking_static` 几何差值 `-0.0059 >= -0.01`。  
+   - 主表来源：`output/summary_tables/tum_reconstruction_metrics_static_target_v1.csv`、`output/summary_tables/static_target_constraint_check.csv`  
+   - 当前 canonical 结果：`freiburg1_xyz` 上 `F-score=0.941005`、`Chamfer=0.037296`；3 条 walking 的 `ghost_ratio` 在约束表中均未退化，且分别下降 `-0.04377 / -0.06393 / -0.05222`。  
 
-2. `[已完成]` SLAM 口径主结论可复现  
-   - 验收表：`output/summary_tables/tum_reconstruction_metrics_slam.csv`、`output/summary_tables/tum_dynamic_metrics_slam.csv`  
-   - 结果：3 条 walking 上 `F-score_mean(EGF)=0.8311 > TSDF=0.3986`，`ghost_ratio_mean(EGF)=0.2279 < TSDF=0.6854`，`traj_finite_ratio=1.0`。  
+2. `[已完成]` 严格协议主结论已统一到双协议 canonical 口径  
+   - 正式主表：`output/summary_tables/paper_main_table_local_mapping.csv`、`output/summary_tables/local_mapping_main_metrics_toptier.csv`  
+   - 单次 `slam` 验收表仍保留在：`output/summary_tables/tum_reconstruction_metrics_slam.csv`、`output/summary_tables/tum_dynamic_metrics_slam.csv`  
+   - 但正式对外结论不再引用单次 `slam` 数字，而统一引用双协议 `5-seed` canonical 表。  
 
-3. `[已完成]` TUM + Bonn 3-seed 统计显著性  
-   - TUM 多 seed 根目录：`output/post_cleanup/p4_multiseed_tum_final_v2/`（oracle, 3 walking × 3 seeds）  
-   - Bonn 多 seed 根目录：`output/post_cleanup/p4_multiseed_bonn_final/`（slam, balloon2 × 3 seeds）  
+3. `[已完成]` TUM + Bonn `5-seed` 统计显著性  
+   - TUM 多 seed 根目录：`output/post_cleanup/p4_multiseed_tum_final_v2/`（oracle, 3 walking × 5 seeds）  
+   - Bonn 多 seed 根目录：`output/post_cleanup/p5_multiseed_bonn_all3/`（slam, all3 × 5 seeds）  
    - 显著性表：  
      - `output/summary_tables/tum_significance_multiseed.csv`  
      - `output/summary_tables/bonn_significance_multiseed.csv`  
-     - `output/summary_tables/multiseed_significance_tum_bonn.csv`  
+     - `output/summary_tables/dual_protocol_multiseed_significance.csv`  
    - 核心结论（t-test）：  
-     - TUM dynamic: `fscore p=6.16e-4`, `ghost_ratio p=2.53e-10`  
-     - Bonn dynamic: `fscore p=5.18e-5`, `ghost_ratio p=1.98e-4`  
-   - 全部验收项汇总：`output/summary_tables/round20260302_goal_check.csv`。  
+     - TUM dynamic: `fscore p=4.81e-10`, `ghost_ratio p=1.72e-24`  
+     - Bonn dynamic: `fscore p=1.06e-18`, `ghost_ratio p=5.35e-05`  
+   - 当前 canonical 主表来源：`output/summary_tables/paper_main_table_local_mapping.csv`。  
 
 ### 下一步目标（建议）
 
-1. `[已完成]` Bonn 扩展到 `balloon + crowd2` 的 3-seed 统计，验证显著性跨序列保持。  
-   - 实验根目录：`output/post_cleanup/p5_multiseed_bonn_all3/`（`balloon2 + balloon + crowd2`, seeds=`40,41,42`）。  
+1. `[已完成]` Bonn 扩展到 `balloon + crowd2` 的 `5-seed` canonical 统计，验证显著性跨序列保持。  
+   - 实验根目录：`output/post_cleanup/p5_multiseed_bonn_all3/`（`balloon2 + balloon + crowd2`, seeds=`40,41,42,43,44`）。  
    - 显著性：`output/post_cleanup/p5_multiseed_bonn_all3/tables/significance.csv`。  
    - 汇总同步后：`output/summary_tables/bonn_reconstruction_metrics_multiseed.csv`、`output/summary_tables/bonn_significance_multiseed.csv`。  
-   - 关键结论（EGF vs TSDF, dynamic, n=9）：`fscore mean +0.3927, p=3.68e-15`; `ghost_ratio mean improve +0.3792, p=4.36e-09`。  
+   - 关键结论（EGF vs TSDF, dynamic, n=15）：`fscore mean +0.5765, p=1.06e-18`; `ghost_ratio mean improve +0.1261, p=5.35e-05`。  
 2. `[已完成]` 将 `scripts/update_summary_tables.py` 增加 `--prefer_p4_final` 开关，避免手工覆盖主表。  
    - 用法：`python scripts/update_summary_tables.py --prefer_p4_final --verbose`。  
    - 作用：主表优先读取 `output/post_cleanup/p4_final_merged/oracle/tables/`，无需手工覆盖。  
@@ -493,15 +493,15 @@
 
 ### 6.2 当前结论（仅局部建图）
 
-1. **几何/动态质量：已接近或达到顶刊可投线**  
-   - TUM dynamic（3-seed, oracle）`F-score=0.9372`，优于 TSDF `0.8829`；`ghost_ratio=0.4575`，优于 TSDF `0.7597`。  
-   - Bonn dynamic（3序列×3seed, slam）`F-score=0.9394`，优于 TSDF `0.5468`；`ghost_ratio=0.3549`，优于 TSDF `0.7341`。  
-   - 统计显著性已满足：`p_fscore=3.68e-15`，`p_ghost=4.36e-09`（Bonn）。
+1. **动态优势仍显著，但顶刊主口径仍未过线**  
+   - TUM dynamic（`5-seed`, `oracle`, canonical 均值）：`EGF F-score=0.7903 > TSDF=0.4137`，`EGF ghost_ratio=0.2566 < TSDF=0.8657`，`Chamfer=0.05317 < 0.13146`。  
+   - Bonn dynamic（3 序列 × `5-seed`, `slam`, canonical 均值）：`EGF F-score=0.6463 > TSDF=0.06973`，`EGF ghost_ratio=0.08613 < TSDF=0.21227`，`Chamfer=0.10116 < 0.25664`。  
+   - 统计显著性已满足：TUM `p_fscore=4.81e-10`, `p_ghost=1.72e-24`；Bonn `p_fscore=1.06e-18`, `p_ghost=5.35e-05`。  
 2. **离顶刊“最终形态”仍有关键差距**  
-   - **效率差距大**：本地效率表显示 EGF 约 `0.21 FPS`，相对 TSDF 慢约 `67x`，且落后 RoDyn/DG 的 `~1.2-1.5 FPS` 量级。  
-   - **协议同口径差距**：当前主表仍以 `F-score/Chamfer/Ghost` 为主，尚未全面对齐动态 NeRF/SLAM文献常用 `Acc/Comp/Comp-R` 官方口径。  
+   - **主口径差距明确**：`local_mapping_main_metrics_toptier.csv` 显示 EGF 当前 `TUM Acc=4.1655 cm`、`Bonn Acc=6.1481 cm`、`Bonn Comp-R(5cm)=77.21%`，距离 `P10` 硬门槛仍有明显差距。  
+   - **效率证据需要更清晰分层**：P7 质量保持配置约 `1.146 FPS`，P15 实时调优路径可到 `mapping_fps≈22.09`，但仍需统一 full-pipeline wall-clock 口径后再用于最终主叙事。  
    - **强基线真实复现仍不足**：虽已接入真实外部输出链路，但“同协议、同序列、同预算”下的 `>=2` 强基线原生 runner 仍需补齐。  
-   - **鲁棒性边界证据不足**：缺少系统化 stress test（遮挡率、深度丢失、帧丢失、快动态）的退化曲线。
+   - **鲁棒性边界证据仍需文档统一**：当前 stress test 已有表和失败边界，但还需与 canonical 主表叙事彻底对齐。
 
 ### 6.3 新增收敛任务（用于投稿前封板）
 
@@ -1593,3 +1593,443 @@
 ### 7.5 完成后允许的结论措辞（固定）
 
 > “在局部建图设定下，EGF-DHMap 已达到顶刊投稿标准。该结论基于双协议（oracle/slam）、多数据集（TUM/Bonn）、多 seed 显著性、真实外部基线和边界鲁棒性分析的完整证据链。”
+
+## 2026-03-06 OTV Negative Result Record
+
+### Module
+- `OTV (Observation-Time Transient Veto)`
+- `OTV + front exclusion` (readout-side exclusion using `phi_otv` geometry)
+
+### Code Landing
+- `egf_dhmap3d/modules/updater.py`
+- `egf_dhmap3d/core/voxel_hash.py`
+- `egf_dhmap3d/core/types.py`
+- `egf_dhmap3d/core/config.py`
+- `scripts/run_benchmark.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_p10_precision_profile.py`
+
+### Focused Probe
+- Scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Frames: `60`
+- Protocol: `oracle`
+- Outputs:
+  - `output/post_cleanup/p10_otv_probe_walking_xyz/`
+  - `output/post_cleanup/p10_otv_probe_walking_xyz_tfe/`
+  - `output/summary_tables/p10_otv_probe_walking_xyz_compare.csv`
+
+### Result
+- `OTV` and `OTV + front exclusion` are identical on the focused probe.
+- Key metrics:
+  - `F-score = 0.981691`
+  - `ghost_ratio = 0.756281`
+  - `ghost_tail_ratio = 0.340002`
+- This does not improve the P10 ghost bottleneck.
+
+### Status Update
+- `OTV` is marked as a negative branch and should not be used as the main fix for P10.
+- Remaining valid mainline: move to stronger architectural decoupling, not more score gates.
+
+## 2026-03-06 CSR-XMap Negative Result Record
+
+### Implemented
+- 新增 `CSR-XMap` 结构分支：
+  - `CSR (Counterfactual Static Readout)`：从 `phi_static / phi_rear / phi_spg` 和经一致性保护的 `phi_geo` 构造反事实静态表面；
+  - `XMap`：从 `phi_transient / phi_dyn / phi_otv` 构造显式动态排斥表面；
+  - 在 `extract_surface_points()` 中，不再只靠 `dyn_mix` 软门控，而是做一次“静态反事实表面 vs 动态排斥表面”的几何竞争。
+- 相关代码已接入：
+  - `egf_dhmap3d/core/config.py`
+  - `egf_dhmap3d/modules/pipeline.py`
+  - `scripts/run_egf_3d_tum.py`
+  - `scripts/run_benchmark.py`
+  - `scripts/run_p10_precision_profile.py`
+  - `egf_dhmap3d/core/voxel_hash.py`
+
+### 验证命令
+```bash
+python scripts/run_p10_precision_profile.py --profiles p10_ptdsf_zcbf_dccm_wdsgr_spg_csr_xmap_a --dry_run
+# 然后抽取 tum benchmark 命令，改为：
+#   --static_sequences ""
+#   --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz
+#   --frames 60
+#   --out_root output/post_cleanup/p10_csr_xmap_probe_walking_xyz
+```
+
+### 结果（focused probe）
+- 输出目录：`output/post_cleanup/p10_csr_xmap_probe_walking_xyz/`
+- 对比表：`output/summary_tables/p10_csr_xmap_probe_walking_xyz_compare.csv`
+- `CSR-XMap`：
+  - `F-score = 0.995147`
+  - `Chamfer = 0.020893`
+  - `ghost_ratio = 0.810235`
+  - `ghost_tail_ratio = 0.338690`
+- `OTV` 参考：
+  - `F-score = 0.981691`
+  - `Chamfer = 0.024224`
+  - `ghost_ratio = 0.756281`
+  - `ghost_tail_ratio = 0.340002`
+- `TSDF` 参考：
+  - `F-score = 0.913703`
+  - `ghost_ratio = 0.687708`
+  - `ghost_tail_ratio = 0.146341`
+
+### 结论
+- `CSR-XMap` 对几何读出是有效的：`Chamfer/F-score` 都优于 `OTV`。
+- 但它**没有解决 P10 的核心 ghost 长尾问题**：
+  - `ghost_tail_ratio` 基本不变（`0.3400 -> 0.3387`）；
+  - `ghost_ratio` 反而进一步恶化（`0.7563 -> 0.8102`）。
+- 同时运行代价上升明显：
+  - `wall_total_sec` 约从 `784.9 s` 升到 `845.9 s`；
+  - `extract_total_sec` 约从 `21.2 s` 升到 `52.6 s`。
+
+### 判定
+- `CSR-XMap` 作为 `P10` 主线 **未通过**，记为第二个结构负例。
+- 它说明：
+  1. export/readout 级的反事实静态竞争可以改善几何质量；
+  2. 但 `P10` 真正卡住的是**长尾动态残影并未在状态层被独立建模**；
+  3. 因而下一步不该继续在 readout 端叠规则，而应进入更强的“显式静/动态图层或写入期排斥状态”路线。
+
+### 下一步主线
+- 从 `readout-side competition` 切到 `state-side separation`：
+  - 真实双图层 / 双地图读写；或
+  - 显式动态排斥 occupancy / exclusion state，在 update-time 提交负证据，而不是等导出阶段再竞争。
+
+## 2026-03-06 XMem / BECM / RCCM Negative Chain Record
+
+### 模块与落地
+- `XMem (Exclusion Memory)`：写入期可逆排斥记忆。
+- `BECM (Bifurcated Exclusion-Clear Memory)`：把 `front exclusion` 与 `clear-lock` 分成两个独立状态，避免 `free evidence` 直接抵消排斥。
+- `RCCM (Ray-Conditioned Clear Memory)`：只对已有前景记忆的体素注入沿视线负证据，避免回到全局激进 ray-casting。
+- 代码接入：
+  - `egf_dhmap3d/core/types.py`
+  - `egf_dhmap3d/core/config.py`
+  - `egf_dhmap3d/modules/updater.py`
+  - `egf_dhmap3d/core/voxel_hash.py`
+  - `scripts/run_egf_3d_tum.py`
+  - `scripts/run_benchmark.py`
+  - `scripts/run_p10_precision_profile.py`
+
+### focused probe
+- Scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Frames: `60`
+- Protocol: `oracle`
+- 输出目录：
+  - `output/post_cleanup/p10_xmem_probe_walking_xyz/`
+  - `output/post_cleanup/p10_xmem_becm_probe_walking_xyz/`
+  - `output/post_cleanup/p10_xmem_rccm_probe_walking_xyz/`
+- 统一对比表：`output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `XMem v1`：
+  - `F-score = 0.992518`
+  - `Chamfer = 0.024049`
+  - `ghost_ratio = 0.820857`
+  - `ghost_tail_ratio = 0.366245`
+- `BECM`：与 `XMem v1` 数值完全一致。
+- `RCCM`：与 `XMem v1` 数值完全一致，且运行更慢（`mapping_fps ≈ 0.0439`）。
+- 参考：
+  - `OTV ghost_tail_ratio = 0.340002`
+  - `CSR-XMap ghost_tail_ratio = 0.338690`
+  - `TSDF ghost_tail_ratio = 0.146341`
+
+### 结论
+- `XMem -> BECM -> RCCM` 构成了第三条完整的结构负例链。
+- 这条链说明：
+  1. 当前单状态融合 + 后置排斥/清理架构下，再往同一 persistent map 上挂排斥记忆，已经无法继续推动 `P10`；
+  2. 即便把 `free evidence` 提升为 `clear-lock`，或者把沿射线负证据只打到 `XMem` 体素上，最终仍被同一个 persistent geometry pool 稀释；
+  3. 因而 `P10` 的下一步不能再是“更多 veto memory”，而必须是**显式静态背景图层 / 双地图 / 双写入图**。
+
+### 状态更新
+- `P10` 继续保持 **未过线**。
+- 当前已证伪的主线包括：
+  - `OTV`
+  - `CSR-XMap`
+  - `XMem`
+  - `BECM`
+  - `RCCM`
+- 下一步唯一合理主线：进入**显式 background layer / dual-map** 结构，不再在单图层 veto 链路上做增量扩展。
+
+## 2026-03-07 OBL-3D Negative Result Record
+
+### 模块
+- `OBL-3D (Occlusion-Buffered Background Layer)`
+- `background_hard`：当背景置信度和前景动态冲突同时足够高时，导出阶段直接硬选背景层 `phi_bg`
+
+### 代码落地
+- `egf_dhmap3d/core/types.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/modules/updater.py`
+- `egf_dhmap3d/core/voxel_hash.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### focused probe
+- Scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Frames: `60`
+- Protocol: `oracle`
+- 输出目录：
+  - `output/post_cleanup/p10_obl_probe_walking_xyz/`
+  - `output/post_cleanup/p10_obl_hardbg_probe_walking_xyz/`
+- 对比表：`output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `OBL-3D`：
+  - `F-score = 0.989473`
+  - `Chamfer = 0.024445`
+  - `ghost_ratio = 0.806074`
+  - `ghost_tail_ratio = 0.368327`
+- `background_hard`：与 `OBL-3D` 数值完全一致，但更慢。
+
+### 结论
+- `OBL-3D` 证明了“在同一张地图中增加背景层”仍然不够。
+- 即便：
+  1. update 阶段已经单独写背景层；
+  2. extract 阶段已经允许硬选背景层；
+  最终 ghost 仍未改善到可接受水平。
+- 这说明当前 P10 的剩余瓶颈已经从“缺少背景状态”进一步收敛到：
+  - **缺少真正独立的 background map / foreground map 持久化与读出链路**。
+
+### 状态更新
+- `P10` 继续 **未过线**。
+- 现阶段单图层主线已证伪的结构分支包括：
+  - `OTV`
+  - `CSR-XMap`
+  - `XMem`
+  - `BECM`
+  - `RCCM`
+  - `OBL-3D`
+  - `background_hard`
+- 下一步唯一合理主线：进入**真双地图**结构，不再在同一个 voxel map 上追加新通道。
+
+## 2026-03-07 Dual-Map Mainline Update
+
+### 模块
+- `DMBG-3D (Dual-Map Background/Foreground Graph)`
+- `BER (Background-Exclusive Readout)`
+
+### 代码落地
+- `egf_dhmap3d/modules/pipeline.py`
+- `egf_dhmap3d/modules/updater.py`
+- `egf_dhmap3d/core/voxel_hash.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/core/types.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### focused probe
+- Scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Frames: `60`
+- Protocol: `oracle`
+- 输出目录：
+  - `output/post_cleanup/p10_dualmap_probe_walking_xyz/`
+  - `output/post_cleanup/p10_dualmap_ber_probe_walking_xyz/`
+- 对比表：`output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `dual_map`：
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_ratio = 0.813839`
+  - `ghost_tail_ratio = 0.347614`
+- `dual_map_ber`：
+  - 与 `dual_map` 指标完全一致；
+  - 运行更慢。
+
+### 结论
+- `dual_map` 是当前第一条**真正有效的结构主线**：
+  - 中间态明显改变，且不是数值等价分支；
+  - 几何质量继续提升；
+  - `ghost_tail_ratio` 从 `0.366245` 降到 `0.347614`，说明“背景图与前景图分家”方向正确。
+- 但它仍未让 `P10` 过线，说明仅做“分图存储 + 独立导出”还不够。
+- 目前最合理的下一步创新模块已经收敛为：
+  - **跨图负证据回传**，即把 foreground_map 中稳定形成的动态矛盾，作为显式负证据投回 background_map。
+
+### 状态更新
+- `P10` 仍未过线。
+- 但主线已从“单图层否决链”正式切换到 `dual_map`。
+- 之后不再继续扩展 `OTV/XMem/OBL` 这类单图层路线；下一步主攻 `CMCT`。
+
+## 2026-03-07 CMCT Negative Result Record
+
+### 模块
+- `CMCT (Cross-Map Contradiction Transfer)`
+- `cross-map foreground arbitration`：背景图提取时显式查询 foreground_map 的局部动态表面，抑制弱背景候选
+
+### 输出
+- `output/post_cleanup/p10_cmct_probe_walking_xyz/`
+- `output/post_cleanup/p10_cmct_cfam_probe_walking_xyz/`
+- `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `dual_map_cmct` 与 `dual_map` 数值完全一致：
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_tail_ratio = 0.347614`
+- `dual_map_cmct_cfam` 同样与 `dual_map` 数值一致。
+
+### 结论
+- 这说明当前剩余瓶颈已经不在“体素级跨图回传”或“同位点前景抑制”。
+- 即使：
+  1. foreground 的稳定动态矛盾已经显式投回 background；
+  2. 背景提取时也已经查询 foreground_map 做局部屏蔽；
+  最终 ghost 指标仍没有变化。
+- 因而下一步主线必须升级到**几何域 / 视线域**，而不是继续在 voxel-local 上做状态传递。
+
+### 状态更新
+- `dual_map` 仍是当前唯一的结构性正主线。
+- `CMCT` 与其 readout 变体记为负结果。
+- 下一步创新模块建议：`CGCC (Cross-Map Geometric Carving Corridor)`，即把 foreground 表面投成短程 carving corridor，对 background_map 做几何域负约束。
+
+## 2026-03-08 CGCC Negative Result Record
+
+### 模块
+- `CGCC (Cross-Map Geometric Carving Corridor)`
+
+### 输出
+- `output/post_cleanup/p10_cgcc_probe_walking_xyz/`
+- `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `dual_map_cgcc` 与 `dual_map` 数值完全一致：
+  - `F-score = 0.996531`
+  - `Chamfer = 0.020462`
+  - `ghost_tail_ratio = 0.347614`
+- 运行更慢：`mapping_fps ≈ 0.0229`。
+
+### 结论
+- 这说明即使把 foreground 表面提升为“几何域短走廊 carving”，在当前形式下仍不足以改变最终 ghost 指标。
+- 因而当前剩余瓶颈已经不在：
+  - 同位点门控；
+  - 体素级跨图传递；
+  - 短程局部视线走廊。
+- 下一步必须升级到更持久的**自由空间世界表示**，而不是继续追加局部 suppression 模块。
+
+### 状态更新
+- `dual_map` 继续保留为唯一结构性正主线。
+- `CMCT / CFAM / CGCC` 全部记为围绕 dual_map 的负结果链。
+- 下一步建议：`PFV (Persistent Free-space Volume)`。
+
+## 2026-03-08 PFV Mainline Update
+
+### 模块
+- `PFV (Persistent Free-space Volume)`
+
+### 输出
+- `output/post_cleanup/p10_pfv_probe_walking_xyz/`
+- `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `dual_map_pfv`：
+  - `F-score = 0.996541`
+  - `Chamfer = 0.020461`
+  - `ghost_ratio = 0.813677`
+  - `ghost_tail_ratio = 0.346503`
+- 相比 `dual_map`：
+  - `ghost_tail_ratio: 0.347614 -> 0.346503`
+  - `F-score` 和 `Chamfer` 轻微改善。
+
+### 结论
+- PFV 是 `dual_map` 之后第一条再次推动目标指标前进的主线。
+- 虽然幅度还不大，但它说明“持久自由空间状态”比此前的：
+  - 单图层门控；
+  - 跨图体素矛盾回传；
+  - 短程几何走廊 carving；
+  更接近真正缺失的机制。
+
+### 状态更新
+- `dual_map + PFV` 现在是新的主线。
+- `CMCT / CFAM / CGCC` 维持负结果归档。
+- 下一步不再回到 contradiction-only 路线，而是继续强化 PFV 主线。
+
+## 2026-03-08 PFVP Negative Result Record
+
+### 模块
+- `PFVP (PFV-guided Proposal Routing)`
+
+### 输出
+- `output/post_cleanup/p10_pfvp_quick/`
+- `output/post_cleanup/p10_pfvp_probe_walking_xyz_v2/`
+- `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `dual_map_pfvp`：
+  - `F-score = 0.997273`
+  - `Chamfer = 0.020437`
+  - `ghost_tail_ratio = 0.352354`
+- 相比 `dual_map_pfv`：
+  - 几何略有改善；
+  - 但 `ghost_tail_ratio` 从 `0.346503` 反弹到 `0.352354`。
+
+### 结论
+- PFVP 证明“把 PFV 再前推到 proposal routing 阶段”并不能解决当前瓶颈。
+- 这与 `PFAG` 的结论一致，但更有说服力：
+  - 不只是“拒绝太早”有问题；
+  - 即使保留观测、只改写入去向，也会损害晚期 ghost 指标。
+- 因此，下一步不应继续向更早阶段推进 PFV，而应继续强化 `dual_map + PFV` 在 update/export 内部的表达能力。
+
+### 状态更新
+- `dual_map + PFV` 仍是当前最优主线。
+- `PFAG / PFVP` 均记为负结果。
+- 下一步建议：继续增强 PFV 本体，而不是更早的 gating/routing。
+
+## 2026-03-08 PFVP Negative Result Record
+
+### 模块
+- `PFVP (PFV-guided Proposal Routing)`
+
+### 输出
+- `output/post_cleanup/p10_pfvp_quick/`
+- `output/post_cleanup/p10_pfvp_probe_walking_xyz_v2/`
+- `output/summary_tables/p10_structural_probe_walking_xyz_compare.csv`
+
+### 结果
+- `dual_map_pfvp`：
+  - `F-score = 0.997273`
+  - `Chamfer = 0.020437`
+  - `ghost_tail_ratio = 0.352354`
+- 相比 `dual_map_pfv`：
+  - 几何略有改善；
+  - 但 `ghost_tail_ratio` 从 `0.346503` 反弹到 `0.352354`。
+
+### 结论
+- PFVP 再次证明：把 PFV 前推到 update 之前的决策层面，会损害当前最关键的 ghost 指标。
+- 它比 PFAG 更温和，但结论一致：
+  - `PFV` 应保留在 update/export 主线；
+  - 不应继续向更早的 gating/routing 扩张。
+
+### 状态更新
+- `dual_map + PFV` 仍为当前最佳主线。
+- `PFAG / PFVP` 都作为负结果归档。
+- 下一步建议：继续增强 PFV 本体，而不是更早阶段的决策逻辑。
+
+## 2026-03-08 PFV-Sharp Quick Negative Record
+
+### 模块
+- `PFV-sharp`：更长时记忆的 PFV + 深度感知累积 + clustered export sharpening
+
+### 输出
+- `output/post_cleanup/p10_pfv_sharp_quick/`
+
+### 结果
+- `10` 帧 quick probe 与当前 `dual_map + PFV` 主线在关键表上基本数值一致。
+- 因此未继续升级到 `60` 帧 focused probe。
+
+### 结论
+- 当前 PFV 的问题不只是“状态不够强”或“阈值不够锐利”。
+- 下一步若继续沿 PFV 主线，应优先考虑更结构化的 PFV 表示，而不是再增强同一个标量状态。
+
+## 2026-03-08 PFV-Bank Quick Negative Record
+
+### 模块
+- `PFV-bank`：near / mid / far free-space banks + bank-aware export sharpening
+
+### 输出
+- `output/post_cleanup/p10_pfv_banks_quick/`
+
+### 结果
+- `10` 帧 quick probe 与当前 `dual_map + PFV` 主线在关键表上基本数值一致。
+- 因此未继续升级到 `60` 帧 focused probe。
+
+### 结论
+- 当前 PFV 的剩余瓶颈不只是“单标量不够”，而是更新/导出的结构作用仍不足。
+- `PFV-bank` 作为结构化 quick 尝试，当前也记为低收益负结果。

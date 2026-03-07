@@ -162,6 +162,14 @@ class Profile:
     surface_dual_layer_static_anchor_rho: float = 0.90
     surface_dual_layer_static_anchor_p: float = 0.70
     surface_dual_layer_static_anchor_ratio: float = 1.70
+    surface_csr_enable: bool = False
+    surface_csr_min_score: float = 0.38
+    surface_csr_geo_blend: float = 0.18
+    surface_csr_geo_agree_min: float = 0.70
+    surface_xmap_enable: bool = False
+    surface_xmap_dyn_min_score: float = 0.52
+    surface_xmap_static_min_score: float = 0.42
+    surface_xmap_sep_ref_vox: float = 0.90
     surface_omhs_enable: bool = False
     zdyn_enable: bool = False
     zdyn_alpha_up: float = 0.26
@@ -206,6 +214,22 @@ class Profile:
     wdsg_route_enable: bool = False
     spg_enable: bool = False
     otv_enable: bool = False
+    xmem_enable: bool = False
+    xmem_sep_ref_vox: float = 0.90
+    xmem_occ_alpha: float = 0.18
+    xmem_free_alpha: float = 0.14
+    xmem_score_alpha: float = 0.20
+    xmem_support_ref: float = 0.24
+    xmem_commit_on: float = 0.60
+    xmem_commit_off: float = 0.42
+    xmem_age_ref: float = 1.0
+    xmem_static_guard: float = 0.78
+    xmem_free_gain: float = 0.85
+    xmem_static_veto: float = 0.96
+    xmem_geo_veto: float = 0.92
+    xmem_transient_boost: float = 0.90
+    xmem_dyn_boost: float = 0.82
+    xmem_decay: float = 0.97
     # Associator heteroscedastic noise.
     assoc_hetero_enable: bool = False
     assoc_hetero_inc_ref_cos: float = 0.65
@@ -5042,6 +5066,159 @@ PROFILES.extend(
         ),
         replace(
             _BASE_P10_STRUCT,
+            name="p10_ptdsf_zcbf_dccm_wdsgr_spg_csr_xmap_a",
+            dual_state_enable=True,
+            ptdsf_enable=True,
+            ptdsf_rho_alpha=0.20,
+            ptdsf_static_blend=0.62,
+            ptdsf_commit_age_ref=3.0,
+            ptdsf_commit_bonus=0.10,
+            ptdsf_rollback_bonus=0.05,
+            wod_enable=True,
+            rps_enable=True,
+            rps_hard_commit_enable=True,
+            wdsg_enable=True,
+            wdsg_route_enable=True,
+            spg_enable=True,
+            lzcd_enable=True,
+            lzcd_interval=1,
+            lzcd_radius_cells=1,
+            lzcd_min_neighbors=8,
+            lzcd_bias_alpha=0.26,
+            lzcd_correction_gain=0.52,
+            lzcd_max_bias=0.10,
+            lzcd_max_step=0.04,
+            lzcd_use_geo_channel=True,
+            zcbf_enable=True,
+            zcbf_block_size_cells=6,
+            zcbf_min_rho=0.22,
+            zcbf_min_phi_w=0.55,
+            zcbf_max_dscore=0.52,
+            zcbf_alpha=0.18,
+            zcbf_trim_quantile=0.72,
+            zcbf_apply_gain=0.24,
+            zcbf_max_bias=0.035,
+            zcbf_static_rho_ref=0.90,
+            dccm_enable=True,
+            dccm_alpha=0.18,
+            dccm_age_gain=0.12,
+            dccm_age_decay=0.95,
+            dccm_commit_thresh=0.60,
+            dccm_free_weight=0.42,
+            dccm_rear_weight=0.24,
+            dccm_age_weight=0.18,
+            dccm_surface_weight=0.12,
+            dccm_rho_weight=0.08,
+            surface_use_phi_geo_channel=True,
+            surface_use_dual_static_channel=True,
+            surface_lzcd_apply_in_extraction=True,
+            surface_lzcd_bias_scale=1.0,
+            surface_ptdsf_persistent_only_enable=True,
+            surface_ptdsf_persistent_min_rho=0.14,
+            surface_ptdsf_static_rho_weight=0.40,
+            surface_zcbf_apply_in_extraction=True,
+            surface_zcbf_bias_scale=0.85,
+            surface_dccm_enable=True,
+            surface_dccm_commit_weight=0.34,
+            surface_dccm_static_guard=0.72,
+            surface_dccm_drop_gain=0.24,
+            surface_dual_layer_extract_enable=True,
+            surface_dual_layer_dyn_drop_thresh=0.69,
+            surface_dual_layer_dyn_free_ratio_min=0.86,
+            surface_dual_layer_static_anchor_rho=0.92,
+            surface_dual_layer_static_anchor_p=0.72,
+            surface_dual_layer_static_anchor_ratio=1.72,
+            surface_csr_enable=True,
+            surface_csr_min_score=0.38,
+            surface_csr_geo_blend=0.18,
+            surface_csr_geo_agree_min=0.70,
+            surface_xmap_enable=True,
+            surface_xmap_dyn_min_score=0.52,
+            surface_xmap_static_min_score=0.42,
+            surface_xmap_sep_ref_vox=0.90,
+            surface_omhs_enable=True,
+            assoc_hetero_enable=True,
+            zdyn_enable=True,
+        ),
+        replace(
+            _BASE_P10_STRUCT,
+            name="p10_ptdsf_zcbf_dccm_wdsgr_spg_xmem_a",
+            dual_state_enable=True,
+            ptdsf_enable=True,
+            ptdsf_rho_alpha=0.20,
+            ptdsf_static_blend=0.62,
+            ptdsf_commit_age_ref=3.0,
+            ptdsf_commit_bonus=0.10,
+            ptdsf_rollback_bonus=0.05,
+            wod_enable=True,
+            rps_enable=True,
+            rps_hard_commit_enable=True,
+            wdsg_enable=True,
+            wdsg_route_enable=True,
+            spg_enable=True,
+            xmem_enable=True,
+            lzcd_enable=True,
+            lzcd_interval=1,
+            lzcd_radius_cells=1,
+            lzcd_min_neighbors=8,
+            lzcd_bias_alpha=0.26,
+            lzcd_correction_gain=0.52,
+            lzcd_max_bias=0.10,
+            lzcd_max_step=0.04,
+            lzcd_use_geo_channel=True,
+            zcbf_enable=True,
+            zcbf_block_size_cells=6,
+            zcbf_min_rho=0.22,
+            zcbf_min_phi_w=0.55,
+            zcbf_max_dscore=0.52,
+            zcbf_alpha=0.18,
+            zcbf_trim_quantile=0.72,
+            zcbf_apply_gain=0.24,
+            zcbf_max_bias=0.035,
+            zcbf_static_rho_ref=0.90,
+            dccm_enable=True,
+            dccm_alpha=0.18,
+            dccm_age_gain=0.12,
+            dccm_age_decay=0.95,
+            dccm_commit_thresh=0.60,
+            dccm_free_weight=0.42,
+            dccm_rear_weight=0.24,
+            dccm_age_weight=0.18,
+            dccm_surface_weight=0.12,
+            dccm_rho_weight=0.08,
+            surface_use_phi_geo_channel=True,
+            surface_use_dual_static_channel=True,
+            surface_lzcd_apply_in_extraction=True,
+            surface_lzcd_bias_scale=1.0,
+            surface_ptdsf_persistent_only_enable=True,
+            surface_ptdsf_persistent_min_rho=0.14,
+            surface_ptdsf_static_rho_weight=0.40,
+            surface_zcbf_apply_in_extraction=True,
+            surface_zcbf_bias_scale=0.85,
+            surface_dccm_enable=True,
+            surface_dccm_commit_weight=0.34,
+            surface_dccm_static_guard=0.72,
+            surface_dccm_drop_gain=0.24,
+            surface_dual_layer_extract_enable=True,
+            surface_dual_layer_dyn_drop_thresh=0.69,
+            surface_dual_layer_dyn_free_ratio_min=0.86,
+            surface_dual_layer_static_anchor_rho=0.92,
+            surface_dual_layer_static_anchor_p=0.72,
+            surface_dual_layer_static_anchor_ratio=1.72,
+            surface_csr_enable=True,
+            surface_csr_min_score=0.38,
+            surface_csr_geo_blend=0.18,
+            surface_csr_geo_agree_min=0.70,
+            surface_xmap_enable=True,
+            surface_xmap_dyn_min_score=0.52,
+            surface_xmap_static_min_score=0.42,
+            surface_xmap_sep_ref_vox=0.90,
+            surface_omhs_enable=True,
+            assoc_hetero_enable=True,
+            zdyn_enable=True,
+        ),
+        replace(
+            _BASE_P10_STRUCT,
             name="p10_ptdsf_zcbf_dccm_wdsgr_spg_otv_a",
             dual_state_enable=True,
             ptdsf_enable=True,
@@ -5723,6 +5900,48 @@ def main() -> None:
             str(float(np.clip(p.surface_dual_layer_static_anchor_p, 0.0, 1.0))),
             "--egf_surface_dual_layer_static_anchor_ratio",
             str(float(max(1e-6, p.surface_dual_layer_static_anchor_ratio))),
+            "--egf_surface_csr_min_score",
+            str(float(np.clip(p.surface_csr_min_score, 0.0, 1.0))),
+            "--egf_surface_csr_geo_blend",
+            str(float(np.clip(p.surface_csr_geo_blend, 0.0, 1.0))),
+            "--egf_surface_csr_geo_agree_min",
+            str(float(np.clip(p.surface_csr_geo_agree_min, 0.0, 1.0))),
+            "--egf_surface_xmap_dyn_min_score",
+            str(float(np.clip(p.surface_xmap_dyn_min_score, 0.0, 1.0))),
+            "--egf_surface_xmap_static_min_score",
+            str(float(np.clip(p.surface_xmap_static_min_score, 0.0, 1.0))),
+            "--egf_surface_xmap_sep_ref_vox",
+            str(float(max(0.1, p.surface_xmap_sep_ref_vox))),
+            "--egf_xmem_sep_ref_vox",
+            str(float(max(0.1, p.xmem_sep_ref_vox))),
+            "--egf_xmem_occ_alpha",
+            str(float(np.clip(p.xmem_occ_alpha, 0.01, 0.95))),
+            "--egf_xmem_free_alpha",
+            str(float(np.clip(p.xmem_free_alpha, 0.01, 0.95))),
+            "--egf_xmem_score_alpha",
+            str(float(np.clip(p.xmem_score_alpha, 0.01, 0.95))),
+            "--egf_xmem_support_ref",
+            str(float(np.clip(p.xmem_support_ref, 0.01, 0.95))),
+            "--egf_xmem_commit_on",
+            str(float(np.clip(p.xmem_commit_on, 0.0, 1.0))),
+            "--egf_xmem_commit_off",
+            str(float(np.clip(p.xmem_commit_off, 0.0, 1.0))),
+            "--egf_xmem_age_ref",
+            str(float(max(1.0, p.xmem_age_ref))),
+            "--egf_xmem_static_guard",
+            str(float(np.clip(p.xmem_static_guard, 0.0, 1.0))),
+            "--egf_xmem_free_gain",
+            str(float(max(0.0, p.xmem_free_gain))),
+            "--egf_xmem_static_veto",
+            str(float(np.clip(p.xmem_static_veto, 0.0, 1.2))),
+            "--egf_xmem_geo_veto",
+            str(float(np.clip(p.xmem_geo_veto, 0.0, 1.2))),
+            "--egf_xmem_transient_boost",
+            str(float(max(0.0, p.xmem_transient_boost))),
+            "--egf_xmem_dyn_boost",
+            str(float(np.clip(p.xmem_dyn_boost, 0.0, 1.5))),
+            "--egf_xmem_decay",
+            str(float(np.clip(p.xmem_decay, 0.80, 1.0))),
             "--egf_surface_adaptive_enable",
         ]
         if p.lzcd_enable:
@@ -5751,6 +5970,10 @@ def main() -> None:
             common_egf.append("--egf_surface_lzcd_apply_in_extraction")
         if p.surface_omhs_enable:
             common_egf.append("--egf_surface_omhs_enable")
+        if p.surface_csr_enable:
+            common_egf.append("--egf_surface_csr_enable")
+        if p.surface_xmap_enable:
+            common_egf.append("--egf_surface_xmap_enable")
         if p.surface_stcg_enable:
             common_egf.append("--egf_surface_stcg_enable")
         if p.surface_use_phi_geo_channel:
@@ -5801,6 +6024,8 @@ def main() -> None:
             common_egf.append("--egf_spg_enable")
         if p.otv_enable:
             common_egf.append("--egf_otv_enable")
+        if p.xmem_enable:
+            common_egf.append("--egf_xmem_enable")
         if p.zcbf_enable:
             common_egf.append("--egf_zcbf_enable")
         if p.dccm_enable:
