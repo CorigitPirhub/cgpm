@@ -125,6 +125,27 @@ class VoxelCell3D:
     phi_bg: float = 0.0
     phi_bg_w: float = 0.0
     rho_bg: float = 0.0
+    # Delayed background candidate state.
+    phi_bg_cand: float = 0.0
+    phi_bg_cand_w: float = 0.0
+    rho_bg_cand: float = 0.0
+    bg_cand_score: float = 0.0
+    bg_cand_age: float = 0.0
+    bg_cand_active: float = 0.0
+    # Tri-map escalation-aware delayed residency state.
+    trimap_hold_frames: float = 0.0
+    trimap_hysteresis: float = 0.0
+    trimap_route_score: float = 0.0
+    trimap_escalated: float = 0.0
+    # Persistent delayed surface bank.
+    phi_delayed_bank: float = 0.0
+    phi_delayed_bank_w: float = 0.0
+    rho_delayed_bank: float = 0.0
+    g_delayed_bank: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=float))
+    g_delayed_bank_w: float = 0.0
+    delayed_bank_conf: float = 0.0
+    delayed_bank_age: float = 0.0
+    delayed_bank_active: float = 0.0
     obl_score: float = 0.0
     obl_age: float = 0.0
     obl_active: float = 0.0
@@ -148,6 +169,10 @@ class VoxelCell3D:
     pfv_near_age: float = 0.0
     pfv_mid_age: float = 0.0
     pfv_far_age: float = 0.0
+    # PFV exclusivity: export-oriented persistent cleared-corridor state.
+    pfv_exclusive: float = 0.0
+    pfv_exclusive_age: float = 0.0
+    pfv_exclusive_active: float = 0.0
     rho_prev: float = 0.0
     rho_osc: float = 0.0
     free_hit_ema: float = 0.0

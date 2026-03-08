@@ -15,6 +15,10 @@ from egf_dhmap3d.modules.predictor import Predictor3D
 from egf_dhmap3d.modules.updater import Updater3D
 from egf_dhmap3d.P10_method.pfv import map_static_support as p10_map_static_support
 from egf_dhmap3d.P10_method.pfv import route_measurements_with_pfv as p10_route_measurements_with_pfv
+from egf_dhmap3d.P10_method.tri_map import promote_delayed_background_map as p10_promote_delayed_background_map
+from egf_dhmap3d.P10_method.tri_map import route_measurements_with_delayed_bg as p10_route_measurements_with_delayed_bg
+from egf_dhmap3d.P10_method.tri_map import hole_only_delayed_rescue as p10_hole_only_delayed_rescue
+from egf_dhmap3d.P10_method.tri_map import residency_gated_delayed_export as p10_residency_gated_delayed_export
 
 
 class EGFDHMap3D:
@@ -22,6 +26,7 @@ class EGFDHMap3D:
         self.cfg = cfg
         self.background_map = VoxelHashMap3D(cfg)
         self.foreground_map = VoxelHashMap3D(cfg) if bool(getattr(cfg.update, 'dual_map_enable', False)) else None
+        self.delayed_background_map = VoxelHashMap3D(cfg) if (self.foreground_map is not None and bool(getattr(cfg.update, 'tri_map_enable', False))) else None
         self.voxel_map = self.background_map
         self.predictor = Predictor3D(cfg)
         self.associator = Associator3D(cfg)
@@ -106,6 +111,21 @@ class EGFDHMap3D:
 
     def _route_measurements_with_pfv(self, accepted: List) -> Tuple[List, List, Dict[str, float]]:
         return p10_route_measurements_with_pfv(self, accepted)
+
+
+    def _route_measurements_with_delayed_bg(self, accepted: List) -> Tuple[List, List, Dict[str, float]]:
+        return p10_route_measurements_with_delayed_bg(self, accepted)
+
+
+    def _promote_delayed_background_map(self) -> Dict[str, float]:
+        return p10_promote_delayed_background_map(self)
+
+
+    def _hole_only_delayed_rescue(self, extract_kwargs: Dict[str, object], committed_points: np.ndarray, committed_normals: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
+        return p10_hole_only_delayed_rescue(self, extract_kwargs, committed_points, committed_normals)
+
+    def _residency_gated_delayed_export(self, extract_kwargs: Dict[str, object], committed_points: np.ndarray, committed_normals: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
+        return p10_residency_gated_delayed_export(self, extract_kwargs, committed_points, committed_normals)
 
 
     def _delta_from_gt(self, t_wc: np.ndarray) -> np.ndarray:
@@ -488,6 +508,10 @@ class EGFDHMap3D:
             )
         else:
             bg_accepted, fg_accepted, pfvp_stats = self._route_measurements_with_pfv(accepted)
+            delayed_bg_accepted: List = []
+            trimap_stats: Dict[str, float] = {'trimap_bg_only': float(len(bg_accepted)), 'trimap_delayed_only': 0.0, 'trimap_delay_score_mean': 0.0}
+            if self.delayed_background_map is not None:
+                bg_accepted, delayed_bg_accepted, trimap_stats = self._route_measurements_with_delayed_bg(bg_accepted)
             update_bg = self.updater.update(
                 self.background_map,
                 bg_accepted,
@@ -497,6 +521,17 @@ class EGFDHMap3D:
                 pose_cov=self.predictor.pose.cov,
                 map_role="background",
             )
+            update_delay = {'mean_d_score': 0.0, 'touched_voxels': 0.0}
+            if self.delayed_background_map is not None:
+                update_delay = self.updater.update(
+                    self.delayed_background_map,
+                    delayed_bg_accepted,
+                    [],
+                    sensor_origin=sensor_origin,
+                    frame_id=self.frame_counter,
+                    pose_cov=self.predictor.pose.cov,
+                    map_role="background_delayed",
+                )
             update_fg = self.updater.update(
                 self.foreground_map,
                 fg_accepted,
@@ -508,6 +543,7 @@ class EGFDHMap3D:
             )
             update_stats = dict(update_bg)
             update_stats.update(pfvp_stats)
+            update_stats.update(trimap_stats)
             if bool(getattr(self.cfg.update, 'cmct_enable', False)):
                 cmct_stats = self.updater.transfer_cross_map_contradiction(self.background_map, self.foreground_map, accepted)
                 update_stats.update(cmct_stats)
@@ -517,12 +553,18 @@ class EGFDHMap3D:
             if bool(getattr(self.cfg.update, 'pfv_enable', False)):
                 pfv_stats = self.updater.update_persistent_free_space_volume(self.background_map, self.foreground_map, accepted)
                 update_stats.update(pfv_stats)
+            if self.delayed_background_map is not None:
+                promote_stats = self._promote_delayed_background_map()
+                update_stats.update(promote_stats)
             update_stats["active_voxels_bg"] = float(len(self.background_map))
             update_stats["active_voxels_fg"] = float(len(self.foreground_map))
-            update_stats["active_voxels"] = float(len(self.background_map) + len(self.foreground_map))
+            update_stats["active_voxels_delay"] = float(len(self.delayed_background_map)) if self.delayed_background_map is not None else 0.0
+            update_stats["active_voxels"] = float(len(self.background_map) + len(self.foreground_map) + (len(self.delayed_background_map) if self.delayed_background_map is not None else 0))
             update_stats["mean_d_score_fg"] = float(update_fg.get("mean_d_score", 0.0))
+            update_stats["mean_d_score_delay"] = float(update_delay.get("mean_d_score", 0.0))
             update_stats["mean_d_score"] = float(max(update_bg.get("mean_d_score", 0.0), 0.65 * update_fg.get("mean_d_score", 0.0)))
             update_stats["touched_voxels_fg"] = float(update_fg.get("touched_voxels", 0.0))
+            update_stats["touched_voxels_delay"] = float(update_delay.get("touched_voxels", 0.0))
         t_upd1 = time.perf_counter()
 
         # Global dynamic score (used only in legacy global forgetting mode + debug).
@@ -567,7 +609,7 @@ class EGFDHMap3D:
         return out
 
     def extract_surface_points(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self.voxel_map.extract_surface_points(
+        extract_kwargs: Dict[str, object] = dict(
             phi_thresh=self.cfg.surface.phi_thresh,
             rho_thresh=self.cfg.surface.rho_thresh,
             min_weight=self.cfg.surface.min_weight,
@@ -687,6 +729,14 @@ class EGFDHMap3D:
             ebcut_w_smooth=float(self.cfg.surface.ebcut_w_smooth),
             ebcut_smooth_radius=int(self.cfg.surface.ebcut_smooth_radius),
         )
+        points, normals = self.voxel_map.extract_surface_points(**extract_kwargs)
+        if bool(getattr(self.cfg.update, 'tri_map_hole_rescue_enable', False)) and self.delayed_background_map is not None:
+            points, normals, rescue_stats = self._hole_only_delayed_rescue(extract_kwargs, points, normals)
+            self.voxel_map.last_extract_stats.update(rescue_stats)
+        if self.delayed_background_map is not None:
+            points, normals, export_stats = self._residency_gated_delayed_export(extract_kwargs, points, normals)
+            self.voxel_map.last_extract_stats.update(export_stats)
+        return points, normals
 
     def save_surface_pointcloud(self, out_path: str | Path) -> int:
         points, normals = self.extract_surface_points()

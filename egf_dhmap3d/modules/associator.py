@@ -27,6 +27,9 @@ class AssocMeasurement3D:
     sensor_origin: np.ndarray | None = None
     seed_blocked: bool = False
     pfv_penalty: float = 0.0
+    tri_map_escalated: bool = False
+    tri_map_hold_frames: float = 0.0
+    tri_map_route_score: float = 0.0
 
 
 class Associator3D:

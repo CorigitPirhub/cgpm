@@ -340,6 +340,209 @@ class Update3DConfig:
     pfv_bank_weight_far: float = 0.55
     pfv_bank_cluster_weight: float = 0.45
     pfv_bank_extract_thresh: float = 0.48
+    # PFV exclusivity: separate export-only cleared-corridor state.
+    pfv_exclusive_enable: bool = False
+    pfv_exclusive_alpha: float = 0.18
+    pfv_exclusive_on: float = 0.32
+    pfv_exclusive_off: float = 0.18
+    pfv_exclusive_fg_weight: float = 0.65
+    pfv_exclusive_long_weight: float = 0.75
+    pfv_exclusive_static_guard: float = 0.72
+    pfv_exclusive_extract_thresh: float = 0.30
+    pfv_exclusive_anchor_guard: float = 0.92
+    pfv_exclusive_rho_guard: float = 1.20
+    pfv_exclusive_free_ratio_min: float = 0.45
+    # PFV-conditioned background commit delay: suppress background-map writes
+    # when persistent free-space repeatedly covers a voxel without stable
+    # background support. This acts at update-time instead of export-time.
+    pfv_commit_delay_enable: bool = False
+    pfv_commit_delay_on: float = 0.34
+    pfv_commit_delay_static_weight: float = 0.85
+    pfv_commit_delay_bg_weight: float = 0.95
+    pfv_commit_delay_geo_weight: float = 0.70
+    pfv_commit_delay_rho_weight: float = 0.55
+    pfv_commit_delay_support_guard: float = 0.78
+    pfv_commit_delay_rho_guard: float = 0.95
+    pfv_commit_delay_free_ratio_ref: float = 0.65
+    pfv_commit_delay_min_scale: float = 0.02
+    # Delayed background candidate state: when PFV strongly contradicts the
+    # current background write, route it to a separate candidate buffer instead
+    # of directly committing into `phi_bg / phi_static`.
+    pfv_bg_candidate_enable: bool = False
+    pfv_bg_candidate_on: float = 0.30
+    pfv_bg_candidate_off: float = 0.18
+    pfv_bg_candidate_alpha: float = 0.18
+    pfv_bg_candidate_gain: float = 1.00
+    pfv_bg_candidate_leak: float = 0.04
+    pfv_bg_candidate_promote_on: float = 0.72
+    pfv_bg_candidate_promote_rho: float = 0.85
+    pfv_bg_candidate_promote_blend: float = 0.45
+    pfv_bg_candidate_decay: float = 0.94
+    # Tri-map background architecture: split the old background role into
+    # committed / delayed / foreground maps and let PFV decide write target.
+    tri_map_enable: bool = False
+    tri_map_delay_on: float = 0.32
+    tri_map_delay_margin: float = 0.04
+    tri_map_pfv_weight: float = 0.45
+    tri_map_fg_weight: float = 0.35
+    tri_map_assoc_weight: float = 0.20
+    tri_map_bg_support_weight: float = 0.55
+    tri_map_bg_rho_weight: float = 0.45
+    tri_map_promote_on: float = 0.72
+    tri_map_promote_fg_guard: float = 0.28
+    tri_map_promote_blend: float = 0.40
+    # Conflict-band routing: keep delayed routing in a middle band instead of
+    # either sending too much (v2) or almost nothing (criterion redesign).
+    tri_map_conflict_strong_margin: float = 0.08
+    tri_map_conflict_soft_margin: float = -0.02
+    tri_map_support_max_strong: float = 0.72
+    tri_map_support_max_soft: float = 0.90
+    # Front-occupancy anchored tri-map routing: route to delayed map only when
+    # a persistent foreground surface is established and background support is weak.
+    tri_map_front_occ_on: float = 0.58
+    tri_map_front_occ_soft_on: float = 0.34
+    tri_map_front_occ_weight: float = 0.60
+    tri_map_front_occ_occ_weight: float = 0.20
+    tri_map_front_occ_pfv_weight: float = 0.20
+    tri_map_bg_support_guard_strong: float = 0.65
+    tri_map_bg_support_guard_soft: float = 0.82
+    tri_map_bg_rho_guard_strong: float = 0.70
+    tri_map_bg_rho_guard_soft: float = 0.90
+    # Hybrid conflict-score routing.
+    tri_map_hybrid_pfv_weight: float = 0.40
+    tri_map_hybrid_front_weight: float = 0.40
+    tri_map_hybrid_assoc_weight: float = 0.10
+    tri_map_hybrid_bg_deficit_weight: float = 0.10
+    tri_map_hybrid_strong_on: float = 0.14
+    tri_map_hybrid_soft_on: float = 0.08
+    tri_map_hybrid_front_floor: float = 0.05
+    tri_map_hybrid_pfv_floor: float = 0.05
+
+    # Support-gap calibrated tri-map routing: route delayed writes using
+    # front-vs-background support gap, then use PFV/assoc/background deficit
+    # only as small calibration terms instead of a primary linear score.
+    tri_map_support_gap_bg_support_weight: float = 0.60
+    tri_map_support_gap_bg_rho_weight: float = 0.40
+    tri_map_support_gap_pfv_gain: float = 0.16
+    tri_map_support_gap_assoc_gain: float = 0.06
+    tri_map_support_gap_bg_deficit_gain: float = 0.08
+    tri_map_support_gap_front_bonus_gain: float = 0.06
+    tri_map_support_gap_strong_on: float = 0.11
+    tri_map_support_gap_soft_on: float = 0.04
+    tri_map_support_gap_front_floor: float = 0.06
+    tri_map_support_gap_front_soft_floor: float = 0.03
+    tri_map_support_gap_pfv_floor: float = 0.04
+    tri_map_support_gap_assoc_floor: float = 0.08
+    # Zero-centered normalized support-gap routing.
+    tri_map_support_gap_center_bg_ratio: float = 0.38
+    tri_map_support_gap_norm_floor: float = 0.28
+    tri_map_support_gap_zero_bias: float = 0.02
+    tri_map_support_gap_centered_floor_strong: float = 0.00
+    tri_map_support_gap_centered_floor_soft: float = -0.03
+
+    # Quantile-calibrated support-gap routing.
+    tri_map_support_gap_quantile_strong_q: float = 0.82
+    tri_map_support_gap_quantile_soft_q: float = 0.985
+    tri_map_support_gap_quantile_floor_strong: float = 0.028
+    tri_map_support_gap_quantile_floor_soft: float = 0.02
+    tri_map_support_gap_quantile_sep_margin: float = 0.008
+    tri_map_support_gap_strong_budget_ratio: float = 0.25
+    tri_map_support_gap_soft_budget_ratio: float = 0.015
+    tri_map_support_gap_strong_min_budget: int = 1
+    tri_map_support_gap_soft_min_budget: int = 8
+    tri_map_support_gap_strong_max_budget: int = 6
+    tri_map_support_gap_soft_max_budget: int = 96
+    # Escalation-aware delayed residency hold / promotion hysteresis.
+    tri_map_escalation_hold_frames: float = 3.0
+    tri_map_escalation_hold_max_frames: float = 6.0
+    tri_map_escalation_hysteresis_gain: float = 1.0
+    tri_map_escalation_hysteresis_decay: float = 0.85
+    tri_map_escalation_promote_bonus: float = 0.12
+    tri_map_escalation_blend_suppress: float = 0.35
+    # Residency-gated delayed export participation.
+    tri_map_residency_export_enable: bool = True
+    tri_map_residency_export_hold_min: float = 0.5
+    tri_map_residency_export_hysteresis_min: float = 0.05
+    tri_map_residency_export_support_on: float = 0.45
+    tri_map_residency_export_fg_guard: float = 0.65
+    tri_map_residency_export_commit_max: float = 0.92
+    tri_map_residency_export_route_score_min: float = 0.02
+    tri_map_residency_export_radius_cells: int = 1
+    # Export-time local replacement around delayed tail.
+    tri_map_residency_replace_enable: bool = True
+    tri_map_residency_replace_radius_cells: int = 2
+    tri_map_residency_replace_distance_vox: float = 2.2
+    tri_map_residency_replace_commit_max: float = 1.0
+    tri_map_residency_replace_support_margin: float = -1.0
+    tri_map_residency_replace_max_per_delayed: int = 2
+    # Competition-scored local replacement.
+    tri_map_residency_compete_route_ref: float = 0.08
+    tri_map_residency_compete_normal_cos_min: float = 0.25
+    tri_map_residency_compete_margin: float = 0.03
+    tri_map_residency_compete_delayed_support_weight: float = 0.55
+    tri_map_residency_compete_route_weight: float = 0.25
+    tri_map_residency_compete_residency_weight: float = 0.10
+    tri_map_residency_compete_normal_weight: float = 0.15
+    tri_map_residency_compete_commit_support_weight: float = 0.60
+    tri_map_residency_compete_distance_weight: float = 0.20
+    # Delayed-branch geometry refinement before export competition.
+    tri_map_delayed_refine_enable: bool = True
+    tri_map_delayed_refine_radius_cells: int = 1
+    tri_map_delayed_refine_blend: float = 0.65
+    tri_map_delayed_refine_normal_blend: float = 0.75
+    tri_map_delayed_refine_max_offset_vox: float = 1.25
+    tri_map_delayed_refine_support_weight: float = 0.50
+    tri_map_delayed_refine_route_weight: float = 0.25
+    tri_map_delayed_refine_residency_weight: float = 0.25
+    tri_map_delayed_refine_phi_static_weight: float = 0.45
+    tri_map_delayed_refine_phi_bg_weight: float = 0.35
+    tri_map_delayed_refine_phi_geo_weight: float = 0.20
+    tri_map_delayed_refine_neighbor_min: int = 2
+    # Delayed-branch dedicated surface readout / banked field refinement.
+    tri_map_delayed_bank_enable: bool = True
+    tri_map_delayed_bank_radius_cells: int = 1
+    tri_map_delayed_bank_support_on: float = 0.40
+    tri_map_delayed_bank_route_on: float = 0.01
+    tri_map_delayed_bank_residency_on: float = 0.10
+    tri_map_delayed_bank_phi_thresh_scale: float = 1.15
+    tri_map_delayed_bank_min_weight_scale: float = 0.60
+    tri_map_delayed_bank_phi_static_weight: float = 0.50
+    tri_map_delayed_bank_phi_bg_weight: float = 0.35
+    tri_map_delayed_bank_phi_geo_weight: float = 0.15
+    tri_map_delayed_bank_support_weight: float = 0.45
+    tri_map_delayed_bank_route_weight: float = 0.25
+    tri_map_delayed_bank_residency_weight: float = 0.30
+    tri_map_delayed_bank_normal_blend: float = 0.80
+    tri_map_delayed_bank_max_offset_vox: float = 1.50
+    tri_map_delayed_bank_neighbor_min: int = 2
+    # Persistent delayed surface bank accumulation.
+    tri_map_delay_bank_accum_enable: bool = True
+    tri_map_delay_bank_conf_on: float = 0.35
+    tri_map_delay_bank_conf_alpha: float = 0.18
+    tri_map_delay_bank_decay: float = 0.96
+    tri_map_delay_bank_rho_alpha: float = 0.12
+    tri_map_delay_bank_phi_static_weight: float = 0.50
+    tri_map_delay_bank_phi_bg_weight: float = 0.35
+    tri_map_delay_bank_phi_geo_weight: float = 0.15
+    tri_map_delay_bank_min_weight: float = 0.20
+    tri_map_delay_bank_gain: float = 1.35
+    tri_map_delay_bank_rear_weight: float = 0.65
+    tri_map_delay_bank_bg_weight: float = 0.25
+    tri_map_delay_bank_static_weight: float = 0.10
+    tri_map_delay_bank_normal_history_weight: float = 0.55
+    tri_map_delay_bank_normal_obs_weight: float = 0.45
+    tri_map_delay_bank_route_ref: float = 0.08
+    # Promotion-aware rescue: lower promotion threshold and increase blend
+    # when committed map has a local hole but delayed map has stable support.
+    tri_map_promotion_rescue_enable: bool = False
+    tri_map_promotion_hole_weight: float = 0.35
+    tri_map_promotion_min_on: float = 0.55
+    # Hole-only rescue at export: delayed map only fills committed-map holes.
+    tri_map_hole_rescue_enable: bool = False
+    tri_map_hole_support_on: float = 0.72
+    tri_map_hole_commit_max: float = 0.25
+    tri_map_hole_fg_guard: float = 0.28
+    tri_map_hole_radius_cells: int = 1
     rps_score_alpha: float = 0.18
     rps_commit_on: float = 0.62
     rps_commit_off: float = 0.40

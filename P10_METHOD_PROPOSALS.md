@@ -1642,3 +1642,1393 @@ python scripts/run_p10_precision_profile.py   --profiles p10_ptdsf_zcbf_dccm_wds
 ### Decision
 - Archive `PFV-bank` as another quick negative branch.
 - Keep `dual_map + PFV` as the active mainline.
+
+
+## 2026-03-07 PFV-Exclusive Export Map Attempt
+
+### 模块
+- `PFV-Exclusive (Persistent Free-space Exclusivity Map)`
+- 定位：仍留在 `dual_map + PFV` 主线内部，不前移到 associator / routing；仅增强 update/export 内部的结构角色。
+
+### 代码落地
+- `egf_dhmap3d/core/types.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/pfv.py`
+- `egf_dhmap3d/core/voxel_hash.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- 在现有 `PFV` 之上新增独立状态：
+  - `pfv_exclusive`
+  - `pfv_exclusive_age`
+  - `pfv_exclusive_active`
+- 更新期：把“长期 cleared corridor”单独记成 export-oriented exclusivity state，而不是继续把所有 free-space 证据都压回同一个 `pfv_score`。
+- 导出期：让 `pfv_exclusive` 与 `static_anchor / rear_anchor` 发生显式竞争，尝试让 persistent free-space 对背景导出产生真正的排他作用。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_pfv_excl_probe_base/`
+  - `output/post_cleanup/p10_pfv_excl_probe_excl_v3/`
+  - `output/post_cleanup/p10_pfv_excl_bonn_base/`
+  - `output/post_cleanup/p10_pfv_excl_bonn_excl/`
+- 对比表：
+  - `output/summary_tables/p10_pfv_exclusive_probe_walking_xyz_compare.csv`
+  - `output/summary_tables/p10_pfv_exclusive_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `dual_map_pfv_base`: `F-score = 1.000000`, `Chamfer = 0.019050`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+  - `dual_map_pfv_exclusive`: `F-score = 1.000000`, `Chamfer = 0.019050`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+- Bonn `balloon2`:
+  - `dual_map_pfv_base`: `F-score = 0.455234`, `Chamfer = 0.124902`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+  - `dual_map_pfv_exclusive`: `F-score = 0.455234`, `Chamfer = 0.124902`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+
+### 结论
+- 本轮 `PFV-Exclusive` 尝试在 TUM / Bonn focused probe 上都**数值完全不变**。
+- 这说明：
+  1. 仅把 `PFV` 升级成“export-only exclusivity map”，即便已经允许它和 `static_anchor` 竞争，仍不足以改变最终导出结果；
+  2. 当前 `dual_map + PFV` 的剩余瓶颈，已经不只是“导出端缺一个更强 veto”；
+  3. 也就是说，问题更可能还在 `background_map` 的写入/提交阶段，而不是单纯导出阶段。
+
+### 判定
+- `PFV-Exclusive` 记为本轮新的**结构负结果**。
+- 它不同于 `PFV-sharp / PFV-bank`：这次不是“更强标量”或“更多 bank”，而是一次真正的 export-role 改造；即便如此仍然不生效，因此可以更明确地排除“只改导出端就能解决”的路径。
+
+### 下一步目标方案
+- 保持 `dual_map + PFV` 为主线，不回退到 `PFVP / PFAG / contradiction-only` 路线。
+- 下一步应转向：
+  - **PFV-conditioned background commit delay / write suppression**
+- 核心思路：
+  1. 让 `PFV` 在 `background_map` 写入期直接影响 `phi_bg / rho_bg / phi_static` 的提交，而不是等到导出时再 veto；
+  2. 仅对被 persistent free-space 长期覆盖、且缺少稳定背景支撑的体素延迟提交或降低写入权重；
+  3. 保持该机制仍位于 update/export 内部，不前移到 associator / routing。
+
+
+## 2026-03-07 PFV-Conditioned Background Commit Delay Attempt
+
+### 模块
+- `PFV-Conditioned Background Commit Delay`
+- 定位：保持在 `dual_map + PFV` 主线内部，把 `PFV` 从 export-side veto 前移到 `background_map` 写入期的提交抑制，而不是前移到 associator / routing。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/pfv.py`
+- `egf_dhmap3d/modules/updater.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- 新增 `pfv_commit_delay_*` 参数组。
+- 在 `background_map` 的写入期，根据已有 `PFV` 持久自由空间状态，对：
+  - `w_static`
+  - `w_bg`
+  - `w_geo`
+  - `rho_static / rho_bg`
+ 进行条件减权。
+- 目标是：让“长期被 cleared corridor 覆盖、但缺乏稳定背景支撑”的体素更晚提交，避免背景图在写入阶段就被污染。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_pfv_commitdelay_tum/`
+  - `output/post_cleanup/p10_pfv_commitdelay_bonn/`
+- 对比表：`output/summary_tables/p10_pfv_commit_delay_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `dual_map_pfv_base`: `F-score = 1.000000`, `Chamfer = 0.019050`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+  - `dual_map_pfv_commit_delay`: `F-score = 1.000000`, `Chamfer = 0.019050`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+- Bonn `balloon2`:
+  - `dual_map_pfv_base`: `F-score = 0.455234`, `Chamfer = 0.124902`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+  - `dual_map_pfv_commit_delay`: `F-score = 0.455234`, `Chamfer = 0.124902`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+
+### 结论
+- 本轮 `PFV-conditioned background commit delay` 在 TUM / Bonn focused probe 上仍然**数值完全不变**。
+- 这说明：
+  1. 仅把 `PFV` 从 export 侧前移到 `background_map` 写入期做 commit delay，仍不足以改变最终结果；
+  2. 当前 `dual_map + PFV` 的剩余瓶颈，可能已经不在“缺一个更强的 PFV 抑制位置”，而在 `PFV` 本身还没有提供足够区分度的状态信息；
+  3. 也就是说，继续沿“同一 PFV 信号换位置使用”这条线，边际收益已经很低。
+
+### 判定
+- `PFV-conditioned background commit delay` 记为本轮新的**结构负结果**。
+- 到目前为止，以下 PFV-side 路线都未形成有效增益：
+  - `PFV-sharp`
+  - `PFV-bank`
+  - `PFV-Exclusive`
+  - `PFV-conditioned background commit delay`
+
+### 下一步目标方案
+- `dual_map + PFV` 仍是唯一合理主线，但下一步不应再做“同一 PFV 信号的更强阈值 / 更早位置 / 更晚位置”改写。
+- 下一步应转向：
+  - **PFV-conditioned write-time background routing with explicit alternate state**
+- 核心思路：
+  1. 不是简单减弱背景写入，而是把被 PFV 长期覆盖的候选显式路由到独立的 delayed background candidate state；
+  2. 让 `background_map` 内部至少存在“committed background` 与 `delayed background candidate` 两种可区分状态；
+  3. 只有在后续时序中重新获得稳定背景支撑时，candidate 才重新并入 committed background。
+
+
+## 2026-03-07 Delayed Background Candidate State Attempt
+
+### 模块
+- `Delayed Background Candidate State`
+- 定位：保持在 `dual_map + PFV` 主线内部；当 `PFV` 长期覆盖某个背景写入位置时，不直接写入 committed background，而是路由到同图内的 delayed background candidate state。
+
+### 代码落地
+- `egf_dhmap3d/core/types.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/bg_candidate.py`
+- `egf_dhmap3d/modules/updater.py`
+- `egf_dhmap3d/core/voxel_hash.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- 新增状态：
+  - `phi_bg_cand`
+  - `phi_bg_cand_w`
+  - `rho_bg_cand`
+  - `bg_cand_score`
+  - `bg_cand_age`
+  - `bg_cand_active`
+- 写入期：若 `PFV` 对背景写入形成持续矛盾，则把该次观测优先写入 `bg_candidate`，并仅向 committed background 泄露少量质量。
+- 提升期：当后续重新获得稳定背景支撑时，再把 candidate 以 soft promotion 的方式并入 committed background。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_pfv_bgcand_tum/`
+  - `output/post_cleanup/p10_pfv_bgcand_bonn/`
+- 对比表：`output/summary_tables/p10_pfv_bg_candidate_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `dual_map_pfv_base`: `F-score = 1.000000`, `Chamfer = 0.019050`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+  - `dual_map_pfv_bg_candidate`: `F-score = 1.000000`, `Chamfer = 0.019050`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+- Bonn `balloon2`:
+  - `dual_map_pfv_base`: `F-score = 0.455234`, `Chamfer = 0.124902`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+  - `dual_map_pfv_bg_candidate`: `F-score = 0.455234`, `Chamfer = 0.124902`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+
+### 结论
+- 本轮 `delayed background candidate state` 在 TUM / Bonn focused probe 上仍然**数值完全不变**。
+- 这说明：
+  1. 即便不再只是“减弱写入”，而是显式引入了 delayed candidate state，同图内的 candidate buffering 仍不足以改变最终结果；
+  2. 当前瓶颈大概率已经不在“同一 background_map 内部还缺一个 state”，而在 map-level persistence / routing 仍不够独立；
+  3. 继续在同一 `background_map` 内堆叠更多 PFV-side candidate state，预期收益已经很低。
+
+### 判定
+- `Delayed Background Candidate State` 记为本轮新的**结构负结果**。
+- 到目前为止，以下 `dual_map + PFV` 内部强化分支均未形成有效 focused gain：
+  - `PFV-sharp`
+  - `PFV-bank`
+  - `PFV-Exclusive`
+  - `PFV-conditioned background commit delay`
+  - `Delayed Background Candidate State`
+
+### 下一步目标方案
+- `dual_map + PFV` 仍是主线，但下一步不应再继续在**同一 background_map 内部**堆叠新 state。
+- 下一步应转向：
+  - **Tri-map background architecture**
+- 核心思路：
+  1. 将当前 `background_map` 分裂为：
+     - `committed_background_map`
+     - `delayed_background_map`
+     - `foreground_map`
+  2. 让 `PFV` 直接决定写入去向：被 persistent free-space 覆盖且缺少稳定支撑的观测写入 `delayed_background_map`；
+  3. 只有当 delayed map 在后续时序中重新获得稳定背景支撑时，才通过显式 promotion 并回 committed background。
+
+
+## 2026-03-07 Tri-Map Background Architecture Attempt
+
+### 模块
+- `Tri-map Background Architecture`
+- 三图结构：
+  - `committed_background_map`
+  - `delayed_background_map`
+  - `foreground_map`
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/P10_method/bg_candidate.py`
+- `egf_dhmap3d/modules/pipeline.py`
+- `egf_dhmap3d/modules/updater.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- `PFV` 不再只决定“同一 background_map 内部怎么写”，而是直接决定写入去向：
+  - 可靠背景 -> `committed_background_map`
+  - 被 persistent free-space 长期覆盖且支撑不足 -> `delayed_background_map`
+  - 动态前景 -> `foreground_map`
+- delayed map 中的背景候选，只有在后续重新获得稳定背景支撑时，才 promotion 回 committed map。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_tum_v2/`
+  - `output/post_cleanup/p10_trimap_bonn_v2/`
+- 对比表：`output/summary_tables/p10_trimap_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `dual_map_pfv_base`: `Acc = 0.009441`, `Chamfer = 0.019050`, `F-score = 1.000000`, `Comp-R = 1.000000`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`
+  - `tri_map_pfv_v2`: `Acc = 0.009360`, `Chamfer = 0.035427`, `F-score = 0.926335`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`
+  - 路由统计：`trimap_delayed_mean = 379.8`, `trimap_promoted_mean = 4240.25`
+- Bonn `balloon2`:
+  - `dual_map_pfv_base`: `Acc = 0.065994`, `Chamfer = 0.124902`, `F-score = 0.455234`, `Comp-R = 0.485667`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`
+  - `tri_map_pfv_v2`: `Acc = 0.051250`, `Chamfer = 0.166409`, `F-score = 0.283288`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`
+  - 路由统计：`trimap_delayed_mean = 691.45`, `trimap_promoted_mean = 6916.9`
+
+### 结论
+- 这是当前 `PFV` 主线下第一条**真正产生显著数值变化**的 map-level 结构分支。
+- 正向信号：
+  1. `Acc` 在 TUM / Bonn 两侧都改善；
+  2. `ghost_tail_ratio` 在 TUM / Bonn 两侧都下降；
+  3. 说明“把 delayed background 从 committed background 真正分离出来”方向是有效的。
+- 负向结果：
+  1. `Comp-R` 明显下降；
+  2. `F-score` 与 `Chamfer` 整体退化；
+  3. `ghost_ratio` 反而变差。
+- 这说明：tri-map 的核心结构方向是对的，但当前 promotion / rescue 机制太保守，导致 coverage 大量丢失。
+
+### 判定
+- `Tri-map Background Architecture` 不是无效分支，而是当前第一条“有正向机制信号、但未通过联合指标”的 `PFV` map-level 主线。
+- 它比 `PFV-sharp / PFV-bank / PFV-Exclusive / PFV-conditioned background commit delay / delayed background candidate state` 更接近真正的下一代结构。
+
+### 下一步目标方案
+- 保持 `tri-map background architecture` 为下一轮主线。
+- 下一步不再继续扩大 delayed routing，而应专注于：
+  - **Comp-R recovery without reintroducing tail ghost**
+- 具体方向：
+  1. `promotion-aware rescue`: delayed map 中满足稳定支撑的体素，更积极地 promotion 回 committed background；
+  2. `hole-only rescue`: 只在 committed map 局部缺口处使用 delayed map 做补洞，避免全局召回回弹；
+  3. `promotion confidence gating`: 把 delayed->committed promotion 绑定到更明确的静态支撑，而不是简单 age / rho。
+
+
+## 2026-03-07 Promotion-Aware Rescue + Hole-Only Rescue Attempt
+
+### 模块
+- `promotion-aware rescue`
+- `hole-only rescue`
+- 定位：建立在 `tri-map background architecture` 之上，目标是恢复 `Comp-R / F-score`，同时避免把 tail ghost 带回来。
+
+### 代码落地
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/modules/pipeline.py`
+- `egf_dhmap3d/core/config.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- `promotion-aware rescue`：
+  - 当 committed map 局部存在 hole 时，降低 delayed->committed promotion 的阈值，并提高 promotion blend。
+- `hole-only rescue`：
+  - 导出期不直接全量使用 delayed map，而只在 committed map 局部洞区域尝试用 delayed map 补洞。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_rescue_tum/`
+  - `output/post_cleanup/p10_trimap_rescue_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_rescue_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_pfv_v2`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`
+  - `tri_map_pfv_rescue`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`
+- Bonn `balloon2`:
+  - `tri_map_pfv_v2`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`
+  - `tri_map_pfv_rescue`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`
+
+### 结论
+- 本轮 `promotion-aware rescue + hole-only rescue` 在 focused probe 上**没有带来新的数值改善**。
+- 这说明：
+  1. tri-map 当前的主要问题并不只是“promotion 不够积极”或“导出没补洞”；
+  2. rescue 逻辑没有改变 tri-map 当前的核心 trade-off：`Acc / ghost_tail` 改善，但 `Comp-R / F-score / ghost_ratio` 退化；
+  3. 下一步若继续沿 tri-map 推进，应该直接作用于 delayed map 的生成/提交标准，而不是继续在 promotion / export-rescue 上微调。
+
+### 判定
+- `promotion-aware rescue + hole-only rescue` 记为本轮**低收益负结果**。
+- 它不会推翻 tri-map 的方向判断，但说明 tri-map 的下一步不该再停留在“恢复层面的小修补”。
+
+### 下一步目标方案
+- 保持 `tri-map background architecture` 为主线。
+- 下一步应转向：
+  - **delayed-map write criterion redesign**
+- 核心思路：
+  1. 重新定义哪些观测应该进入 delayed map，而不是 committed map；
+  2. 将 delayed routing 绑定到更明确的“front occupancy / background support conflict”，而不是当前较松的 PFV + foreground history 组合；
+  3. 优先在写入生成端减少不必要的 delayed routing，再谈 promotion / rescue。
+
+
+## 2026-03-07 Delayed-Map Write Criterion Redesign Attempt
+
+### 模块
+- `delayed-map write criterion redesign`
+- 定位：不再在 tri-map 上继续堆 rescue，而是直接重写“什么样的观测应该进入 delayed map”。
+
+### 代码落地
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/modules/pipeline.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- 将原先较激进的 delayed routing 改成“更明确的前景占据冲突判据”：
+  - 使用 `PFV` + `foreground local conflict` + `background support` 的显式冲突带；
+  - 只有在强冲突时才 delayed-only；
+  - 中等冲突时走 `bg + delayed` 双写入；
+  - 否则直接写 committed background。
+- 目标是：减少误送 delayed map，恢复 `Comp-R / F-score / ghost_ratio`，同时尽量保留 tri-map 的 `Acc / ghost_tail` 改善。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_criterion_tum/`
+  - `output/post_cleanup/p10_trimap_criterion_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_write_criterion_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_pfv_v2`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`, `trimap_delayed_mean = 379.8`
+  - `tri_map_pfv_write_criterion`: `F-score = 1.000000`, `Chamfer = 0.019050`, `Comp-R = 1.000000`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`, `trimap_delayed_mean = 0.0`
+- Bonn `balloon2`:
+  - `tri_map_pfv_v2`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`, `trimap_delayed_mean = 691.45`
+  - `tri_map_pfv_write_criterion`: `F-score = 0.455234`, `Chamfer = 0.124902`, `Comp-R = 0.485667`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`, `trimap_delayed_mean = 0.0`
+
+### 结论
+- 本轮 `write criterion redesign` 把 tri-map 几乎**完全退回了 `dual_map + PFV` 基线**：
+  - `Comp-R / F-score / ghost_ratio` 全部回来了；
+  - 但 tri-map 原本带来的 `Acc / ghost_tail_ratio` 改善也一起消失了；
+  - `trimap_delayed_mean = 0.0` 直接说明 delayed routing 基本未被触发。
+- 这说明：
+  1. tri-map 的方向本身是有效的；
+  2. 但当前这版 write criterion 过于保守，已经把 tri-map “关掉了”；
+  3. 问题不在 tri-map 方向，而在 delayed routing 的冲突带没有落在正确区间。
+
+### 判定
+- `delayed-map write criterion redesign` 记为本轮**有信息增益但未形成增益结果**的分支：
+  - 它不是简单负结果；
+  - 它告诉我们 tri-map 的可用区间位于“当前 v2 过激”和“本轮 redesign 过保守”之间。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **conflict-band tri-map routing**
+- 核心思路：
+  1. 不走当前这种几乎关闭 delayed routing 的硬判据；
+  2. 也不回到 v2 那种大规模 delayed routing；
+  3. 而是构造一个中间带：
+     - 强冲突 -> delayed-only
+     - 中等冲突 -> bg + delayed 双写入
+     - 弱冲突 -> committed-only
+  4. 重点目标是把 `delayed_mean` 控制在非零但显著低于 `v2` 的范围内，尝试同时保住部分 `Acc / ghost_tail` 改善与 `Comp-R`。
+
+
+## 2026-03-07 Conflict-Band Tri-Map Routing Attempt
+
+### 模块
+- `conflict-band tri-map routing`
+- 定位：试图把 tri-map 的 delayed routing 从“过激”与“几乎关闭”之间拉回一个中间冲突带。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- 将 tri-map 写入准则明确分成三档：
+  - 强冲突：`delayed-only`
+  - 中等冲突：`bg + delayed` 双写入
+  - 弱冲突：`committed-only`
+- 目标是让 `trimap_delayed_mean` 落在 `v2` 与“criterion redesign 几乎为 0”之间，尝试同时保住部分 `Acc / ghost_tail` 改善与 `Comp-R`。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_conflictband_tum/`
+  - `output/post_cleanup/p10_trimap_conflictband_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_conflict_band_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_pfv_v2`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`, `trimap_delayed_mean = 379.8`
+  - `tri_map_conflict_band`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`, `trimap_delayed_mean = 379.8`
+- Bonn `balloon2`:
+  - `tri_map_pfv_v2`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`, `trimap_delayed_mean = 691.45`
+  - `tri_map_conflict_band`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`, `trimap_delayed_mean = 691.45`
+
+### 结论
+- 本轮 `conflict-band tri-map routing` 与当前 `tri_map_pfv_v2` **数值完全一致**。
+- 这说明：
+  1. 当前实现下，所谓“冲突带”并没有真正改变 tri-map 的有效路由分布；
+  2. delayed routing 的关键问题不在“多一个中间档”，而在冲突分数本身的构成仍然和 `v2` 等价；
+  3. 因而下一步不该再继续微调 band，而应该重新定义冲突分数的来源。
+
+### 判定
+- `conflict-band tri-map routing` 记为本轮**无额外增益的等价分支**。
+- 它没有提供新的有效改善，但进一步确认了：tri-map 的下一步必须重做冲突信号，而不是再细调路由形状。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **front-occupancy anchored tri-map routing**
+- 核心思路：
+  1. delayed routing 不再主要依赖当前 `PFV + foreground history + background support` 组合；
+  2. 改成更明确的“前景占据成立且背景支撑不足”才进入 delayed map；
+  3. 也就是说，先重做 conflict score 的物理语义，再谈 band / promotion / rescue。
+
+
+## 2026-03-07 Front-Occupancy Anchored Tri-Map Routing Attempt
+
+### 模块
+- `front-occupancy anchored tri-map routing`
+- 定位：不再以当前 `PFV + foreground history + background support` 组合作为 delayed routing 主信号，而改成“前景占据成立且背景支撑不足”才进入 delayed map。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- delayed routing 的主导信号从 `PFV` 转为 `front occupancy`：
+  - 前景占据强 -> 才允许 delayed routing；
+  - 背景支撑不足 -> 才真正进入 delayed map；
+  - 否则保持 committed background。
+- 目标是：减少 v2 中过于宽松的 delayed routing，同时避免 criterion redesign 那种“几乎完全关掉 tri-map”。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_frontocc_tum/`
+  - `output/post_cleanup/p10_trimap_frontocc_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_front_occupancy_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_pfv_v2`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`, `trimap_delayed_mean = 379.8`
+  - `tri_map_front_occupancy`: `F-score = 1.000000`, `Chamfer = 0.019050`, `Comp-R = 1.000000`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`, `trimap_delayed_mean = 0.0`
+- Bonn `balloon2`:
+  - `tri_map_pfv_v2`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`, `trimap_delayed_mean = 691.45`
+  - `tri_map_front_occupancy`: `F-score = 0.455234`, `Chamfer = 0.124902`, `Comp-R = 0.485667`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`, `trimap_delayed_mean = 0.0`
+
+### 结论
+- 本轮 `front-occupancy anchored tri-map routing` 与此前的 `write criterion redesign` 一样，**把 tri-map 几乎完全关掉了**。
+- 这说明：
+  1. 单独依赖“前景占据成立”作为 delayed routing 主锚点过于保守；
+  2. tri-map 需要的不是“更换主信号”，而是同时保留 `PFV` 与前景占据、并在两者之间形成真正的冲突融合；
+  3. 当前 delayed routing 的问题不是“少了某一个锚点”，而是缺少一个能把 `PFV / front occupancy / background support` 融合成可调冲突带的统一分数。
+
+### 判定
+- `front-occupancy anchored tri-map routing` 记为本轮**有信息增益但未形成增益结果**的分支。
+- 它进一步证明：tri-map 不能只靠 PFV，也不能只靠 front occupancy；下一步必须做两者的显式融合。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **hybrid conflict-score tri-map routing**
+- 核心思路：
+  1. 不是仅用 `PFV`；
+  2. 也不是仅用 `front occupancy`；
+  3. 而是构造统一 `conflict score = f(PFV, front occupancy, background support)`；
+  4. 再在这个统一分数上做三段式路由：`committed-only / dual / delayed-only`。
+
+
+## 2026-03-07 Hybrid Conflict-Score Tri-Map Routing Attempt
+
+### 模块
+- `hybrid conflict-score tri-map routing`
+- 定位：用统一 `conflict score = f(PFV, front occupancy, background deficiency)` 取代单一 `PFV` 或单一 `front occupancy` 的 delayed routing 主信号。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+- `scripts/run_benchmark.py`
+
+### 设计要点
+- 统一冲突分数：
+  - `PFV`
+  - `front occupancy`
+  - `assoc risk`
+  - `background deficiency`
+- 再在统一分数上做三段式路由：
+  - `committed-only`
+  - `dual`
+  - `delayed-only`
+- 目标是让 tri-map 不再完全依赖单一信号，同时避免当前 `v2` 的过度 delayed routing。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_hybrid_tum/`
+  - `output/post_cleanup/p10_trimap_hybrid_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_hybrid_conflict_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_pfv_v2`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`, `trimap_delayed_mean = 379.8`
+  - `tri_map_hybrid_conflict`: `F-score = 1.000000`, `Chamfer = 0.019050`, `Comp-R = 1.000000`, `ghost_ratio = 0.560057`, `ghost_tail_ratio = 0.130459`, `trimap_delayed_mean = 0.0`
+- Bonn `balloon2`:
+  - `tri_map_pfv_v2`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`, `trimap_delayed_mean = 691.45`
+  - `tri_map_hybrid_conflict`: `F-score = 0.455234`, `Chamfer = 0.124902`, `Comp-R = 0.485667`, `ghost_ratio = 0.044268`, `ghost_tail_ratio = 0.472253`, `trimap_delayed_mean = 0.0`
+
+### 结论
+- 本轮 `hybrid conflict-score` 仍然**过于保守**，结果与“write criterion redesign / front-occupancy anchored”同类：
+  - tri-map 基本被关掉；
+  - `Comp-R / F-score / ghost_ratio` 回到基线；
+  - `Acc / ghost_tail` 改善消失。
+- `trimap_hybrid_mean` 虽然非零，但没有推动 delayed routing 进入有效区间。
+- 这说明：
+  1. 不是“缺少融合公式”；
+  2. 而是当前 conflict score 的量纲和阈值仍没有把样本推到真正有用的中间带；
+  3. 继续在当前 score 上调权重，预期收益有限。
+
+### 判定
+- `hybrid conflict-score tri-map routing` 记为本轮**有信息增益但未形成增益结果**的分支。
+- 它证明了：简单把多个信号线性加权，还不足以得到有效 tri-map routing。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **support-gap calibrated tri-map routing**
+- 核心思路：
+  1. 不再直接用线性混合分数做 delayed 判定；
+  2. 转而显式建模 `front support - background support` 的 gap；
+  3. delayed routing 只在 gap 穿过一个稳定阈值区间时触发；
+  4. 目标仍是把 delayed usage 控制在非零但低于 `v2` 的区间，同时保留部分 `Acc / ghost_tail` 改善与 `Comp-R`。
+
+## 2026-03-07 Support-Gap Calibrated Tri-Map Routing Attempt
+
+### 模块
+- `support-gap calibrated tri-map routing`
+- 定位：不再用线性 `hybrid conflict score` 直接做 delayed routing，而是显式计算 `front support - background support` 的 signed gap，再用 `PFV / assoc risk / background deficit` 只做小幅校准。
+
+### 代码落地
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/core/config.py`
+- `scripts/run_egf_3d_tum.py`
+- `egf_dhmap3d/modules/updater.py`
+
+### 设计要点
+- 主判据从“线性混合分数”改为：
+  - `support_gap = front_support - background_support_mix`
+- 其中：
+  - `front_support` 仍由 `front occupancy / front history / local PFV-front` 构成；
+  - `background_support_mix` 由 `bg_support` 与 `bg_rho` 混合；
+  - `PFV / assoc risk / background deficit` 只作为 gap 的校准项，而不再主导 delayed 判定。
+- 目标是：
+  1. 让 gap 的符号直接表达“前景支撑是否真正压过背景支撑”；
+  2. 避免 `hybrid conflict-score` 那种量纲混合后阈值难对齐的问题；
+  3. 把 delayed routing 控制在“非零但明显低于 `v2`”的中间区间。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_supportgap_tum/`
+  - `output/post_cleanup/p10_trimap_supportgap_bonn/`
+- 为消除“旧 v2 输出与当前代码状态不完全同口径”的歧义，本轮额外补跑了当前代码下的同口径 baseline：
+  - `output/post_cleanup/p10_supportgap_base_tum/`
+  - `output/post_cleanup/p10_supportgap_base_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_support_gap_probe_tum_bonn_compare.csv`
+
+### 结果
+- 与 `legacy tri_map_pfv_v2` 比较：
+  - TUM `walking_xyz`:
+    - `tri_map_pfv_v2`: `F-score = 0.926335`, `Chamfer = 0.035427`, `Comp-R = 0.862778`, `ghost_ratio = 0.728791`, `ghost_tail_ratio = 0.096225`, `trimap_delayed_mean = 379.8`
+    - `tri_map_support_gap`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`, `trimap_delayed_mean = 0.0`
+  - Bonn `balloon2`:
+    - `tri_map_pfv_v2`: `F-score = 0.283288`, `Chamfer = 0.166409`, `Comp-R = 0.183722`, `ghost_ratio = 0.093995`, `ghost_tail_ratio = 0.417786`, `trimap_delayed_mean = 691.45`
+    - `tri_map_support_gap`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`, `trimap_delayed_mean = 0.0`
+- 但在**当前代码同口径 baseline** 下，本轮更关键的判定是：
+  - TUM：`dual_map_pfv_base_current` 与 `tri_map_support_gap` **逐项完全相同**；
+  - Bonn：`dual_map_pfv_base_current` 与 `tri_map_support_gap` **逐项完全相同**。
+- 新增路由统计显示：
+  - TUM：`trimap_support_gap_mean = -0.308175`, `trimap_gap_score_mean = -0.258249`
+  - Bonn：`trimap_support_gap_mean = -0.163471`, `trimap_gap_score_mean = -0.099534`
+- 即：raw gap 与 calibrated gap 在两组 probe 上都整体落在负区间，没有把样本推入 delayed/dual 的有效带。
+
+### 结论
+- 本轮 `support-gap calibrated tri-map routing` 的**有效结论是负结果**：
+  - 从当前代码同口径 baseline 看，它与 `dual_map + PFV` **数值完全等价**；
+  - `trimap_delayed_mean = 0.0`、`trimap_dual_mean = 0.0`，tri-map 实际没有被激活；
+  - 它属于又一个“有观测增益、但机制上退回基线”的分支。
+- 这说明：
+  1. 仅把 delayed routing 改写成 raw `front - background` gap 还不够；
+  2. 当前 gap 的中心明显偏负，样本整体没有进入 tri-map 的可用工作带；
+  3. 下一步不应只是继续微调阈值，而应先把 gap 做**零中心化 / 归一化 / bias-lift**，否则只会在“全关”和“过开”之间来回摆动。
+
+### 判定
+- `support-gap calibrated tri-map routing` 记为本轮**有信息增益但未形成收益**的分支。
+- 它的核心价值在于明确暴露了：当前 `front_support - background_support` 的自然分布整体偏负，tri-map 下一步必须先做 gap 的中心校准，而不是继续直接调固定阈值。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **zero-centered normalized support-gap routing**
+- 核心思路：
+  1. 不直接对 raw gap 设阈值；
+  2. 先对 `front_support - background_support` 做局部零中心化或 bias-lift；
+  3. 再在归一化后的 gap 上做 `committed-only / dual / delayed-only` 三段路由；
+  4. 目标是先把 `trimap_delayed_mean` 从 `0.0` 拉回到一个稳定非零区间，再观察是否还能保留部分 `ghost_tail / Acc` 改善而不过度损伤 `Comp-R`。
+
+## 2026-03-07 Zero-Centered Normalized Support-Gap Routing Attempt
+
+### 模块
+- `zero-centered normalized support-gap routing`
+- 定位：保留 `support-gap` 主线，但不再直接对 raw `front_support - background_support` 设阈值，而是先做：
+  1. `background anchor` 缩放；
+  2. `centered gap`；
+  3. `normalized gap`；
+  4. 再叠加小幅 `bias-lift`。
+
+### 代码落地
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/core/config.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 从上一轮得到的关键信号是：raw gap 在两组 probe 上整体偏负：
+  - TUM: `-0.308175`
+  - Bonn: `-0.163471`
+- 因此本轮不再直接对 raw gap 做 hard threshold，而是：
+  - 用 `bg_anchor_ratio < 1` 把背景支撑做零中心化；
+  - 再用 `norm_floor + front + bg_anchor + deficit` 做归一化；
+  - 最后叠加 `PFV / assoc / bg_deficit / front bonus` 的小幅 `bias-lift`。
+- 同时，本轮还把 `bg_rho` 从 hard guard 中移出，改为让它通过 `bg_deficit` 间接进入 route score，避免再次出现“score 已经为正、但 hard guard 把所有样本全挡掉”的情况。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_zerocenter_tum/`
+  - `output/post_cleanup/p10_trimap_zerocenter_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_zero_centered_support_gap_probe_tum_bonn_compare.csv`
+
+### 结果
+- 与当前代码同口径 baseline 比较，map-level 指标仍然**完全不变**：
+  - TUM `walking_xyz`:
+    - `dual_map_pfv_base_current`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`
+    - `tri_map_zero_centered_support_gap`: **完全相同**
+  - Bonn `balloon2`:
+    - `dual_map_pfv_base_current`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`
+    - `tri_map_zero_centered_support_gap`: **完全相同**
+- 但机制统计上有了比上一轮更细的变化：
+  - TUM:
+    - `trimap_support_gap_mean = -0.308175`
+    - `trimap_centered_gap_mean = -0.024127`
+    - `trimap_norm_gap_mean = -0.038345`
+    - `trimap_gap_bias_mean = 0.069926`
+    - `trimap_gap_score_mean = 0.031581`
+    - `trimap_dual_mean = 0.05`
+    - `trimap_delayed_mean = 0.0`
+  - Bonn:
+    - `trimap_support_gap_mean = -0.163471`
+    - `trimap_centered_gap_mean = -0.012112`
+    - `trimap_norm_gap_mean = -0.019264`
+    - `trimap_gap_bias_mean = 0.083937`
+    - `trimap_gap_score_mean = 0.064673`
+    - `trimap_dual_mean = 0.0`
+    - `trimap_delayed_mean = 0.0`
+
+### 结论
+- 本轮 `zero-centered normalized support-gap routing` 相比上一轮**确实向前推进了一步**：
+  - raw gap 被成功推近零中心；
+  - route score 由负转正；
+  - TUM 上首次出现了**非零 tri-map 激活**（`trimap_dual_mean = 0.05`）。
+- 但它仍然**没有形成 map-level 收益**：
+  - delayed routing 仍为 `0.0`；
+  - Bonn 仍然完全没有激活；
+  - TUM 的激活量也过小，尚不足以改变导出的最终指标。
+- 这说明：
+  1. 本轮已经证明“问题不在 raw gap 本身，而在固定阈值与固定预算太脆弱”；
+  2. 零中心化让 score 进入了可用区，但**绝对阈值路由仍然太硬**；
+  3. 下一步需要从“固定阈值”转向“分位数/预算约束”的路由方式，让 tri-map 在不同场景下都能保持一个稳定、可控的非零激活量。
+
+### 判定
+- `zero-centered normalized support-gap routing` 记为本轮**有信息增益、出现弱机制激活、但尚未形成指标收益**的分支。
+- 它是目前 support-gap 主线上最接近“真正打开 tri-map”的版本，但离能稳定冲击 P10 指标还差一步“自适应路由预算”。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **quantile-calibrated support-gap routing**
+- 核心思路：
+  1. 继续使用当前 `zero-centered normalized support-gap score`；
+  2. 不再只用固定绝对阈值；
+  3. 每帧或每批次按 score 分位数 / capped budget 选择少量 top-conflict 候选进入 `dual` 或 `delayed`；
+  4. 目标是把 `trimap_dual_mean / trimap_delayed_mean` 稳定拉到“小而非零”的区间，再观察是否能恢复部分 `ghost_tail / Acc` 改善而不过度伤害 `Comp-R`。
+
+## 2026-03-07 Quantile-Calibrated Support-Gap Routing Attempt
+
+### 模块
+- `quantile-calibrated support-gap routing`
+- 定位：保留上一轮的 `zero-centered normalized support-gap score`，但把最终 tri-map 激活从固定绝对阈值改为：
+  - 先按每帧 score 分位数找 top-conflict；
+  - 再施加 `capped budget`，保证 tri-map 使用量稳定、小幅、非零。
+
+### 代码落地
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/core/config.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 上一轮已经把 score 拉到接近可用区，但固定阈值导致：
+  - TUM 只有极弱激活；
+  - Bonn 基本仍为零。
+- 本轮改成两阶段：
+  1. 继续计算 `zero-centered normalized support-gap score`；
+  2. 在 `soft_candidate` 上按分位数取 top tail；
+  3. 再用 `soft/strong budget` 限制每帧进入 tri-map 的点数。
+- 目标是：
+  - 不再依赖某个固定绝对阈值；
+  - 让 TUM/Bonn 都进入稳定非零 tri-map 使用区间；
+  - 观察这种“受控非零使用”是否足以带来 map-level 指标变化。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_quantile_tum/`
+  - `output/post_cleanup/p10_trimap_quantile_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_quantile_support_gap_probe_tum_bonn_compare.csv`
+
+### 结果
+- 与当前代码同口径 baseline 比较，最终 map-level 指标仍然**完全不变**：
+  - TUM `walking_xyz`:
+    - `dual_map_pfv_base_current`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`
+    - `tri_map_quantile_support_gap`: **完全相同**
+  - Bonn `balloon2`:
+    - `dual_map_pfv_base_current`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`
+    - `tri_map_quantile_support_gap`: **完全相同**
+- 但机制统计上，本轮比 `zero-centered` 明显更进一步：
+  - TUM:
+    - `trimap_dual_mean = 9.15`
+    - `trimap_promoted_mean = 77.95`
+    - `trimap_quantile_soft_thresh_mean = 0.020248`
+    - `trimap_quantile_soft_budget_mean = 42.75`
+  - Bonn:
+    - `trimap_dual_mean = 7.45`
+    - `trimap_promoted_mean = 46.15`
+    - `trimap_quantile_soft_thresh_mean = 0.019991`
+    - `trimap_quantile_soft_budget_mean = 42.75`
+- 同时也暴露出本轮的核心限制：
+  - `trimap_delayed_mean` 仍然是 `0.0`；
+  - `trimap_quantile_strong_budget_mean` 仍然是 `0.0`；
+  - 即：quantile 确实把**dual branch** 打开了，但**delayed-only branch 仍未打开**。
+
+### 结论
+- 本轮 `quantile-calibrated support-gap routing` 的关键结论是：
+  - 它已经成功把 tri-map 从“偶发弱激活”推进到了“稳定非零 dual 使用”；
+  - TUM/Bonn 都进入了可重复的 tri-map 活跃状态；
+  - 但由于所有激活都落在 `dual` 而不是 `delayed-only`，committed background 仍接收同一批测量，导致最终导出表面几乎不变。
+- 这说明：
+  1. 当前真正的瓶颈已经不再是“怎么打开 tri-map”；
+  2. 而是“怎么让 top-conflict 样本真正离开 committed background”；
+  3. 如果 strongest tail 仍只走 `dual`，tri-map 机制会被 committed 写回冲淡，最终指标不会动。
+
+### 判定
+- `quantile-calibrated support-gap routing` 记为本轮**有明显机制增益、但仍未形成指标收益**的分支。
+- 它是目前 support-gap 主线上最有价值的一步：第一次让 TUM/Bonn 都进入稳定非零 tri-map 使用区间，但也把下一步的真正攻坚点钉死为“top tail delayed-only split”。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **top-tail delayed-only escalation under quantile routing**
+- 核心思路：
+  1. 保留本轮 quantile-calibrated candidate selection；
+  2. 把 top tail 中最强冲突的一小部分从 `dual` 升级为 `delayed-only`；
+  3. 中等冲突仍保持 `dual`；
+  4. 目标是让 committed map 与 delayed map 真正出现结构性分叉，再观察是否能恢复 `Acc / ghost_tail` 改善而不过度破坏 `Comp-R / F-score`。
+
+## 2026-03-08 Top-Tail Delayed-Only Escalation Attempt
+
+### 模块
+- `top-tail delayed-only escalation under quantile routing`
+- 定位：保留上一轮 `quantile-calibrated support-gap routing` 的稳定非零 tri-map 激活，但把其中最强冲突的 top tail 从 `dual` 升级为 `delayed-only`，尝试让 committed map 与 delayed map 产生真正结构性分叉。
+
+### 代码落地
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/core/config.py`
+
+### 设计要点
+- 上一轮已经证明：
+  - `dual` branch 能稳定打开；
+  - 但 strongest tail 仍然没有离开 committed background；
+  - 因此最终指标几乎不动。
+- 本轮改动是：
+  1. 先按 quantile 选出稳定的 `dual tail`；
+  2. 再在这批 `dual tail` 内部按 top-tail score 做第二次筛选；
+  3. 把其中最强的一小部分升级为 `delayed-only`；
+  4. 其余仍保留 `dual`。
+- 目标是：
+  - 第一次真正打开 `delayed-only` 分支；
+  - 验证“只要 strongest tail 真离开 committed map，是否就能产生 map-level 指标变化”。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_toptail_tum/`
+  - `output/post_cleanup/p10_trimap_toptail_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_toptail_delayed_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `dual_map_pfv_base_current`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`, `trimap_delayed_mean = 0.0`, `trimap_dual_mean = 0.0`
+  - `tri_map_quantile_support_gap`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`, `trimap_delayed_mean = 0.0`, `trimap_dual_mean = 9.15`
+  - `tri_map_top_tail_delayed`: `F-score = 0.999553`, `Chamfer = 0.020246`, `Comp-R = 1.000000`, `ghost_ratio = 0.607141`, `ghost_tail_ratio = 0.117683`, `trimap_delayed_mean = 1.35`, `trimap_dual_mean = 7.75`
+- Bonn `balloon2`:
+  - `dual_map_pfv_base_current`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`, `trimap_delayed_mean = 0.0`, `trimap_dual_mean = 0.0`
+  - `tri_map_quantile_support_gap`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`, `trimap_delayed_mean = 0.0`, `trimap_dual_mean = 7.45`
+  - `tri_map_top_tail_delayed`: `F-score = 0.630482`, `Chamfer = 0.099874`, `Comp-R = 0.701800`, `ghost_ratio = 0.142210`, `ghost_tail_ratio = 0.343899`, `trimap_delayed_mean = 1.1`, `trimap_dual_mean = 6.35`
+
+### 结论
+- 本轮首次成功把 `delayed-only` 分支真正打开：
+  - TUM: `trimap_delayed_mean = 1.35`
+  - Bonn: `trimap_delayed_mean = 1.1`
+- 这说明：
+  1. `quantile-calibrated` 路由并非只会打开 `dual`；
+  2. 通过 top-tail escalation，strongest tail 确实可以被结构性剥离出 committed background；
+  3. 到这一步为止，tri-map 的“真正分叉机制”已经被验证可行。
+- 但 map-level 收益仍然**没有形成明确突破**：
+  - TUM 变化极小，接近数值微扰；
+  - Bonn 出现了轻微 mixed change：`F-score / Comp-R / ghost_ratio` 有极小幅改善，但 `Chamfer / ghost_tail_ratio / Acc` 未同步改善；
+  - 当前幅度仍不足以支撑“已冲破 P10 目标”的判断。
+- 更关键的是：`trimap_promoted_mean` 仍然几乎不变（TUM `77.7`，Bonn `46.15`），说明 delayed-only tail 虽然被打开了，但很可能又被 promotion 很快吸回 committed map，造成结构分叉时间太短，最终导出仍被重新抹平。
+
+### 判定
+- `top-tail delayed-only escalation` 记为本轮**有明确机制突破、但仍未形成稳定指标突破**的分支。
+- 它是当前 support-gap / tri-map 主线上最关键的一步：
+  - 第一次同时在 TUM/Bonn 打开 `delayed-only`；
+  - 证明“strongest tail delayed split”这条方向是对的；
+  - 但下一步必须处理 promotion 回流过快的问题。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **escalation-aware promotion hold / delayed residency hysteresis**
+- 核心思路：
+  1. 保留本轮 `top-tail delayed-only` 选择机制；
+  2. 对被 escalation 的 delayed tail 施加短时 residency hold，或提高其 promotion 阈值；
+  3. 避免它们在写入 delayed map 后过快被 promotion 回 committed map；
+  4. 目标是把已经打开的 delayed-only 分叉“保持住足够长时间”，再观察是否能把当前极小 mixed change 放大成真正可见的 P10 指标收益。
+
+## 2026-03-08 Escalation-Aware Promotion Hold / Delayed Residency Hysteresis Attempt
+
+### 模块
+- `promotion hold / hysteresis`
+- 定位：在上一轮 `top-tail delayed-only escalation` 已经打开 delayed-only 分支的基础上，专门抑制 escalation tail 被过快 promotion 回 committed map。
+
+### 代码落地
+- `egf_dhmap3d/modules/associator.py`
+- `egf_dhmap3d/core/types.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/modules/updater.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 本轮给被 `top-tail delayed-only` 选中的 measurement 增加 escalation 标记与 hold frames；
+- 在 delayed map 写入时，把 escalation tail 的 `hold / hysteresis / route_score` 写入 delayed cell；
+- 在 `promote_delayed_background_map()` 内部：
+  - hold 期间直接阻止 promotion；
+  - hold 结束后仍施加一段 promotion hysteresis：
+    - 提高 promotion threshold；
+    - 降低 blend；
+    - 逐帧衰减。
+- 目标是：
+  1. 把上一轮已经打开的 delayed-only 分叉保留更久；
+  2. 防止 strongest tail 刚进入 delayed map 又被立刻吸回 committed map；
+  3. 观察这种“延长 delayed residency”的做法，能否把上一轮的极小 mixed change 放大成更稳定的 P10 收益。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_hold_tum/`
+  - `output/post_cleanup/p10_trimap_hold_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_promotion_hold_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_top_tail_delayed`: `F-score = 0.999553`, `Chamfer = 0.020246`, `Comp-R = 1.000000`, `ghost_ratio = 0.607141`, `ghost_tail_ratio = 0.117683`, `trimap_delayed_mean = 1.35`, `trimap_promoted_mean = 77.7`
+  - `tri_map_promotion_hold`: `F-score = 0.999553`, `Chamfer = 0.020248`, `Comp-R = 1.000000`, `ghost_ratio = 0.607150`, `ghost_tail_ratio = 0.117681`, `trimap_delayed_mean = 1.35`, `trimap_promoted_mean = 73.4`
+- Bonn `balloon2`:
+  - `tri_map_top_tail_delayed`: `F-score = 0.630482`, `Chamfer = 0.099874`, `Comp-R = 0.701800`, `ghost_ratio = 0.142210`, `ghost_tail_ratio = 0.343899`, `trimap_delayed_mean = 1.1`, `trimap_promoted_mean = 46.15`
+  - `tri_map_promotion_hold`: `F-score = 0.630482`, `Chamfer = 0.099874`, `Comp-R = 0.701800`, `ghost_ratio = 0.142210`, `ghost_tail_ratio = 0.343899`, `trimap_delayed_mean = 1.1`, `trimap_promoted_mean = 42.55`
+- 新增 residency 统计：
+  - TUM：`trimap_hold_blocked_mean = 4.5`, `trimap_hold_mean = 0.1640`, `trimap_hysteresis_mean = 0.1037`
+  - Bonn：`trimap_hold_blocked_mean = 3.6`, `trimap_hold_mean = 0.1552`, `trimap_hysteresis_mean = 0.1037`
+- 这说明 hold/hysteresis 的确在发挥作用：
+  - delayed-only tail 没有消失；
+  - promotion 回流被真实压低；
+  - 但 map-level 指标并没有同步放大。
+
+### 结论
+- 本轮 `promotion hold / hysteresis` 的**机制结论是正的**：
+  - 它成功降低了 escalation tail 的 promotion 回流；
+  - 证明上一轮的判断是对的：promotion rebound 确实存在，而且可以被抑制。
+- 但它的**结果结论仍然偏负**：
+  - TUM 只出现极小数值扰动；
+  - Bonn 基本与上一轮 top-tail delayed-only 完全同级；
+  - 指标增量没有被进一步放大。
+- 这说明：
+  1. “把 strongest tail 保留在 delayed map 更久”本身并不足以转化成显著收益；
+  2. 当前更大的瓶颈很可能已经从 promotion 回流，转移到**导出路径**；
+  3. 也就是说，即使 delayed tail 被保留住，如果 extraction/export 仍几乎只读 committed map，那么 P10 指标仍然不会被明显改变。
+
+### 判定
+- `promotion hold / hysteresis` 记为本轮**有明确机制验证价值、但未形成收益放大**的分支。
+- 它进一步缩小了搜索空间：当前最值得怀疑的瓶颈已不再是“路由”或“promotion”，而是 delayed map 对最终 surface export 的参与度过低。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **residency-gated delayed export participation**
+- 核心思路：
+  1. 只对 hold/hysteresis 仍活跃、且通过严格前景/支撑约束的 delayed tail，允许有限度参与 export；
+  2. 不是全量 delayed export，更不是恢复旧的 hole-only rescue；
+  3. 而是把“已经被 top-tail + hold 证实值得保留的 delayed-only subset”作为一个受控导出支路；
+  4. 目标是验证：一旦 delayed tail 真能进入最终 export，当前已被验证的机制分叉能否终于转化为可见的 P10 指标收益。
+
+## 2026-03-08 Residency-Gated Delayed Export Participation Attempt
+
+### 模块
+- `residency-gated delayed export participation`
+- 定位：在 `top-tail delayed-only + promotion hold/hysteresis` 已经把 delayed-only tail 保留下来的前提下，允许其中一小部分仍处于 residency 活跃期的 delayed tail 受控参与最终 export。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `egf_dhmap3d/modules/pipeline.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 本轮不是开放整个 delayed map 的 export；
+- 而是只允许同时满足以下条件的 delayed subset 参与最终 export：
+  1. 处于 `hold / hysteresis / escalated` 活跃期；
+  2. delayed support 足够高；
+  3. route score 足够高；
+  4. committed map 在该位置附近没有很强的已导出支撑，或该点本来就不在 committed export 里。
+- 目标是验证：如果 delayed tail 真能进入最终 export，当前已经建立的 tri-map 结构分叉是否终于会转化成可见的 P10 指标收益。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_export_tum/`
+  - `output/post_cleanup/p10_trimap_export_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_residency_export_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_promotion_hold`: `F-score = 0.999553`, `Chamfer = 0.020248`, `Comp-R = 1.000000`, `ghost_ratio = 0.607150`, `ghost_tail_ratio = 0.117681`, `trimap_export_added = 0`
+  - `tri_map_residency_export`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`, `trimap_export_added = 18`
+- Bonn `balloon2`:
+  - `tri_map_promotion_hold`: `F-score = 0.630482`, `Chamfer = 0.099874`, `Comp-R = 0.701800`, `ghost_ratio = 0.142210`, `ghost_tail_ratio = 0.343899`, `trimap_export_added = 0`
+  - `tri_map_residency_export`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`, `trimap_export_added = 14`
+- 说明 export 支路本身已经真正生效：
+  - TUM：`trimap_export_added = 18`, `trimap_export_candidates = 165`, `trimap_export_residency = 24`
+  - Bonn：`trimap_export_added = 14`, `trimap_export_candidates = 139`, `trimap_export_residency = 21`
+- 但最终指标表现非常关键：
+  - TUM：基本**回到当前 baseline**；
+  - Bonn：也基本**回到当前 baseline**。
+
+### 结论
+- 本轮的结论非常有价值：
+  - delayed tail 不仅能被路由出去、保留下来，而且现在**确实能进入最终 export**；
+  - 但即便如此，最终指标仍几乎回到 baseline，说明“仅仅把 delayed tail 以附加点的形式加进 export”仍不足以改变主导表面的几何统计。
+- 这意味着：
+  1. 当前瓶颈已不再是“delayed tail 无法进入 export”；
+  2. 而是 export 里 **committed surface 仍然主导几何**；
+  3. delayed tail 作为附加点被加入时，只产生了极小或可忽略的统计影响。
+- 因而，下一步不能再是“多加一点 delayed points”，而必须转向**export-time local replacement / shadow suppression**：
+  - 在 delayed tail 参与 export 的局部邻域，对 committed export 做有控制的替换或抑制；
+  - 让 delayed branch 不只是“附加”，而是真正参与最终表面的局部主导权竞争。
+
+### 判定
+- `residency-gated delayed export participation` 记为本轮**有明确链路打通价值、但结果仍未突破**的分支。
+- 它进一步把问题钉死在 export-time 主导权上：当前需要的不再是更多 delayed 点，而是 delayed 点对 committed 点的局部替换权。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **export-time local replacement around delayed tail**
+- 核心思路：
+  1. 保留本轮 residency-gated delayed export subset；
+  2. 对这些 delayed export 点的局部邻域，抑制或替换 nearby committed export points；
+  3. 不是全局替换，而是仅在 delayed tail 覆盖的局部小球/索引邻域内做 controlled replacement；
+  4. 目标是验证：一旦 delayed branch 获得局部表面主导权，当前已经打通的 tri-map 机制能否终于转化成真正可见的 P10 指标收益。
+
+## 2026-03-08 Export-Time Local Replacement Around Delayed Tail Attempt
+
+### 模块
+- `export-time local replacement around delayed tail`
+- 定位：不再只把 delayed tail 作为 export 的附加点，而是在 delayed tail 局部邻域内，受控抑制/替换 nearby committed export points，让 delayed branch 获得局部表面主导权。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 上一轮已经证明 delayed tail 可以进入 export，但只是“附加点”；
+- 本轮进一步改为：
+  1. 先选出 residency-active delayed export subset；
+  2. 在其邻域内搜索 nearby committed export points；
+  3. 若 committed 点局部支撑不够强，则在局部小球内删去少量 committed points；
+  4. 再把 delayed tail 加入 export。
+- 目标是：让 delayed tail 从“附加参与”变成“局部表面主导”，观察这是否能把 tri-map 机制分叉转化成真正可见的 P10 指标变化。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_replace_tum/`
+  - `output/post_cleanup/p10_trimap_replace_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_local_replacement_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_residency_export`: `F-score = 0.999553`, `Chamfer = 0.020242`, `Comp-R = 1.000000`, `ghost_ratio = 0.607266`, `ghost_tail_ratio = 0.117678`, `trimap_export_added = 18`, `trimap_export_replaced = 0`
+  - `tri_map_local_replacement`: `F-score = 0.999552`, `Chamfer = 0.020254`, `Comp-R = 1.000000`, `ghost_ratio = 0.607098`, `ghost_tail_ratio = 0.117708`, `trimap_export_added = 18`, `trimap_export_replaced = 62`
+- Bonn `balloon2`:
+  - `tri_map_residency_export`: `F-score = 0.630335`, `Chamfer = 0.099868`, `Comp-R = 0.701660`, `ghost_ratio = 0.142491`, `ghost_tail_ratio = 0.343565`, `trimap_export_added = 14`, `trimap_export_replaced = 0`
+  - `tri_map_local_replacement`: `F-score = 0.630254`, `Chamfer = 0.099880`, `Comp-R = 0.701600`, `ghost_ratio = 0.142359`, `ghost_tail_ratio = 0.343798`, `trimap_export_added = 14`, `trimap_export_replaced = 42`
+
+### 结论
+- 本轮验证了一个非常关键的事实：
+  - delayed tail 不仅能进入 export；
+  - 它也**确实可以在局部邻域内替换 committed export points**；
+  - replacement 统计已经非零且不小：
+    - TUM：`62` 个 committed export points 被替换；
+    - Bonn：`42` 个 committed export points 被替换。
+- 但结果层面，这轮是一个**偏负的结构结果**：
+  - replacement 确实让表面主导权发生了变化；
+  - 但当前这种“半径邻域 + 硬替换”过于粗糙；
+  - 指标表现变成了典型的几何扰动：
+    - `ghost_ratio` 有轻微改善；
+    - 但 `Chamfer / ghost_tail / F-score` 整体没有同步改善，甚至略有恶化。
+- 这说明：
+  1. 方向本身是对的——export-time 主导权确实是当前最后一道关键门；
+  2. 但当前 replacement 机制太“硬”，缺少 delayed-vs-committed 的精细竞争；
+  3. 不能只按半径删除 committed points，而必须让 delayed/committed 在局部做**一对一、带几何一致性约束的竞争替换**。
+
+### 判定
+- `export-time local replacement around delayed tail` 记为本轮**有关键链路验证价值、但当前实现过于粗糙，未形成收益**的分支。
+- 它进一步明确了：P10 这条 tri-map 主线真正需要的不是“更多 delayed 点”，也不是“更大 replacement 半径”，而是**replacement-time competition scoring**。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **competition-scored local replacement**
+- 核心思路：
+  1. 保留当前 residency-gated delayed export subset；
+  2. 不再按纯半径硬删 committed points；
+  3. 而是在 delayed point 与 nearby committed point 之间构造局部竞争分数：
+     - delayed residency / route score
+     - committed static support
+     - 几何距离
+     - 法向一致性
+  4. 只有 delayed 明确胜出时，才进行一对一或小规模替换；
+  5. 目标是把本轮“表面真的会动”的证明，进一步变成“表面只在正确的地方动”，从而争取第一次稳定的 P10 指标正增益。
+
+## 2026-03-08 Competition-Scored Local Replacement Attempt
+
+### 模块
+- `competition-scored local replacement`
+- 定位：延续上一轮 `export-time local replacement`，但不再按“半径邻域 + 硬替换”删除 committed export points，而是对 delayed point 与 nearby committed point 逐点计算 competition score，只有 delayed 明确胜出时才替换。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 本轮在 replacement 时加入了更细的竞争分数：
+  - delayed support
+  - route score
+  - residency strength
+  - 法向一致性
+  - committed static support
+  - 局部距离惩罚
+- 与上一轮相比，目标不是“替换更多 committed 点”，而是“只替换 delayed 确实胜出的 committed 点”。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_compete_tum/`
+  - `output/post_cleanup/p10_trimap_compete_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_competition_replacement_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_local_replacement`: `F-score = 0.999552`, `Chamfer = 0.020254`, `ghost_ratio = 0.607098`, `ghost_tail_ratio = 0.117708`, `trimap_export_replaced = 62`
+  - `tri_map_competition_replacement`: `F-score = 0.999553`, `Chamfer = 0.020247`, `ghost_ratio = 0.607093`, `ghost_tail_ratio = 0.117741`, `trimap_export_replaced = 32`, `trimap_export_compete_mean = 0.1236`, `trimap_export_normal_cos_mean = 0.9047`
+- Bonn `balloon2`:
+  - `tri_map_local_replacement`: `F-score = 0.630254`, `Chamfer = 0.099880`, `ghost_ratio = 0.142359`, `ghost_tail_ratio = 0.343798`, `trimap_export_replaced = 42`
+  - `tri_map_competition_replacement`: `F-score = 0.630273`, `Chamfer = 0.099876`, `ghost_ratio = 0.142373`, `ghost_tail_ratio = 0.343714`, `trimap_export_replaced = 26`, `trimap_export_compete_mean = 0.1075`, `trimap_export_normal_cos_mean = 0.8668`
+- 这说明：
+  - replacement 从粗暴硬删变成了更节制的局部竞争替换；
+  - 被替换的 committed 点数量明显下降；
+  - 且替换对的法向一致性较高（TUM `0.90`，Bonn `0.87`）。
+
+### 结论
+- 本轮 `competition-scored local replacement` 是一个**比上一轮更合理的负结果**：
+  - 它确实让 replacement 更精细；
+  - 相比上一轮硬替换，TUM/Bonn 的几何扰动都更小；
+  - Bonn 上也出现了比上一轮略更平衡的 mixed change。
+- 但到结果层面，它仍然**没有形成净正收益**：
+  - TUM 仍然只是极小扰动；
+  - Bonn 虽然相对硬替换更稳，但仍未超越 `residency_export` / baseline；
+  - 说明当前 export-time 替换这条线已经很接近“只能做微调”的上限。
+- 这进一步说明：
+  1. 当前 tri-map 主线的最后一个主要瓶颈不是“替换太粗”；
+  2. 而是 delayed branch 本身承载的几何质量 / 几何位置，还不足以在局部竞争中稳定赢过 committed surface；
+  3. 因此，再继续在 export 末端做 replacement trick，预期收益会越来越小。
+
+### 判定
+- `competition-scored local replacement` 记为本轮**有精细化机制收益、但未形成指标突破**的分支。
+- 它基本宣告：当前 tri-map/export competition 这条子线已接近边际收益衰减区。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **delayed-branch geometry refinement before export competition**
+- 核心思路：
+  1. 不再只在 export 末端竞争；
+  2. 先提升 delayed branch 自身的几何质量或几何定位稳定性；
+  3. 再让它去和 committed branch 做 export competition；
+  4. 换句话说，下一步重点应从“谁来主导 export”转向“delayed branch 先变得足够像一个高质量 surface bank”。
+
+## 2026-03-08 Delayed-Branch Geometry Refinement Before Export Competition Attempt
+
+### 模块
+- `delayed-branch geometry refinement before export competition`
+- 定位：不再继续强化 export 末端替换规则，而是在 delayed branch 自身先做局部几何 refinement（法向 + 零交叉点位），再把 refined delayed surface 送入 export competition。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 本轮在 delayed export 点参与 competition 之前，增加了一个 delayed-branch 局部 refinement：
+  - 从 delayed map 邻域聚合 `g_mean` 做法向平滑；
+  - 对 `phi_static / phi_bg / phi_geo` 做局部加权，构造 refined zero-crossing；
+  - 最终得到 refined point / refined normal，再参加 delayed-vs-committed 的局部 competition。
+- 目标是让 delayed branch 先变成一个更像“高质量 surface bank”的分支，再去争 export 主导权。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_refine_tum/`
+  - `output/post_cleanup/p10_trimap_refine_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_delayed_refine_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_competition_replacement`: `F-score = 0.999553`, `Chamfer = 0.020247`, `ghost_ratio = 0.607093`, `ghost_tail_ratio = 0.117741`, `trimap_export_replaced = 32`
+  - `tri_map_delayed_refine`: `F-score = 0.999553`, `Chamfer = 0.020247`, `ghost_ratio = 0.607056`, `ghost_tail_ratio = 0.117739`, `trimap_export_replaced = 31`, `trimap_delayed_refine_offset_mean = 0.00388`, `trimap_delayed_refine_normal_cos_mean = 0.9944`
+- Bonn `balloon2`:
+  - `tri_map_competition_replacement`: `F-score = 0.630273`, `Chamfer = 0.099876`, `ghost_ratio = 0.142373`, `ghost_tail_ratio = 0.343714`, `trimap_export_replaced = 26`
+  - `tri_map_delayed_refine`: `F-score = 0.630273`, `Chamfer = 0.099876`, `ghost_ratio = 0.142373`, `ghost_tail_ratio = 0.343714`, `trimap_export_replaced = 26`, `trimap_delayed_refine_offset_mean = 0.00038`, `trimap_delayed_refine_normal_cos_mean = 0.9987`
+- 说明 delayed branch refinement 在几何层面是有效的：
+  - refinement offset 很小，说明它在做温和稳定化而不是大幅扭曲几何；
+  - refinement 后的法向一致性非常高（TUM `0.9944`，Bonn `0.9987`）；
+  - export competition 仍在正常工作。
+
+### 结论
+- 本轮 `delayed-branch geometry refinement` 的结论是：
+  - 它成功把 delayed branch 做得更平滑、更稳定；
+  - 但这种 refinement 并没有把 export competition 的结果明显推向净收益；
+  - 指标变化仍停留在极小 mixed change 范围内。
+- 这说明：
+  1. delayed branch 的几何质量确实是一个问题，但当前的 refinement 还只是“局部平滑级别”的改进；
+  2. delayed branch 与 committed branch 之间更深层的差异，可能不是点位/法向噪声，而是**surface field 本身的状态表达不够独立**；
+  3. 继续只在 export 前做局部 refinement，预期收益也会逐渐变小。
+
+### 判定
+- `delayed-branch geometry refinement before export competition` 记为本轮**有稳定化收益、但未形成指标突破**的分支。
+- 它进一步说明：如果要继续沿 delayed branch 深挖，下一步不能只做 point-level refinement，而应考虑 delayed branch 自身的 **surface field / readout state** 级增强。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **delayed-branch dedicated surface readout / banked field refinement**
+- 核心思路：
+  1. 不只对 delayed exported points 做后处理；
+  2. 而是在 delayed branch 内部单独建立更稳定的 surface readout（例如 dedicated surface bank / refined persistent readout）；
+  3. 让 delayed branch 在 export 之前就拥有更清晰的 surface representation；
+  4. 再与 committed branch 做 competition。
+
+## 2026-03-08 Delayed-Branch Dedicated Surface Readout / Banked Field Refinement Attempt
+
+### 模块
+- `delayed-branch dedicated surface readout / banked field refinement`
+- 定位：不再只对 delayed export 点做 point-level refinement，而是给 delayed branch 一个更独立的 dedicated surface readout：
+  - 先在 delayed map 内部做 banked field 读出；
+  - 再把这个 delayed-specific surface representation 送入 export competition。
+
+### 代码落地
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+- `scripts/run_egf_3d_tum.py`
+
+### 设计要点
+- 本轮把 delayed branch 的 surface readout 从“通用 extractor + delayed postprocess”切换到：
+  1. delayed map 内部单独计算 local banked field；
+  2. 用 `phi_static / phi_bg / phi_geo` 做 delayed-specific field readout；
+  3. 用 delayed 邻域做 dedicated normal / zero-crossing 估计；
+  4. 再把这个 banked delayed surface 去做 export competition。
+- 目标是让 delayed branch 在 export 之前就先拥有更独立的 surface representation，而不是继续依赖 committed-style extractor 再做末端修补。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_bank_tum/`
+  - `output/post_cleanup/p10_trimap_bank_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_delayed_banked_readout_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_competition_replacement`: `F-score = 0.999553`, `Chamfer = 0.020247`, `ghost_ratio = 0.607093`, `ghost_tail_ratio = 0.117741`, `trimap_export_added = 18`, `trimap_export_replaced = 32`
+  - `tri_map_delayed_bank_readout`: `F-score = 0.999553`, `Chamfer = 0.020247`, `ghost_ratio = 0.607114`, `ghost_tail_ratio = 0.117692`, `trimap_export_added = 4`, `trimap_export_replaced = 8`, `trimap_delayed_bank_points = 14`
+- Bonn `balloon2`:
+  - `tri_map_competition_replacement`: `F-score = 0.630273`, `Chamfer = 0.099876`, `ghost_ratio = 0.142373`, `ghost_tail_ratio = 0.343714`, `trimap_export_added = 14`, `trimap_export_replaced = 26`
+  - `tri_map_delayed_bank_readout`: `F-score = 0.630477`, `Chamfer = 0.099874`, `ghost_ratio = 0.142234`, `ghost_tail_ratio = 0.343911`, `trimap_export_added = 2`, `trimap_export_replaced = 4`, `trimap_delayed_bank_points = 6`
+- 统计上，本轮 delayed branch 的独立性确实变强了：
+  - TUM：`trimap_delayed_bank_points = 14`, `trimap_delayed_bank_conf_mean = 0.3871`, `trimap_delayed_bank_residency_mean = 0.5363`
+  - Bonn：`trimap_delayed_bank_points = 6`, `trimap_delayed_bank_conf_mean = 0.3494`, `trimap_delayed_bank_residency_mean = 0.2130`
+- 说明 dedicated banked readout 的确让 delayed branch 变得更“克制”和更独立，而不是继续大规模动 export surface。
+
+### 结论
+- 本轮是一个很典型的“更干净但不更强”的结果：
+  - delayed branch 的 surface readout 确实被独立出来了；
+  - 干预点数明显减少；
+  - 但最终指标并没有被显著抬升。
+- 更具体地说：
+  1. TUM 上它比前几轮更接近“无害扰动”，但没有形成净收益；
+  2. Bonn 上出现了比 `competition replacement` 更接近 `top-tail delayed-only` 的 mixed positive pattern，但仍然很小，不足以构成真正突破；
+  3. 这说明 delayed branch 的 dedicated readout 是对的方向，但当前 bank 还太弱、点太少，仍不足以主导局部表面统计。
+
+### 判定
+- `delayed-branch dedicated surface readout / banked field refinement` 记为本轮**有结构正确性增益、但未形成突破**的分支。
+- 它说明 delayed branch 这条线如果继续走下去，应该从“更聪明地导出少量点”升级到“更强地积累一个 delayed-specific persistent surface bank”。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **persistent delayed surface bank accumulation**
+- 核心思路：
+  1. 不只在 export 时临时读 delayed field；
+  2. 而是在 delayed branch 内部显式积累一个更稳定的 persistent surface bank；
+  3. 让 delayed branch 拥有足够强的 surface mass，再去和 committed branch 做 export competition；
+  4. 目标是从“少量干预”提升到“足够强的 delayed-specific geometry 主导权”。
+
+## 2026-03-08 Persistent Delayed Surface Bank Accumulation Attempt
+
+### 模块
+- `persistent delayed surface bank accumulation`
+- 定位：在上一轮 `delayed-branch dedicated surface readout / banked field refinement` 的基础上，不再只在 export 时临时读取 delayed field，而是在 delayed branch 内部显式积累一个 persistent surface bank，再从该 bank 做 delayed readout。
+
+### 代码落地
+- `egf_dhmap3d/core/types.py`
+- `egf_dhmap3d/core/config.py`
+- `egf_dhmap3d/core/voxel_hash.py`
+- `egf_dhmap3d/modules/updater.py`
+- `egf_dhmap3d/P10_method/tri_map.py`
+
+### 设计要点
+- 本轮新增 delayed bank state：
+  - `phi_delayed_bank`
+  - `phi_delayed_bank_w`
+  - `rho_delayed_bank`
+  - `delayed_bank_conf / age / active`
+- 在 delayed map 写入阶段做 bank accumulation；
+- 在 delayed export readout 时优先读 persistent bank，而不是只依赖临时邻域读出。
+- 目标是：让 delayed branch 具备真正的持久 surface mass，而不再只是 export 阶段的局部临时重建。
+
+### focused probe
+- TUM scene: `rgbd_dataset_freiburg3_walking_xyz`
+- Bonn scene: `rgbd_bonn_balloon2`
+- Frames: `20`
+- Protocols: `oracle` (TUM) / `slam` (Bonn)
+- 输出目录：
+  - `output/post_cleanup/p10_trimap_pbank_tum/`
+  - `output/post_cleanup/p10_trimap_pbank_bonn/`
+- 对比表：`output/summary_tables/p10_trimap_persistent_delay_bank_probe_tum_bonn_compare.csv`
+
+### 结果
+- TUM `walking_xyz`:
+  - `tri_map_delayed_bank_readout`: `F-score = 0.999553`, `Chamfer = 0.020247`, `ghost_ratio = 0.607114`, `ghost_tail_ratio = 0.117692`, `trimap_export_added = 4`, `trimap_export_replaced = 8`, `trimap_delayed_bank_points = 14`
+  - `tri_map_persistent_delay_bank`: **数值基本完全相同**
+- Bonn `balloon2`:
+  - `tri_map_delayed_bank_readout`: `F-score = 0.630477`, `Chamfer = 0.099874`, `ghost_ratio = 0.142234`, `ghost_tail_ratio = 0.343911`, `trimap_export_added = 2`, `trimap_export_replaced = 4`, `trimap_delayed_bank_points = 6`
+  - `tri_map_persistent_delay_bank`: **数值基本完全相同**
+
+### 结论
+- 本轮 `persistent delayed surface bank accumulation` 的结论是一个非常明确的负结果：
+  - 在当前 focused probe 条件下，它与上一轮 `dedicated banked readout` 几乎完全等价；
+  - 说明当前新增的 persistent bank state 还没有提供额外信息量；
+  - delayed branch 的瓶颈并不是“缺少 bank 存储位”，而是这些 bank 中并没有被写入比现有 delayed readout 更强的几何内容。
+- 换句话说：
+  1. delayed branch 当前不是“没有记住自己”；
+  2. 而是“记住的东西还不够有区分度”；
+  3. 如果要继续深挖 delayed branch，就不能只做 persistence，还必须让写入 delayed bank 的 observation/geometry target 本身更强。
+
+### 判定
+- `persistent delayed surface bank accumulation` 记为本轮**无额外增益的结构验证分支**。
+- 它进一步表明：当前 tri-map/delayed 主线如果继续推进，下一步必须转向 delayed branch 的 **write-time target synthesis / dedicated observation model**，而不是继续堆积存储或 export 侧技巧。
+
+### 下一步目标方案
+- 下一步应转向：
+  - **delayed-branch write-time target synthesis**
+- 核心思路：
+  1. 不再只累积当前 delayed cell 已有的 `phi_static / phi_bg / phi_geo`；
+  2. 而是在 delayed branch 写入期就专门构造 delayed-specific surface target；
+  3. 让 delayed bank 写入的就不是 committed 的弱变体，而是 delayed branch 自己的几何假设；
+  4. 目标是提升 delayed bank 的信息增益，再回到 export competition 看是否能真正带来可见的 P10 指标收益。

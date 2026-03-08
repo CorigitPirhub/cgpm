@@ -13,6 +13,7 @@ from egf_dhmap3d.P10_method.obl import update_obl_state as p10_update_obl_state
 from egf_dhmap3d.P10_method.omhs import update_omhs_state as p10_update_omhs_state
 from egf_dhmap3d.P10_method.otv import update_otv_state as p10_update_otv_state
 from egf_dhmap3d.P10_method.pfv import update_persistent_free_space_volume as p10_update_persistent_free_space_volume
+from egf_dhmap3d.P10_method.pfv import pfv_commit_delay_scales as p10_pfv_commit_delay_scales
 from egf_dhmap3d.P10_method.ptdsf import write_time_dual_surface_targets as p10_write_time_dual_surface_targets
 from egf_dhmap3d.P10_method.rps import update_rps_state as p10_update_rps_state
 from egf_dhmap3d.P10_method.spg import update_spg_state as p10_update_spg_state
@@ -20,6 +21,9 @@ from egf_dhmap3d.P10_method.wod import write_time_occlusion_split as p10_write_t
 from egf_dhmap3d.P10_method.xmem import update_xmem_state as p10_update_xmem_state
 from egf_dhmap3d.P10_method.zcbf import local_zero_crossing_debias as p10_local_zero_crossing_debias
 from egf_dhmap3d.P10_method.zcbf import zero_crossing_bias_field as p10_zero_crossing_bias_field
+from egf_dhmap3d.P10_method.bg_candidate import bg_candidate_route_score as p10_bg_candidate_route_score
+from egf_dhmap3d.P10_method.bg_candidate import update_bg_candidate_state as p10_update_bg_candidate_state
+from egf_dhmap3d.P10_method.bg_candidate import maybe_promote_bg_candidate as p10_maybe_promote_bg_candidate
 
 
 class Updater3D:
@@ -262,8 +266,10 @@ class Updater3D:
         if float(np.linalg.norm(n)) < 1e-8:
             return
 
-        bg_role = str(map_role).lower() == "background"
-        fg_role = str(map_role).lower() == "foreground"
+        role = str(map_role).lower()
+        bg_role = role in {"background", "background_delayed"}
+        delayed_bg_role = role == "background_delayed"
+        fg_role = role == "foreground"
 
         trunc = float(self.cfg.map3d.truncation)
         trunc_scale = float(np.clip(self.cfg.update.integration_radius_scale, 0.20, 1.0))
@@ -342,6 +348,9 @@ class Updater3D:
             xmem_dyn_boost = 0.0
             q_obl_route = 0.0
             obl_geo_keep = 1.0
+            pfv_commit_geo_keep = 1.0
+            pfv_commit_rho_keep = 1.0
+            pfv_commit_score = 0.0
             if bool(self.cfg.update.dual_state_enable):
                 q_dyn = float(np.clip(q_dyn_obs, 0.0, 1.0))
                 min_static = float(np.clip(self.cfg.update.dual_state_min_static_ratio, 0.0, 0.5))
@@ -517,26 +526,71 @@ class Updater3D:
                         transient_mass = float(np.clip(w_transient / max(1e-9, w_obs), 0.0, 1.0))
                         shell_mass = float(np.clip(w_shell / max(1e-9, w_obs), 0.0, 1.0))
 
+                pfv_commit_geo_keep = 1.0
+                pfv_commit_rho_keep = 1.0
+                pfv_commit_score = 0.0
                 if bool(getattr(self.cfg.update, 'dual_map_enable', False)) and (bg_role or fg_role):
                     if bg_role:
                         front_dyn = float(np.clip(wod_front + 0.50 * wod_shell + 0.35 * q_dyn_obs + 0.20 * assoc_risk + 0.15 * q_xmem_route, 0.0, 1.0))
                         rear_bg = float(np.clip(wod_rear + 0.35 * static_ratio + 0.20 * q_obl_route + 0.10 * (1.0 - q_dyn_obs), 0.0, 1.0))
                         bg_floor = float(np.clip(getattr(self.cfg.update, 'dual_map_bg_static_floor', 0.08), 0.0, 0.5))
                         bg_keep = float(np.clip(bg_floor + float(getattr(self.cfg.update, 'dual_map_bg_rear_gain', 1.0)) * rear_bg - float(getattr(self.cfg.update, 'dual_map_bg_front_veto', 0.90)) * front_dyn, 0.0, 1.0))
+                        cand_score = p10_bg_candidate_route_score(
+                            self,
+                            voxel_map,
+                            cell,
+                            static_ratio=static_ratio,
+                            rear_bg=rear_bg,
+                            front_dyn=front_dyn,
+                            q_dyn_obs=q_dyn_obs,
+                            assoc_risk=assoc_risk,
+                        )
                         w_static *= bg_keep
+                        if not delayed_bg_role:
+                            pfv_static_keep, pfv_bg_keep, pfv_commit_geo_keep, pfv_commit_rho_keep, pfv_commit_score = p10_pfv_commit_delay_scales(
+                                self,
+                                voxel_map,
+                                cell,
+                                static_ratio=static_ratio,
+                                q_dyn_obs=q_dyn_obs,
+                                assoc_risk=assoc_risk,
+                            )
+                            w_static *= pfv_static_keep
+                        else:
+                            pfv_static_keep, pfv_bg_keep, pfv_commit_geo_keep, pfv_commit_rho_keep, pfv_commit_score = 1.0, 1.0, 1.0, 1.0, 0.0
+                        d_bg_obs = float(d_rear_obs if rear_bg >= max(0.20, 0.75 * front_dyn) else d_static_obs)
+                        if not delayed_bg_role:
+                            cand_leak, cand_n = p10_update_bg_candidate_state(
+                                self,
+                                voxel_map,
+                                cell,
+                                d_bg_obs=d_bg_obs,
+                                w_obs=w_obs * max(bg_floor, bg_keep),
+                                route_score=cand_score,
+                            )
+                            w_static *= cand_leak
+                        else:
+                            cand_leak, cand_n = 1.0, 0.0
                         w_transient = 0.0
                         w_shell = 0.0
                         static_mass = float(np.clip(w_static / max(1e-9, w_obs), 0.0, 1.0))
                         transient_mass = 0.0
                         shell_mass = 0.0
-                        d_bg_obs = float(d_rear_obs if rear_bg >= max(0.20, 0.75 * front_dyn) else d_static_obs)
-                        w_bg = float(w_obs * max(bg_floor, bg_keep))
+                        w_bg = float(w_obs * max(bg_floor, bg_keep) * pfv_bg_keep * cand_leak)
                         if w_bg > 1e-12:
                             w_bg_new = float(float(getattr(cell, 'phi_bg_w', 0.0)) + w_bg)
                             if w_bg_new > 1e-12:
                                 cell.phi_bg = float((float(getattr(cell, 'phi_bg_w', 0.0)) * float(getattr(cell, 'phi_bg', 0.0)) + w_bg * d_bg_obs) / w_bg_new)
                                 cell.phi_bg_w = float(min(5000.0, w_bg_new))
-                                cell.rho_bg = float(float(getattr(cell, 'rho_bg', 0.0)) + float(np.clip(getattr(self.cfg.update, 'obl_rho_alpha', 0.20), 0.01, 1.0)) * w_bg)
+                                cell.rho_bg = float(float(getattr(cell, 'rho_bg', 0.0)) + float(np.clip(getattr(self.cfg.update, 'obl_rho_alpha', 0.20), 0.01, 1.0)) * w_bg * pfv_commit_rho_keep)
+                        if not delayed_bg_role:
+                            _cand_promote = p10_maybe_promote_bg_candidate(
+                                self,
+                                voxel_map,
+                                cell,
+                                static_ratio=static_ratio,
+                                rear_bg=rear_bg,
+                            )
                     elif fg_role:
                         front_fg = float(np.clip(wod_front + 0.60 * wod_shell + 0.35 * q_dyn_obs + 0.20 * assoc_risk + 0.15 * q_xmem_route, 0.0, 1.0))
                         fg_boost = float(max(0.0, getattr(self.cfg.update, 'dual_map_fg_front_boost', 1.10)))
@@ -550,7 +604,7 @@ class Updater3D:
 
                 if bool(self.cfg.update.ptdsf_enable):
                     rho_alpha = float(np.clip(self.cfg.update.ptdsf_rho_alpha, 0.01, 1.0))
-                    cell.rho_static = float(cell.rho_static + rho_alpha * w_static)
+                    cell.rho_static = float(cell.rho_static + rho_alpha * w_static * pfv_commit_rho_keep)
                     cell.rho_transient = float(cell.rho_transient + rho_alpha * (w_transient + w_shell))
                     if static_mass >= 0.65 and shell_mass <= 0.20:
                         cell.ptdsf_commit_age = float(min(20.0, cell.ptdsf_commit_age + 1.0))
@@ -570,6 +624,67 @@ class Updater3D:
                         cell.phi_transient = float((cell.phi_transient_w * cell.phi_transient + w_transient * d_transient_obs) / w_t_new)
                         cell.phi_transient_w = float(min(5000.0, w_t_new))
 
+                if delayed_bg_role:
+                    hold_frames = float(max(0.0, getattr(measurement, 'tri_map_hold_frames', 0.0)))
+                    route_score = float(getattr(measurement, 'tri_map_route_score', 0.0))
+                    escalated = bool(getattr(measurement, 'tri_map_escalated', False))
+                    if hold_frames > 1e-6 or escalated:
+                        cell.trimap_hold_frames = float(max(float(getattr(cell, 'trimap_hold_frames', 0.0)), hold_frames))
+                        cell.trimap_hysteresis = float(max(float(getattr(cell, 'trimap_hysteresis', 0.0)), float(getattr(self.cfg.update, 'tri_map_escalation_hysteresis_gain', 1.0))))
+                        cell.trimap_route_score = float(max(float(getattr(cell, 'trimap_route_score', 0.0)), route_score))
+                        cell.trimap_escalated = 1.0
+                    if bool(getattr(self.cfg.update, 'tri_map_delay_bank_accum_enable', False)):
+                        rho_ref = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
+                        surf = float(max(1e-6, getattr(cell, 'surf_evidence', 0.0)))
+                        free = float(max(0.0, getattr(cell, 'free_evidence', 0.0)))
+                        occ = float(np.clip(surf / max(1e-6, surf + free), 0.0, 1.0))
+                        support = float(np.clip(max(
+                            occ,
+                            float(np.clip(getattr(cell, 'p_static', 0.0), 0.0, 1.0)),
+                            float(np.clip(getattr(cell, 'rho_bg', 0.0) / rho_ref, 0.0, 1.0)),
+                            float(np.clip(getattr(cell, 'rho_static', 0.0) / rho_ref, 0.0, 1.0)),
+                        ), 0.0, 1.0))
+                        hold_ref = float(max(1.0, getattr(self.cfg.update, 'tri_map_escalation_hold_max_frames', 6.0)))
+                        residency = float(np.clip(max(hold_frames / hold_ref, float(getattr(cell, 'trimap_hysteresis', 0.0)), float(getattr(cell, 'trimap_escalated', 0.0))), 0.0, 1.0))
+                        conf_raw = float((0.45 * support + 0.30 * max(0.0, route_score) + 0.25 * residency))
+                        conf_alpha = float(np.clip(getattr(self.cfg.update, 'tri_map_delay_bank_conf_alpha', 0.18), 0.01, 0.95))
+                        cell.delayed_bank_conf = float(np.clip((1.0 - conf_alpha) * float(getattr(cell, 'delayed_bank_conf', 0.0)) + conf_alpha * conf_raw, 0.0, 1.0))
+                        conf_on = float(np.clip(getattr(self.cfg.update, 'tri_map_delay_bank_conf_on', 0.35), 0.0, 1.0))
+                        min_w = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_min_weight', 0.20)))
+                        route_ref = float(max(1e-6, getattr(self.cfg.update, 'tri_map_delay_bank_route_ref', 0.08)))
+                        route_n = float(np.clip(max(0.0, route_score) / route_ref, 0.0, 1.0))
+                        rear_w = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_rear_weight', 0.65)))
+                        bg_w = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_bg_weight', 0.25)))
+                        static_w = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_static_weight', 0.10)))
+                        synth_mix = float(np.clip((0.45 * rear_bg + 0.35 * route_n + 0.20 * residency), 0.0, 1.0))
+                        phi_obs = float((rear_w * synth_mix * d_rear_obs + bg_w * d_bg_obs + static_w * d_static_obs) / max(1e-9, rear_w * synth_mix + bg_w + static_w))
+                        bank_gain = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_gain', 1.35)))
+                        if cell.delayed_bank_conf >= conf_on and w_obs >= min_w:
+                            bank_w = float(w_obs * max(0.1, cell.delayed_bank_conf) * bank_gain)
+                            new_w = float(max(0.0, getattr(cell, 'phi_delayed_bank_w', 0.0)) + bank_w)
+                            if new_w > 1e-8:
+                                cell.phi_delayed_bank = float((float(getattr(cell, 'phi_delayed_bank_w', 0.0)) * float(getattr(cell, 'phi_delayed_bank', 0.0)) + bank_w * phi_obs) / new_w)
+                                cell.phi_delayed_bank_w = float(min(5000.0, new_w))
+                                cell.rho_delayed_bank = float(float(getattr(cell, 'rho_delayed_bank', 0.0)) + float(np.clip(getattr(self.cfg.update, 'tri_map_delay_bank_rho_alpha', 0.12), 0.01, 1.0)) * bank_w)
+                                g_hist = np.asarray(getattr(cell, 'g_delayed_bank', np.zeros(3, dtype=float)), dtype=float).reshape(3)
+                                g_hist_w = float(max(0.0, getattr(cell, 'g_delayed_bank_w', 0.0)))
+                                g_obs = np.asarray(n, dtype=float).reshape(3)
+                                g_ref = np.asarray(getattr(cell, 'g_mean', g_obs), dtype=float).reshape(3)
+                                wh = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_normal_history_weight', 0.55)))
+                                wo = float(max(0.0, getattr(self.cfg.update, 'tri_map_delay_bank_normal_obs_weight', 0.45)))
+                                g_target = wh * g_ref + wo * g_obs
+                                gn = float(np.linalg.norm(g_target))
+                                if gn > 1e-8:
+                                    g_target = g_target / gn
+                                    new_g_w = float(g_hist_w + bank_w)
+                                    if new_g_w > 1e-8:
+                                        g_new = (g_hist_w * g_hist + bank_w * g_target) / new_g_w if g_hist_w > 1e-8 else g_target
+                                        g_new_n = float(np.linalg.norm(g_new))
+                                        if g_new_n > 1e-8:
+                                            cell.g_delayed_bank = g_new / g_new_n
+                                            cell.g_delayed_bank_w = float(min(5000.0, new_g_w))
+                                cell.delayed_bank_age = float(min(20.0, float(getattr(cell, 'delayed_bank_age', 0.0)) + 1.0))
+                                cell.delayed_bank_active = float(max(float(getattr(cell, 'delayed_bank_active', 0.0)), 1.0))
                 voxel_map._sync_legacy_channels(cell)
             else:
                 w_new = cell.phi_w + w_obs
@@ -646,6 +761,7 @@ class Updater3D:
                 if bool(getattr(self.cfg.update, 'dual_map_enable', False)) and bg_role:
                     bg_front = float(np.clip(wod_front + 0.50 * wod_shell + 0.35 * q_dyn_obs, 0.0, 1.0))
                     w_geo *= float(np.clip(1.0 - 0.95 * bg_front, 0.02, 1.0))
+                    w_geo *= float(np.clip(pfv_commit_geo_keep, 0.02, 1.0))
                 if bool(getattr(self.cfg.update, 'dual_map_enable', False)) and fg_role:
                     w_geo *= 0.02
                 w_geo_new = cell.phi_geo_w + w_geo

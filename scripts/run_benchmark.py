@@ -697,6 +697,12 @@ def run_method(
     egf_cmct_enable: bool,
     egf_cgcc_enable: bool,
     egf_pfv_enable: bool,
+    egf_pfv_exclusive_enable: bool,
+    egf_pfv_commit_delay_enable: bool,
+    egf_pfv_bg_candidate_enable: bool,
+    egf_tri_map_enable: bool,
+    egf_tri_map_promotion_rescue_enable: bool,
+    egf_tri_map_hole_rescue_enable: bool,
     egf_pfvp_enable: bool,
     egf_xmem_sep_ref_vox: float,
     egf_xmem_occ_alpha: float,
@@ -1477,6 +1483,18 @@ def run_method(
                 cmd.append("--cgcc_enable")
             if bool(egf_pfv_enable):
                 cmd.append("--pfv_enable")
+            if bool(egf_pfv_exclusive_enable):
+                cmd.append("--pfv_exclusive_enable")
+            if bool(egf_pfv_commit_delay_enable):
+                cmd.append("--pfv_commit_delay_enable")
+            if bool(egf_pfv_bg_candidate_enable):
+                cmd.append("--pfv_bg_candidate_enable")
+            if bool(egf_tri_map_enable):
+                cmd.append("--tri_map_enable")
+            if bool(egf_tri_map_promotion_rescue_enable):
+                cmd.append("--tri_map_promotion_rescue_enable")
+            if bool(egf_tri_map_hole_rescue_enable):
+                cmd.append("--tri_map_hole_rescue_enable")
             if bool(egf_pfvp_enable):
                 cmd.append("--pfvp_enable")
             if bool(egf_surface_omhs_enable):
@@ -2343,6 +2361,12 @@ def main():
     parser.add_argument("--egf_cmct_enable", action="store_true")
     parser.add_argument("--egf_cgcc_enable", action="store_true")
     parser.add_argument("--egf_pfv_enable", action="store_true")
+    parser.add_argument("--egf_pfv_exclusive_enable", action="store_true")
+    parser.add_argument("--egf_pfv_commit_delay_enable", action="store_true")
+    parser.add_argument("--egf_pfv_bg_candidate_enable", action="store_true")
+    parser.add_argument("--egf_tri_map_enable", action="store_true")
+    parser.add_argument("--egf_tri_map_promotion_rescue_enable", action="store_true")
+    parser.add_argument("--egf_tri_map_hole_rescue_enable", action="store_true")
     parser.add_argument("--egf_pfvp_enable", action="store_true")
     parser.add_argument("--egf_xmem_sep_ref_vox", type=float, default=0.90)
     parser.add_argument("--egf_xmem_occ_alpha", type=float, default=0.18)
@@ -2880,6 +2904,12 @@ def main():
                     egf_cmct_enable=bool(args.egf_cmct_enable),
                     egf_cgcc_enable=bool(args.egf_cgcc_enable),
                     egf_pfv_enable=bool(args.egf_pfv_enable),
+                    egf_pfv_exclusive_enable=bool(args.egf_pfv_exclusive_enable),
+                    egf_pfv_commit_delay_enable=bool(args.egf_pfv_commit_delay_enable),
+                    egf_pfv_bg_candidate_enable=bool(args.egf_pfv_bg_candidate_enable),
+                    egf_tri_map_enable=bool(args.egf_tri_map_enable),
+                    egf_tri_map_promotion_rescue_enable=bool(args.egf_tri_map_promotion_rescue_enable),
+                    egf_tri_map_hole_rescue_enable=bool(args.egf_tri_map_hole_rescue_enable),
                     egf_pfvp_enable=bool(args.egf_pfvp_enable),
                     egf_xmem_sep_ref_vox=args.egf_xmem_sep_ref_vox,
                     egf_xmem_occ_alpha=args.egf_xmem_occ_alpha,

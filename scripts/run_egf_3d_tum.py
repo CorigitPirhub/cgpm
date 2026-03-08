@@ -367,6 +367,12 @@ def main():
     parser.add_argument("--cmct_enable", action="store_true")
     parser.add_argument("--cgcc_enable", action="store_true")
     parser.add_argument("--pfv_enable", action="store_true")
+    parser.add_argument("--pfv_exclusive_enable", action="store_true")
+    parser.add_argument("--pfv_commit_delay_enable", action="store_true")
+    parser.add_argument("--pfv_bg_candidate_enable", action="store_true")
+    parser.add_argument("--tri_map_enable", action="store_true")
+    parser.add_argument("--tri_map_promotion_rescue_enable", action="store_true")
+    parser.add_argument("--tri_map_hole_rescue_enable", action="store_true")
     parser.add_argument("--pfvp_enable", action="store_true")
     parser.add_argument("--xmem_sep_ref_vox", type=float, default=0.90)
     parser.add_argument("--xmem_occ_alpha", type=float, default=0.18)
@@ -729,6 +735,12 @@ def main():
     cfg.update.cmct_enable = bool(args.cmct_enable)
     cfg.update.cgcc_enable = bool(args.cgcc_enable)
     cfg.update.pfv_enable = bool(args.pfv_enable)
+    cfg.update.pfv_exclusive_enable = bool(args.pfv_exclusive_enable)
+    cfg.update.pfv_commit_delay_enable = bool(args.pfv_commit_delay_enable)
+    cfg.update.pfv_bg_candidate_enable = bool(args.pfv_bg_candidate_enable)
+    cfg.update.tri_map_enable = bool(args.tri_map_enable)
+    cfg.update.tri_map_promotion_rescue_enable = bool(args.tri_map_promotion_rescue_enable)
+    cfg.update.tri_map_hole_rescue_enable = bool(args.tri_map_hole_rescue_enable)
     cfg.update.pfvp_enable = bool(args.pfvp_enable)
     cfg.update.xmem_sep_ref_vox = float(max(0.1, args.xmem_sep_ref_vox))
     cfg.update.xmem_occ_alpha = float(np.clip(args.xmem_occ_alpha, 0.01, 0.95))
@@ -892,6 +904,25 @@ def main():
     odom_fitness: List[float] = []
     odom_rmse: List[float] = []
     odom_valid: List[float] = []
+    trimap_delayed: List[float] = []
+    trimap_dual: List[float] = []
+    trimap_promoted: List[float] = []
+    trimap_hybrid: List[float] = []
+    trimap_support_gap: List[float] = []
+    trimap_gap_score: List[float] = []
+    trimap_bg_support: List[float] = []
+    trimap_centered_gap: List[float] = []
+    trimap_norm_gap: List[float] = []
+    trimap_gap_bias: List[float] = []
+    trimap_front_occ: List[float] = []
+    trimap_delay_score: List[float] = []
+    trimap_q_strong_thresh: List[float] = []
+    trimap_q_soft_thresh: List[float] = []
+    trimap_q_strong_budget: List[float] = []
+    trimap_q_soft_budget: List[float] = []
+    trimap_hold_blocked: List[float] = []
+    trimap_hold_mean: List[float] = []
+    trimap_hysteresis_mean: List[float] = []
     rng = np.random.default_rng(int(args.seed))
     run_wall_t0 = time.perf_counter()
     step_total_sec = 0.0
@@ -912,6 +943,25 @@ def main():
         odom_fitness.append(float(stat.get("odom_fitness", 0.0)))
         odom_rmse.append(float(stat.get("odom_rmse", 0.0)))
         odom_valid.append(float(stat.get("odom_valid", 0.0)))
+        trimap_delayed.append(float(stat.get("trimap_delayed_only", 0.0)))
+        trimap_dual.append(float(stat.get("trimap_dual", 0.0)))
+        trimap_promoted.append(float(stat.get("trimap_promoted", 0.0)))
+        trimap_hybrid.append(float(stat.get("trimap_hybrid_mean", 0.0)))
+        trimap_support_gap.append(float(stat.get("trimap_support_gap_mean", 0.0)))
+        trimap_gap_score.append(float(stat.get("trimap_gap_score_mean", 0.0)))
+        trimap_bg_support.append(float(stat.get("trimap_bg_support_mean", 0.0)))
+        trimap_centered_gap.append(float(stat.get("trimap_centered_gap_mean", 0.0)))
+        trimap_norm_gap.append(float(stat.get("trimap_norm_gap_mean", 0.0)))
+        trimap_gap_bias.append(float(stat.get("trimap_gap_bias_mean", 0.0)))
+        trimap_front_occ.append(float(stat.get("trimap_front_occ_mean", 0.0)))
+        trimap_delay_score.append(float(stat.get("trimap_delay_score_mean", 0.0)))
+        trimap_q_strong_thresh.append(float(stat.get("trimap_quantile_strong_thresh", 0.0)))
+        trimap_q_soft_thresh.append(float(stat.get("trimap_quantile_soft_thresh", 0.0)))
+        trimap_q_strong_budget.append(float(stat.get("trimap_quantile_strong_budget", 0.0)))
+        trimap_q_soft_budget.append(float(stat.get("trimap_quantile_soft_budget", 0.0)))
+        trimap_hold_blocked.append(float(stat.get("trimap_hold_blocked", 0.0)))
+        trimap_hold_mean.append(float(stat.get("trimap_hold_mean", 0.0)))
+        trimap_hysteresis_mean.append(float(stat.get("trimap_hysteresis_mean", 0.0)))
         step_total_sec += float(stat.get("step_total_sec", t_step1 - t_step0))
         step_predict_sec += float(stat.get("predict_sec", 0.0))
         step_assoc_sec += float(stat.get("associate_sec", 0.0))
@@ -939,6 +989,7 @@ def main():
 
     t_extract0 = time.perf_counter()
     pred_points, pred_normals = model.extract_surface_points()
+    extract_stats = dict(getattr(model.voxel_map, 'last_extract_stats', {}))
     extract_total_sec = float(time.perf_counter() - t_extract0)
     gt_points = np.vstack(gt_refs) if gt_refs else np.zeros((0, 3), dtype=float)
     gt_normals = np.vstack(gt_norm_refs) if gt_norm_refs else np.zeros((0, 3), dtype=float)
@@ -1247,6 +1298,12 @@ def main():
         "cgcc_static_guard": float(cfg.update.cgcc_static_guard),
         "cgcc_fg_weight_floor": float(cfg.update.cgcc_fg_weight_floor),
         "pfv_enable": bool(cfg.update.pfv_enable),
+        "pfv_exclusive_enable": bool(cfg.update.pfv_exclusive_enable),
+        "pfv_commit_delay_enable": bool(cfg.update.pfv_commit_delay_enable),
+        "pfv_bg_candidate_enable": bool(cfg.update.pfv_bg_candidate_enable),
+        "tri_map_enable": bool(cfg.update.tri_map_enable),
+        "tri_map_promotion_rescue_enable": bool(cfg.update.tri_map_promotion_rescue_enable),
+        "tri_map_hole_rescue_enable": bool(cfg.update.tri_map_hole_rescue_enable),
         "pfv_alpha": float(cfg.update.pfv_alpha),
         "pfv_commit_on": float(cfg.update.pfv_commit_on),
         "pfv_commit_off": float(cfg.update.pfv_commit_off),
@@ -1402,6 +1459,37 @@ def main():
         "odom_fitness_mean": float(np.mean(odom_fitness)) if odom_fitness else 0.0,
         "odom_rmse_mean": float(np.mean(odom_rmse)) if odom_rmse else 0.0,
         "odom_valid_ratio": float(np.mean(odom_valid)) if odom_valid else 0.0,
+        "trimap_delayed_mean": float(np.mean(trimap_delayed)) if trimap_delayed else 0.0,
+        "trimap_dual_mean": float(np.mean(trimap_dual)) if trimap_dual else 0.0,
+        "trimap_promoted_mean": float(np.mean(trimap_promoted)) if trimap_promoted else 0.0,
+        "trimap_hybrid_mean": float(np.mean(trimap_hybrid)) if trimap_hybrid else 0.0,
+        "trimap_support_gap_mean": float(np.mean(trimap_support_gap)) if trimap_support_gap else 0.0,
+        "trimap_gap_score_mean": float(np.mean(trimap_gap_score)) if trimap_gap_score else 0.0,
+        "trimap_bg_support_mean": float(np.mean(trimap_bg_support)) if trimap_bg_support else 0.0,
+        "trimap_centered_gap_mean": float(np.mean(trimap_centered_gap)) if trimap_centered_gap else 0.0,
+        "trimap_norm_gap_mean": float(np.mean(trimap_norm_gap)) if trimap_norm_gap else 0.0,
+        "trimap_gap_bias_mean": float(np.mean(trimap_gap_bias)) if trimap_gap_bias else 0.0,
+        "trimap_front_occ_mean": float(np.mean(trimap_front_occ)) if trimap_front_occ else 0.0,
+        "trimap_delay_score_mean": float(np.mean(trimap_delay_score)) if trimap_delay_score else 0.0,
+        "trimap_quantile_strong_thresh_mean": float(np.mean(trimap_q_strong_thresh)) if trimap_q_strong_thresh else 0.0,
+        "trimap_quantile_soft_thresh_mean": float(np.mean(trimap_q_soft_thresh)) if trimap_q_soft_thresh else 0.0,
+        "trimap_quantile_strong_budget_mean": float(np.mean(trimap_q_strong_budget)) if trimap_q_strong_budget else 0.0,
+        "trimap_quantile_soft_budget_mean": float(np.mean(trimap_q_soft_budget)) if trimap_q_soft_budget else 0.0,
+        "trimap_hold_blocked_mean": float(np.mean(trimap_hold_blocked)) if trimap_hold_blocked else 0.0,
+        "trimap_hold_mean": float(np.mean(trimap_hold_mean)) if trimap_hold_mean else 0.0,
+        "trimap_hysteresis_mean": float(np.mean(trimap_hysteresis_mean)) if trimap_hysteresis_mean else 0.0,
+        "trimap_export_added": float(extract_stats.get('trimap_export_added', 0.0)),
+        "trimap_export_replaced": float(extract_stats.get('trimap_export_replaced', 0.0)),
+        "trimap_export_candidates": float(extract_stats.get('trimap_export_candidates', 0.0)),
+        "trimap_export_residency": float(extract_stats.get('trimap_export_residency', 0.0)),
+        "trimap_export_route_mean": float(extract_stats.get('trimap_export_route_mean', 0.0)),
+        "trimap_export_compete_mean": float(extract_stats.get('trimap_export_compete_mean', 0.0)),
+        "trimap_export_normal_cos_mean": float(extract_stats.get('trimap_export_normal_cos_mean', 0.0)),
+        "trimap_delayed_refine_offset_mean": float(extract_stats.get('trimap_delayed_refine_offset_mean', 0.0)),
+        "trimap_delayed_refine_normal_cos_mean": float(extract_stats.get('trimap_delayed_refine_normal_cos_mean', 1.0)),
+        "trimap_delayed_bank_points": float(extract_stats.get('trimap_delayed_bank_points', 0.0)),
+        "trimap_delayed_bank_conf_mean": float(extract_stats.get('trimap_delayed_bank_conf_mean', 0.0)),
+        "trimap_delayed_bank_residency_mean": float(extract_stats.get('trimap_delayed_bank_residency_mean', 0.0)),
         "runtime": {
             "wall_total_sec": float(wall_total_sec),
             "mapping_step_total_sec": float(step_total_sec),

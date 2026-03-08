@@ -16,6 +16,7 @@ from egf_dhmap3d.P10_method.otv import otv_surface_conf as p10_otv_surface_conf
 from egf_dhmap3d.P10_method.pfv import cross_map_fg_conf as p10_cross_map_fg_conf
 from egf_dhmap3d.P10_method.pfv import pfv_cluster_conf as p10_pfv_cluster_conf
 from egf_dhmap3d.P10_method.pfv import pfv_conf as p10_pfv_conf
+from egf_dhmap3d.P10_method.pfv import pfv_exclusive_conf as p10_pfv_exclusive_conf
 from egf_dhmap3d.P10_method.ptdsf import persistent_surface_readout as p10_persistent_surface_readout
 from egf_dhmap3d.P10_method.ptdsf import ptdsf_state_stats as p10_ptdsf_state_stats
 from egf_dhmap3d.P10_method.xmem import xmem_clear_conf as p10_xmem_clear_conf
@@ -141,6 +142,10 @@ class VoxelHashMap3D:
 
     def _pfv_cluster_conf(self, idx: VoxelIndex) -> float:
         return p10_pfv_cluster_conf(self, idx)
+
+
+    def _pfv_exclusive_conf(self, cell: VoxelCell3D) -> float:
+        return p10_pfv_exclusive_conf(self, cell)
 
 
     def _cross_map_fg_conf(self, foreground_map: 'VoxelHashMap3D', idx: VoxelIndex) -> float:
@@ -311,6 +316,18 @@ class VoxelHashMap3D:
                 cell.otv_score *= evidence_decay_pow
                 cell.otv_age *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
                 cell.otv_active *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
+                cell.rho_bg_cand *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.phi_bg_cand_w *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.bg_cand_score *= evidence_decay_pow
+                cell.bg_cand_age *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.bg_cand_active *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                bank_decay = float(np.clip(getattr(ucfg, 'tri_map_delay_bank_decay', 0.96), 0.70, 0.999) ** steps)
+                cell.phi_delayed_bank_w *= bank_decay
+                cell.rho_delayed_bank *= bank_decay
+                cell.g_delayed_bank_w *= bank_decay
+                cell.delayed_bank_conf *= evidence_decay_pow
+                cell.delayed_bank_age *= bank_decay
+                cell.delayed_bank_active *= bank_decay
                 cell.rho_rear_cand *= float(np.clip(ucfg.rps_candidate_decay, 0.70, 0.999) ** steps)
                 cell.phi_rear_cand_w *= float(np.clip(ucfg.rps_candidate_decay, 0.70, 0.999) ** steps)
                 cell.rps_commit_score *= evidence_decay_pow
@@ -327,6 +344,7 @@ class VoxelHashMap3D:
                         and cell.phi_rear_w < 1e-3
                         and cell.phi_rear_cand_w < 1e-3
                         and cell.phi_otv_w < 1e-3
+                        and cell.phi_bg_cand_w < 1e-3
                         and cell.rho < 1e-4
                         and cell.frontier_score < 0.05
                     )
@@ -388,6 +406,18 @@ class VoxelHashMap3D:
                 cell.otv_score *= evidence_decay_pow
                 cell.otv_age *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
                 cell.otv_active *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
+                cell.rho_bg_cand *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.phi_bg_cand_w *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.bg_cand_score *= evidence_decay_pow
+                cell.bg_cand_age *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.bg_cand_active *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                bank_decay = float(np.clip(getattr(ucfg, 'tri_map_delay_bank_decay', 0.96), 0.70, 0.999) ** steps)
+                cell.phi_delayed_bank_w *= bank_decay
+                cell.rho_delayed_bank *= bank_decay
+                cell.g_delayed_bank_w *= bank_decay
+                cell.delayed_bank_conf *= evidence_decay_pow
+                cell.delayed_bank_age *= bank_decay
+                cell.delayed_bank_active *= bank_decay
                 cell.rho_rear_cand *= float(np.clip(ucfg.rps_candidate_decay, 0.70, 0.999) ** steps)
                 cell.phi_rear_cand_w *= float(np.clip(ucfg.rps_candidate_decay, 0.70, 0.999) ** steps)
                 cell.rps_commit_score *= evidence_decay_pow
@@ -403,6 +433,7 @@ class VoxelHashMap3D:
                         and cell.phi_dyn_w < 1e-3
                         and cell.phi_rear_w < 1e-3
                         and cell.phi_rear_cand_w < 1e-3
+                        and cell.phi_bg_cand_w < 1e-3
                         and cell.rho < 1e-4
                         and cell.frontier_score < 0.05
                     )
@@ -585,6 +616,7 @@ class VoxelHashMap3D:
                     cgcc_conf = float(self._cgcc_conf(cell))
                     pfv_cluster = float(self._pfv_cluster_conf(idx))
                     pfv_conf = float(max(self._pfv_conf(cell), float(getattr(self.cfg.update, 'pfv_cluster_weight', 0.35)) * pfv_cluster))
+                    pfv_exclusive = float(self._pfv_exclusive_conf(cell)) if bool(getattr(self.cfg.update, 'pfv_exclusive_enable', False)) else 0.0
                     if cmct_conf >= 0.40 and bg_conf < 0.60 and bg_rho < 0.90 * ptdsf_persistent_min_rho:
                         continue
                     if fg_cross_conf >= 0.38 and bg_conf < 0.72 and bg_rho < 1.20 * ptdsf_persistent_min_rho:
@@ -592,6 +624,8 @@ class VoxelHashMap3D:
                     if cgcc_conf >= 0.34 and bg_conf < 0.78 and bg_rho < 1.30 * ptdsf_persistent_min_rho:
                         continue
                     if pfv_conf >= max(float(getattr(self.cfg.update, 'pfv_bank_extract_thresh', 0.48)), float(getattr(self.cfg.update, 'pfv_extract_thresh', 0.36))) and bg_conf < 0.88 and bg_rho < 1.50 * ptdsf_persistent_min_rho:
+                        continue
+                    if pfv_exclusive >= float(getattr(self.cfg.update, 'pfv_exclusive_extract_thresh', 0.52)) and bg_conf < 0.92 and bg_rho < 1.80 * ptdsf_persistent_min_rho:
                         continue
                     if bg_conf >= 0.12 or bg_rho >= 0.50 * ptdsf_persistent_min_rho:
                         phi_eff = float(getattr(cell, 'phi_bg', 0.0))
@@ -1300,12 +1334,18 @@ class VoxelHashMap3D:
                 )
                 if xmem_exclude:
                     continue
+                pfv_exclusive_conf = float(self._pfv_exclusive_conf(cell)) if bool(getattr(self.cfg.update, 'pfv_exclusive_enable', False)) else 0.0
+                pfv_exclusive_compete = bool(
+                    pfv_exclusive_conf >= max(float(getattr(self.cfg.update, 'pfv_exclusive_extract_thresh', 0.30)), 0.80 * drop_th_eff)
+                    and float(free_ratio) >= max(float(getattr(self.cfg.update, 'pfv_exclusive_free_ratio_min', 0.45)), 0.70 * free_min)
+                    and max(float(xmap_score), float(csr_score)) < 0.65
+                )
                 static_anchor = bool(
                     max(float(cell.rho), rho_stat) >= anchor_rho
                     and max(ptdsf_static_conf, float(cell.p_static), ptdsf_ratio) >= anchor_p
                     and surf >= anchor_ratio * free
                 )
-                if static_anchor:
+                if static_anchor and not pfv_exclusive_compete:
                     keep_idx.add(idx)
                     continue
                 omhs_rear_anchor = bool(
@@ -1314,8 +1354,16 @@ class VoxelHashMap3D:
                     and max(static_conf, ptdsf_dom, ptdsf_ratio) >= 0.42
                     and rho_stat >= 0.5 * max(1e-6, ptdsf_persistent_min_rho)
                 )
-                if omhs_rear_anchor:
+                if omhs_rear_anchor and not pfv_exclusive_compete:
                     keep_idx.add(idx)
+                    continue
+                pfv_exclusive_veto = bool(
+                    pfv_exclusive_conf >= max(float(getattr(self.cfg.update, 'pfv_exclusive_extract_thresh', 0.30)), 0.80 * drop_th_eff)
+                    and max(static_conf, ptdsf_dom, ptdsf_ratio, float(csr_score), float(getattr(cell, 'p_static', 0.0))) < float(getattr(self.cfg.update, 'pfv_exclusive_anchor_guard', 0.92))
+                    and max(float(cell.rho), rho_stat, float(getattr(cell, 'rho_bg', 0.0))) < float(getattr(self.cfg.update, 'pfv_exclusive_rho_guard', 1.20)) * max(1e-6, anchor_rho)
+                    and float(free_ratio) >= max(float(getattr(self.cfg.update, 'pfv_exclusive_free_ratio_min', 0.45)), 0.70 * free_min)
+                )
+                if pfv_exclusive_veto:
                     continue
                 otv_sep = 0.0
                 if otv_geom > 1e-6:

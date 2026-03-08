@@ -42,11 +42,19 @@ def update_persistent_free_space_volume(
     geo_decay_long = float(np.clip(getattr(self.cfg.update, 'pfv_geo_decay_long', 0.52), 0.0, 1.0))
     release_rho = float(np.clip(getattr(self.cfg.update, 'pfv_release_rho', 0.92), 0.0, 2.0))
     depth_gain = float(np.clip(getattr(self.cfg.update, 'pfv_depth_gain', 0.30), 0.0, 1.0))
+    excl_enable = bool(getattr(self.cfg.update, 'pfv_exclusive_enable', False))
+    excl_alpha = float(np.clip(getattr(self.cfg.update, 'pfv_exclusive_alpha', 0.18), 0.01, 0.8))
+    excl_on = float(np.clip(getattr(self.cfg.update, 'pfv_exclusive_on', 0.46), 0.0, 1.0))
+    excl_off = float(np.clip(getattr(self.cfg.update, 'pfv_exclusive_off', 0.32), 0.0, 1.0))
+    excl_fg_weight = float(np.clip(getattr(self.cfg.update, 'pfv_exclusive_fg_weight', 0.45), 0.0, 1.0))
+    excl_long_weight = float(np.clip(getattr(self.cfg.update, 'pfv_exclusive_long_weight', 0.55), 0.0, 1.0))
+    excl_static_guard = float(np.clip(getattr(self.cfg.update, 'pfv_exclusive_static_guard', 0.78), 0.0, 1.0))
     rho_ref = float(max(1e-6, self.cfg.update.dual_state_static_protect_rho))
     step = float(max(0.5 * background_map.voxel_size, step_scale * background_map.voxel_size))
 
     touched: Set[VoxelIndex] = set()
     scored: List[float] = []
+    excl_scored: List[float] = []
     for m in accepted:
         if m.sensor_origin is None:
             continue
@@ -152,23 +160,53 @@ def update_persistent_free_space_volume(
             active = bool((pfv_eff >= on and cb.pfv_age >= 1.0) or (active_prev >= 0.5 and pfv_eff >= off))
             cb.pfv_active = 1.0 if active else float(0.96 * active_prev)
             pfv_n = float(max(pfv_eff, cb.pfv_active))
-            if pfv_n > 1e-6:
+            excl_n = 0.0
+            if excl_enable:
+                excl_prev = float(np.clip(getattr(cb, 'pfv_exclusive_active', 0.0), 0.0, 1.0))
+                excl_obs = float(
+                    np.clip(
+                        max(obs, 0.82 * bank_eff, 0.70 * long_obs)
+                        * (0.55 + excl_fg_weight * max(fg_conf, 1.0 - local_bg))
+                        * (0.45 + excl_long_weight * max(long_obs, bank_eff))
+                        * (1.0 - excl_static_guard * local_bg),
+                        0.0,
+                        1.0,
+                    )
+                )
+                if bg_rho_n >= release_rho or local_bg >= 0.72:
+                    cb.pfv_exclusive = float(max(0.0, 0.92 * float(getattr(cb, 'pfv_exclusive', 0.0))))
+                    cb.pfv_exclusive_age = float(max(0.0, 0.96 * float(getattr(cb, 'pfv_exclusive_age', 0.0))))
+                else:
+                    cb.pfv_exclusive = float(np.clip((1.0 - excl_alpha) * float(getattr(cb, 'pfv_exclusive', 0.0)) + excl_alpha * excl_obs, 0.0, 1.0))
+                    if excl_obs >= excl_on:
+                        cb.pfv_exclusive_age = float(min(20.0, float(getattr(cb, 'pfv_exclusive_age', 0.0)) + 1.0))
+                    else:
+                        cb.pfv_exclusive_age = float(max(0.0, 0.97 * float(getattr(cb, 'pfv_exclusive_age', 0.0))))
+                excl_eff = float(np.clip(float(getattr(cb, 'pfv_exclusive', 0.0)) * (0.55 + 0.45 * min(1.0, float(getattr(cb, 'pfv_exclusive_age', 0.0)) / 3.0)), 0.0, 1.0))
+                excl_active = bool((excl_eff >= excl_on and float(getattr(cb, 'pfv_exclusive_age', 0.0)) >= 1.0) or (excl_prev >= 0.5 and excl_eff >= excl_off))
+                cb.pfv_exclusive_active = 1.0 if excl_active else float(0.96 * excl_prev)
+                excl_n = float(max(excl_eff, float(getattr(cb, 'pfv_exclusive_active', 0.0))))
+            if pfv_n > 1e-6 or excl_n > 1e-6:
                 short_strength = float(np.clip(pfv_n * (1.0 - 0.70 * local_bg), 0.0, 1.0))
                 long_strength = float(np.clip(float(getattr(cb, 'pfv_long', 0.0)) * (1.0 - 0.55 * local_bg), 0.0, 1.0))
-                cb.phi_bg_w = float(max(0.0, getattr(cb, 'phi_bg_w', 0.0) * (1.0 - bg_decay * short_strength) * (1.0 - bg_decay_long * long_strength)))
-                cb.phi_static_w = float(max(0.0, cb.phi_static_w * (1.0 - 0.50 * bg_decay * short_strength) * (1.0 - 0.50 * bg_decay_long * long_strength)))
-                cb.phi_geo_w = float(max(0.0, cb.phi_geo_w * (1.0 - geo_decay * short_strength) * (1.0 - geo_decay_long * long_strength)))
-                cb.rho_bg = float(max(0.0, getattr(cb, 'rho_bg', 0.0) * (1.0 - rho_decay * short_strength) * (1.0 - 0.85 * rho_decay * long_strength)))
-                cb.rho_static = float(max(0.0, getattr(cb, 'rho_static', 0.0) * (1.0 - 0.75 * rho_decay * short_strength) * (1.0 - 0.60 * rho_decay * long_strength)))
-                cb.rho = float(max(0.0, cb.rho * (1.0 - 0.5 * rho_decay * short_strength) * (1.0 - 0.40 * rho_decay * long_strength)))
+                excl_strength = float(np.clip(excl_n * (1.0 - 0.45 * local_bg), 0.0, 1.0))
+                cb.phi_bg_w = float(max(0.0, getattr(cb, 'phi_bg_w', 0.0) * (1.0 - bg_decay * short_strength) * (1.0 - bg_decay_long * long_strength) * (1.0 - 0.35 * bg_decay * excl_strength)))
+                cb.phi_static_w = float(max(0.0, cb.phi_static_w * (1.0 - 0.50 * bg_decay * short_strength) * (1.0 - 0.50 * bg_decay_long * long_strength) * (1.0 - 0.22 * bg_decay * excl_strength)))
+                cb.phi_geo_w = float(max(0.0, cb.phi_geo_w * (1.0 - geo_decay * short_strength) * (1.0 - geo_decay_long * long_strength) * (1.0 - 0.28 * geo_decay * excl_strength)))
+                cb.rho_bg = float(max(0.0, getattr(cb, 'rho_bg', 0.0) * (1.0 - rho_decay * short_strength) * (1.0 - 0.85 * rho_decay * long_strength) * (1.0 - 0.42 * rho_decay * excl_strength)))
+                cb.rho_static = float(max(0.0, getattr(cb, 'rho_static', 0.0) * (1.0 - 0.75 * rho_decay * short_strength) * (1.0 - 0.60 * rho_decay * long_strength) * (1.0 - 0.24 * rho_decay * excl_strength)))
+                cb.rho = float(max(0.0, cb.rho * (1.0 - 0.5 * rho_decay * short_strength) * (1.0 - 0.40 * rho_decay * long_strength) * (1.0 - 0.18 * rho_decay * excl_strength)))
                 background_map._sync_legacy_channels(cb)
             touched.add(bidx)
             scored.append(float(obs))
+            if excl_enable:
+                excl_scored.append(float(excl_n))
             s += step
     return {
         "pfv_applied": 1.0,
         "pfv_cells": float(len(touched)),
         "pfv_mean_score": float(np.mean(scored)) if scored else 0.0,
+        "pfv_exclusive_mean": float(np.mean(excl_scored)) if excl_scored else 0.0,
     }
 
 def pfv_conf(self, cell: VoxelCell3D) -> float:
@@ -178,6 +216,65 @@ def pfv_conf(self, cell: VoxelCell3D) -> float:
     long_age = float(np.clip(getattr(cell, 'pfv_long_age', 0.0) / 4.0, 0.0, 1.0))
     long_eff = float(np.clip(long_term * (0.55 + 0.45 * long_age), 0.0, 1.0))
     return float(np.clip(max(score, active, long_eff), 0.0, 1.0))
+
+def pfv_commit_delay_scales(
+    self,
+    voxel_map: VoxelHashMap3D,
+    cell: VoxelCell3D,
+    *,
+    static_ratio: float,
+    q_dyn_obs: float,
+    assoc_risk: float,
+) -> Tuple[float, float, float, float, float]:
+    if not bool(getattr(self.cfg.update, 'pfv_commit_delay_enable', False)):
+        return 1.0, 1.0, 1.0, 1.0, 0.0
+    pfv_score = float(np.clip(voxel_map._pfv_conf(cell), 0.0, 1.0)) if hasattr(voxel_map, '_pfv_conf') else 0.0
+    pfv_excl = float(np.clip(voxel_map._pfv_exclusive_conf(cell), 0.0, 1.0)) if hasattr(voxel_map, '_pfv_exclusive_conf') else 0.0
+    pfv_n = float(max(pfv_score, pfv_excl))
+    if pfv_n <= 1e-6:
+        return 1.0, 1.0, 1.0, 1.0, 0.0
+
+    rho_ref = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
+    surf = float(max(1e-6, getattr(cell, 'surf_evidence', 0.0)))
+    free = float(max(0.0, getattr(cell, 'free_evidence', 0.0)))
+    free_ratio = float(free / surf)
+    free_ref = float(max(1e-6, getattr(self.cfg.update, 'pfv_commit_delay_free_ratio_ref', 0.65)))
+    free_n = float(np.clip(free_ratio / free_ref, 0.0, 1.5))
+    static_conf = float(np.clip(max(
+        float(np.clip(getattr(cell, 'p_static', 0.0), 0.0, 1.0)),
+        float(np.clip(getattr(cell, 'rho_static', 0.0) / rho_ref, 0.0, 1.0)),
+        float(np.clip(getattr(cell, 'rho_bg', 0.0) / rho_ref, 0.0, 1.0)),
+        float(voxel_map._obl_conf(cell)) if hasattr(voxel_map, '_obl_conf') else 0.0,
+        float(np.clip(static_ratio, 0.0, 1.0)),
+    ), 0.0, 1.0))
+    rho_n = float(np.clip(max(getattr(cell, 'rho_bg', 0.0), getattr(cell, 'rho_static', 0.0), getattr(cell, 'rho', 0.0)) / rho_ref, 0.0, 1.5))
+    support_guard = float(np.clip(getattr(self.cfg.update, 'pfv_commit_delay_support_guard', 0.78), 0.0, 1.0))
+    rho_guard = float(np.clip(getattr(self.cfg.update, 'pfv_commit_delay_rho_guard', 0.95), 0.0, 2.0))
+    score = float(np.clip(
+        pfv_n
+        * (0.60 + 0.22 * float(np.clip(assoc_risk, 0.0, 1.0)) + 0.18 * float(np.clip(q_dyn_obs, 0.0, 1.0)) + 0.20 * min(1.0, free_n))
+        * max(0.0, 1.0 - support_guard * static_conf)
+        * max(0.0, 1.0 - min(1.0, rho_n / max(1e-6, rho_guard))),
+        0.0,
+        1.0,
+    ))
+    if score < float(np.clip(getattr(self.cfg.update, 'pfv_commit_delay_on', 0.34), 0.0, 1.0)):
+        return 1.0, 1.0, 1.0, 1.0, score
+
+    min_scale = float(np.clip(getattr(self.cfg.update, 'pfv_commit_delay_min_scale', 0.02), 0.0, 1.0))
+    static_keep = float(np.clip(1.0 - getattr(self.cfg.update, 'pfv_commit_delay_static_weight', 0.85) * score, min_scale, 1.0))
+    bg_keep = float(np.clip(1.0 - getattr(self.cfg.update, 'pfv_commit_delay_bg_weight', 0.95) * score, min_scale, 1.0))
+    geo_keep = float(np.clip(1.0 - getattr(self.cfg.update, 'pfv_commit_delay_geo_weight', 0.70) * score, min_scale, 1.0))
+    rho_keep = float(np.clip(1.0 - getattr(self.cfg.update, 'pfv_commit_delay_rho_weight', 0.55) * score, min_scale, 1.0))
+    return static_keep, bg_keep, geo_keep, rho_keep, score
+
+
+def pfv_exclusive_conf(self, cell: VoxelCell3D) -> float:
+    score = float(np.clip(getattr(cell, 'pfv_exclusive', 0.0), 0.0, 1.0))
+    age = float(np.clip(getattr(cell, 'pfv_exclusive_age', 0.0) / 3.0, 0.0, 1.0))
+    active = float(np.clip(getattr(cell, 'pfv_exclusive_active', 0.0), 0.0, 1.0))
+    return float(np.clip(max(score * (0.55 + 0.45 * age), active), 0.0, 1.0))
+
 
 def pfv_cluster_conf(self, idx: VoxelIndex) -> float:
     radius = int(max(0, getattr(self.cfg.update, 'pfv_cluster_radius', 1)))
