@@ -1,0 +1,5 @@
+variant,tum_acc_cm,tum_comp_r_5cm,bonn_acc_cm,bonn_comp_r_5cm,tum_ghost_reduction_vs_tsdf,bonn_ghost_reduction_vs_tsdf,hit_2of4_partial,pass_comp,tum_rear_w_nz,tum_rear_cand_nz,tum_rps_active_nz,bonn_rear_w_nz,bonn_rear_cand_nz,bonn_rps_active_nz,decision,post_competition_handoff
+25_rps_commit_control,0.940000855145702,91.9,2.886679005260992,83.56666666666666,-15.760040671072714,-7.558733401430031,2,False,0.0,2855.0,0.0,0.0,2937.0,0.0,control,activation_phase_only
+28_rps_commit_geom_bg_soft,0.940000855145702,91.9,2.886679005261014,83.56666666666666,-15.760040671072714,-7.558733401430031,2,False,108.0,2855.0,108.0,55.0,2937.0,55.0,abandon,activation_phase_only
+29_rps_commit_geom_bg_mid,0.940000855145702,91.9,2.886679005261039,83.56666666666666,-15.760040671072714,-7.558733401430031,2,False,4.0,2855.0,4.0,2.0,2937.0,2.0,abandon,activation_phase_only
+30_rps_commit_geom_bg_soft_bank,0.9412647506612332,91.93333333333334,2.8868400967611283,83.56666666666666,-15.871000507872028,-7.558733401430031,2,False,108.0,2855.0,108.0,56.0,2937.0,56.0,iterate,extract_admission_score_gate_bottleneck_confirmed

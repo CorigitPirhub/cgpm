@@ -1,0 +1,5 @@
+method,status,source_path,surface_points,chamfer,fscore,comp_r_5cm
+egf,ok,output/post_cleanup/s1_rbcore_gate/lockbox/oracle/rgbd_dataset_freiburg3_walking_static/egf/surface_points.ply,189547,0.05534376549234313,0.7240532062415014,1.0
+tsdf,ok,output/post_cleanup/s1_rbcore_gate/lockbox/oracle/rgbd_dataset_freiburg3_walking_static/tsdf/surface_points.ply,266,0.12427687491679978,0.3285418198836665,0.19656
+dynaslam,ok,output/post_cleanup/s1_rbcore_gate/lockbox/oracle/rgbd_dataset_freiburg3_walking_static/dynaslam/surface_points.ply,11282,2.7994530192550755,0.0,0.0
+rodyn_slam,ok,output/post_cleanup/rodyn_smoke/walking_static_f5/mesh.ply,126,0.9293168242390886,0.01053280434881537,0.00536

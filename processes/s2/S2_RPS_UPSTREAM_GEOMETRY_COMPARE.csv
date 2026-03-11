@@ -1,0 +1,4 @@
+variant,tum_acc_cm,tum_comp_r_5cm,bonn_acc_cm,bonn_comp_r_5cm,bonn_ghost_reduction_vs_tsdf,bonn_rear_true_background_sum,mean_distance_to_plane_before,mean_distance_to_plane_after,depth_bias_offset_m,surface_point_bias_along_normal_m,notes,decision
+99_manhattan_plane_completion,0.935798295196066,93.12222222222222,4.345629355333998,70.07777777777778,28.277506974935523,39.0,0.0979900898984986,0.0979900898984986,0.0,0.0,downstream-99-reference,reference
+104_depth_bias_minus1cm,0.935798295196066,93.12222222222222,4.237806081736836,70.85555555555555,13.45102676500444,0.0,0.0979900898984986,0.07461874079332431,-0.01,0.0,true-upstream-rerun on executable precursor; rear branch absent,progress
+105_depth_bias_plus1cm,0.935798295196066,93.12222222222222,4.238087554349259,70.8111111111111,13.197365978656,0.0,0.0979900898984986,0.09826642357886166,0.01,0.0,true-upstream-rerun on executable precursor; rear branch absent,progress

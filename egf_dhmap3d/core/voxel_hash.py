@@ -19,6 +19,11 @@ from egf_dhmap3d.P10_method.pfv import pfv_conf as p10_pfv_conf
 from egf_dhmap3d.P10_method.pfv import pfv_exclusive_conf as p10_pfv_exclusive_conf
 from egf_dhmap3d.P10_method.ptdsf import persistent_surface_readout as p10_persistent_surface_readout
 from egf_dhmap3d.P10_method.ptdsf import ptdsf_state_stats as p10_ptdsf_state_stats
+from egf_dhmap3d.P10_method.rps_admission import decay_protect_factors as p10_decay_protect_factors
+from egf_dhmap3d.P10_method.rps_admission import rear_state_support as p10_rear_state_support
+from egf_dhmap3d.P10_method.bg_manifold import manifold_state_components as p10_manifold_state_components
+from egf_dhmap3d.P10_method.rps_selectivity import filter_rear_records as p10_filter_rear_records
+from egf_dhmap3d.P10_method.rps_selectivity import rear_selectivity_components as p10_rear_selectivity_components
 from egf_dhmap3d.P10_method.xmem import xmem_clear_conf as p10_xmem_clear_conf
 from egf_dhmap3d.P10_method.xmem import xmem_conf as p10_xmem_conf
 
@@ -178,7 +183,18 @@ class VoxelHashMap3D:
         if ws <= 1e-12 and wt <= 1e-12 and wr <= 1e-12:
             return
         if bool(self.cfg.update.ptdsf_enable):
-            persistent_read = self._persistent_surface_readout(cell)
+            prev_ctx = getattr(self, '_ptdsf_context', None)
+            self._ptdsf_context = 'sync'
+            try:
+                persistent_read = self._persistent_surface_readout(cell)
+            finally:
+                if prev_ctx is None:
+                    try:
+                        delattr(self, '_ptdsf_context')
+                    except AttributeError:
+                        pass
+                else:
+                    self._ptdsf_context = prev_ctx
             if persistent_read is not None:
                 phi_p, w_p, bias_p, stats = persistent_read
                 persist_n = float(np.clip(0.55 * float(stats.get("static_conf", 0.0)) + 0.45 * float(stats.get("dominance", 0.0)), 0.0, 1.0))
@@ -309,8 +325,15 @@ class VoxelHashMap3D:
                 cell.wod_front_conf *= evidence_decay_pow
                 cell.wod_rear_conf *= evidence_decay_pow
                 cell.wod_shell_conf *= evidence_decay_pow
-                cell.rho_rear *= evidence_decay_pow
-                cell.phi_rear_w *= geo_decay_pow
+                rear_evidence_decay = evidence_decay_pow
+                rear_geo_decay = geo_decay_pow
+                if bool(getattr(ucfg, 'rps_rear_state_protect_enable', False)) and float(max(0.0, getattr(cell, 'phi_rear_w', 0.0))) > 1e-12:
+                    support = float(p10_rear_state_support(self, cell))
+                    factors = p10_decay_protect_factors(ucfg, support)
+                    rear_evidence_decay = float(np.clip(evidence_decay_pow ** factors['exponent_scale'], 0.0, 1.0))
+                    rear_geo_decay = float(np.clip(geo_decay_pow ** (0.70 * factors['exponent_scale'] + 0.30), 0.0, 1.0))
+                cell.rho_rear *= rear_evidence_decay
+                cell.phi_rear_w *= rear_geo_decay
                 cell.phi_otv_w *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
                 cell.rho_otv *= evidence_decay_pow
                 cell.otv_score *= evidence_decay_pow
@@ -318,6 +341,10 @@ class VoxelHashMap3D:
                 cell.otv_active *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
                 cell.rho_bg_cand *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
                 cell.phi_bg_cand_w *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.rho_bg_stable *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_decay', 0.992), 0.80, 0.9999) ** steps)
+                cell.phi_bg_memory_w *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_decay', 0.992), 0.80, 0.9999) ** steps)
+                cell.bg_visible_mem *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_mem_decay', 0.996), 0.80, 0.9999) ** steps)
+                cell.bg_obstruction_mem *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_mem_decay', 0.996), 0.80, 0.9999) ** steps)
                 cell.bg_cand_score *= evidence_decay_pow
                 cell.bg_cand_age *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
                 cell.bg_cand_active *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
@@ -332,7 +359,14 @@ class VoxelHashMap3D:
                 cell.phi_rear_cand_w *= float(np.clip(ucfg.rps_candidate_decay, 0.70, 0.999) ** steps)
                 cell.rps_commit_score *= evidence_decay_pow
                 cell.rps_commit_age *= float(0.96**steps)
-                cell.rps_active *= float(np.clip(ucfg.rps_active_decay, 0.80, 0.999) ** steps)
+                rear_active_decay = float(np.clip(ucfg.rps_active_decay, 0.80, 0.999) ** steps)
+                if bool(getattr(ucfg, 'rps_rear_state_protect_enable', False)) and float(max(0.0, getattr(cell, 'phi_rear_w', 0.0))) > 1e-12:
+                    support = float(p10_rear_state_support(self, cell))
+                    factors = p10_decay_protect_factors(ucfg, support)
+                    rear_active_decay = float(np.clip(rear_active_decay ** factors['exponent_scale'], 0.0, 1.0))
+                    cell.rps_active = float(max(float(getattr(cell, 'rps_active', 0.0)) * rear_active_decay, factors['active_floor']))
+                else:
+                    cell.rps_active *= rear_active_decay
                 cell.geo_res_ema *= float(0.995**steps)
                 cell.geo_res_hits *= float(0.98**steps)
                 cell.frontier_score *= frontier_decay_pow
@@ -399,8 +433,15 @@ class VoxelHashMap3D:
                 cell.wod_front_conf *= evidence_decay_pow
                 cell.wod_rear_conf *= evidence_decay_pow
                 cell.wod_shell_conf *= evidence_decay_pow
-                cell.rho_rear *= evidence_decay_pow
-                cell.phi_rear_w *= geo_decay_pow
+                rear_evidence_decay = evidence_decay_pow
+                rear_geo_decay = geo_decay_pow
+                if bool(getattr(ucfg, 'rps_rear_state_protect_enable', False)) and float(max(0.0, getattr(cell, 'phi_rear_w', 0.0))) > 1e-12:
+                    support = float(p10_rear_state_support(self, cell))
+                    factors = p10_decay_protect_factors(ucfg, support)
+                    rear_evidence_decay = float(np.clip(evidence_decay_pow ** factors['exponent_scale'], 0.0, 1.0))
+                    rear_geo_decay = float(np.clip(geo_decay_pow ** (0.70 * factors['exponent_scale'] + 0.30), 0.0, 1.0))
+                cell.rho_rear *= rear_evidence_decay
+                cell.phi_rear_w *= rear_geo_decay
                 cell.phi_otv_w *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
                 cell.rho_otv *= evidence_decay_pow
                 cell.otv_score *= evidence_decay_pow
@@ -408,6 +449,10 @@ class VoxelHashMap3D:
                 cell.otv_active *= float(np.clip(getattr(ucfg, 'otv_decay', 0.96), 0.80, 1.0) ** steps)
                 cell.rho_bg_cand *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
                 cell.phi_bg_cand_w *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
+                cell.rho_bg_stable *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_decay', 0.992), 0.80, 0.9999) ** steps)
+                cell.phi_bg_memory_w *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_decay', 0.992), 0.80, 0.9999) ** steps)
+                cell.bg_visible_mem *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_mem_decay', 0.996), 0.80, 0.9999) ** steps)
+                cell.bg_obstruction_mem *= float(np.clip(getattr(ucfg, 'rps_bg_manifold_mem_decay', 0.996), 0.80, 0.9999) ** steps)
                 cell.bg_cand_score *= evidence_decay_pow
                 cell.bg_cand_age *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
                 cell.bg_cand_active *= float(np.clip(getattr(ucfg, 'pfv_bg_candidate_decay', 0.94), 0.70, 0.999) ** steps)
@@ -422,7 +467,14 @@ class VoxelHashMap3D:
                 cell.phi_rear_cand_w *= float(np.clip(ucfg.rps_candidate_decay, 0.70, 0.999) ** steps)
                 cell.rps_commit_score *= evidence_decay_pow
                 cell.rps_commit_age *= float(0.96**steps)
-                cell.rps_active *= float(np.clip(ucfg.rps_active_decay, 0.80, 0.999) ** steps)
+                rear_active_decay = float(np.clip(ucfg.rps_active_decay, 0.80, 0.999) ** steps)
+                if bool(getattr(ucfg, 'rps_rear_state_protect_enable', False)) and float(max(0.0, getattr(cell, 'phi_rear_w', 0.0))) > 1e-12:
+                    support = float(p10_rear_state_support(self, cell))
+                    factors = p10_decay_protect_factors(ucfg, support)
+                    rear_active_decay = float(np.clip(rear_active_decay ** factors['exponent_scale'], 0.0, 1.0))
+                    cell.rps_active = float(max(float(getattr(cell, 'rps_active', 0.0)) * rear_active_decay, factors['active_floor']))
+                else:
+                    cell.rps_active *= rear_active_decay
                 cell.geo_res_ema *= float(0.995**steps)
                 cell.geo_res_hits *= float(0.98**steps)
                 cell.frontier_score *= frontier_decay_pow
@@ -460,6 +512,7 @@ class VoxelHashMap3D:
         use_zero_crossing: bool = True,
         zero_crossing_max_offset: float = 0.06,
         zero_crossing_phi_gate: float = 0.05,
+        point_bias_along_normal_m: float = 0.0,
         use_phi_geo_channel: bool = False,
         consistency_enable: bool = False,
         consistency_radius: int = 1,
@@ -570,18 +623,22 @@ class VoxelHashMap3D:
         ebcut_smooth_radius: int = 1,
     ) -> Tuple[np.ndarray, np.ndarray]:
         candidates: List[Tuple[VoxelIndex, VoxelCell3D, np.ndarray, np.ndarray, float, float]] = []
-        candidate_map: Dict[VoxelIndex, Tuple[VoxelCell3D, float, bool, bool, float, float, float]] = {}
+        candidate_map: Dict[VoxelIndex, Tuple[VoxelCell3D, float, bool, bool, float, float, float, str]] = {}
         ebcut_rejects = 0
         prefilter_candidates = 0
         xmap_rescue_count = 0
         xmap_front_drop_count = 0
+        rear_density_drops = 0
         geom_margin = float(max(0.0, two_stage_geom_margin))
         decouple = bool(structural_decouple_enable)
         dual_layer = bool(dual_layer_extract_enable)
         persistent_only = bool(ptdsf_persistent_only_enable)
         omhs = bool(omhs_enable)
         dual_geo_min_ratio = float(np.clip(dual_layer_geo_min_weight_ratio, 0.0, 1.0))
+        prev_extract_ctx = getattr(self, '_ptdsf_context', None)
+        self._ptdsf_context = 'extract'
         for idx, cell in self.cells.items():
+            _read_stats = {}
             phi_thr = float(phi_thresh)
             min_w = float(min_weight)
             max_d_eff = float(max_d_score)
@@ -965,8 +1022,25 @@ class VoxelHashMap3D:
             gn = np.linalg.norm(g)
             if gn < 1e-7:
                 continue
-            candidates.append((idx, cell, self.index_to_center(idx), g / gn, free_ratio, phi_eff))
-            candidate_map[idx] = (cell, free_ratio, omhs_rear_keep, xmap_rescue, float(csr_score), float(xmap_score), float(xmap_sep))
+            center = self.index_to_center(idx)
+            if abs(float(point_bias_along_normal_m)) > 1e-9:
+                center = center + float(point_bias_along_normal_m) * (g / gn)
+            candidates.append((idx, cell, center, g / gn, free_ratio, phi_eff))
+            bank_selected_tag = str(_read_stats.get("bank_selected", "unknown")) if (persistent_read is not None and "_read_stats" in locals()) else "unknown"
+            candidate_map[idx] = (
+                cell,
+                free_ratio,
+                omhs_rear_keep,
+                xmap_rescue,
+                float(csr_score),
+                float(xmap_score),
+                float(xmap_sep),
+                bank_selected_tag,
+                float(_read_stats.get("front_score", 0.0)) if "_read_stats" in locals() else 0.0,
+                float(_read_stats.get("rear_score", 0.0)) if "_read_stats" in locals() else 0.0,
+                float(_read_stats.get("rear_gap", 0.0)) if "_read_stats" in locals() else 0.0,
+                float(_read_stats.get("rear_sep", 0.0)) if "_read_stats" in locals() else 0.0,
+            )
         if not candidates:
             self.last_extract_stats = {
                 "candidates_prefilter": float(prefilter_candidates),
@@ -976,7 +1050,16 @@ class VoxelHashMap3D:
                 "xmap_rescues": float(xmap_rescue_count),
                 "xmap_front_drops": float(xmap_front_drop_count),
                 "accepted_points": 0.0,
-            }
+                "rear_density_drops": float(rear_density_drops),
+                "rear_density_drops": float(rear_density_drops),
+        }
+            if prev_extract_ctx is None:
+                try:
+                    delattr(self, '_ptdsf_context')
+                except AttributeError:
+                    pass
+            else:
+                self._ptdsf_context = prev_extract_ctx
             return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
 
         accepted_idx: set[VoxelIndex]
@@ -1228,7 +1311,7 @@ class VoxelHashMap3D:
                 info = candidate_map.get(idx)
                 if info is None:
                     continue
-                cell, free_ratio, omhs_keep, xmap_rescue, csr_score, xmap_score, xmap_sep = info
+                cell, free_ratio, omhs_keep, xmap_rescue, csr_score, xmap_score, xmap_sep, bank_selected_tag = info[:8]
                 omhs_front_conf = float(np.clip(getattr(cell, "omhs_front_conf", 0.0), 0.0, 1.0)) if omhs else 0.0
                 omhs_rear_conf = float(np.clip(getattr(cell, "omhs_rear_conf", 0.0), 0.0, 1.0)) if omhs else 0.0
                 omhs_active_score = float(np.clip(getattr(cell, "omhs_active", 0.0), 0.0, 1.0)) if omhs else 0.0
@@ -1435,16 +1518,84 @@ class VoxelHashMap3D:
                 "xmap_rescues": float(xmap_rescue_count),
                 "xmap_front_drops": float(xmap_front_drop_count),
                 "accepted_points": 0.0,
-            }
+                "rear_density_drops": float(rear_density_drops),
+                "rear_density_drops": float(rear_density_drops),
+        }
+            if prev_extract_ctx is None:
+                try:
+                    delattr(self, '_ptdsf_context')
+                except AttributeError:
+                    pass
+            else:
+                self._ptdsf_context = prev_extract_ctx
             return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
 
         pts: List[np.ndarray] = []
         nrm: List[np.ndarray] = []
+        rear_pts: List[np.ndarray] = []
+        rear_nrm: List[np.ndarray] = []
+        rear_feature_rows: List[Dict[str, float]] = []
+        front_pts: List[np.ndarray] = []
+        front_nrm: List[np.ndarray] = []
+        bg_pts: List[np.ndarray] = []
+        bg_nrm: List[np.ndarray] = []
+        rear_records: List[tuple[VoxelIndex, np.ndarray, np.ndarray, Dict[str, float]]] = []
         max_off = float(max(0.0, zero_crossing_max_offset))
         phi_gate = float(max(1e-4, zero_crossing_phi_gate))
+        rear_selectivity_enabled = bool(getattr(self.cfg.update, 'rps_rear_selectivity_enable', False))
+        rear_selectivity_stats = {
+            'rear_selectivity_pre_count': 0.0,
+            'rear_selectivity_kept_count': 0.0,
+            'rear_selectivity_drop_count': 0.0,
+            'rear_selectivity_topk_drop_count': 0.0,
+            'rear_selectivity_score_sum': 0.0,
+            'rear_selectivity_risk_sum': 0.0,
+            'rear_selectivity_pre_front_score_sum': 0.0,
+            'rear_selectivity_pre_front_residual_sum': 0.0,
+            'rear_selectivity_pre_occlusion_order_sum': 0.0,
+            'rear_selectivity_pre_local_conflict_sum': 0.0,
+            'rear_selectivity_pre_dynamic_trail_sum': 0.0,
+            'rear_selectivity_pre_dyn_risk_sum': 0.0,
+            'rear_selectivity_front_score_sum': 0.0,
+            'rear_selectivity_rear_score_sum': 0.0,
+            'rear_selectivity_gap_sum': 0.0,
+            'rear_selectivity_competition_sum': 0.0,
+            'rear_selectivity_occlusion_order_sum': 0.0,
+            'rear_selectivity_occluder_protect_sum': 0.0,
+            'rear_selectivity_local_conflict_sum': 0.0,
+            'rear_selectivity_front_residual_sum': 0.0,
+            'rear_selectivity_dynamic_trail_sum': 0.0,
+            'rear_selectivity_pre_history_anchor_sum': 0.0,
+            'rear_selectivity_pre_surface_anchor_sum': 0.0,
+            'rear_selectivity_pre_surface_distance_sum': 0.0,
+            'rear_selectivity_pre_dynamic_shell_sum': 0.0,
+            'rear_selectivity_dyn_risk_sum': 0.0,
+            'rear_selectivity_history_anchor_sum': 0.0,
+            'rear_selectivity_surface_anchor_sum': 0.0,
+            'rear_selectivity_surface_distance_sum': 0.0,
+            'rear_selectivity_dynamic_shell_sum': 0.0,
+            'rear_selectivity_pre_penetration_sum': 0.0,
+            'rear_selectivity_pre_penetration_free_span_sum': 0.0,
+            'rear_selectivity_pre_observation_count_sum': 0.0,
+            'rear_selectivity_pre_observation_support_sum': 0.0,
+            'rear_selectivity_pre_static_coherence_sum': 0.0,
+            'rear_selectivity_penetration_sum': 0.0,
+            'rear_selectivity_penetration_free_span_sum': 0.0,
+            'rear_selectivity_observation_count_sum': 0.0,
+            'rear_selectivity_observation_support_sum': 0.0,
+            'rear_selectivity_static_coherence_sum': 0.0,
+            'rear_selectivity_pre_topology_thickness_sum': 0.0,
+            'rear_selectivity_pre_normal_consistency_sum': 0.0,
+            'rear_selectivity_pre_ray_convergence_sum': 0.0,
+            'rear_selectivity_topology_thickness_sum': 0.0,
+            'rear_selectivity_normal_consistency_sum': 0.0,
+            'rear_selectivity_ray_convergence_sum': 0.0,
+        }
         for idx, _cell, center, n_i, _free_ratio, phi_eff in candidates:
             if idx not in accepted_idx:
                 continue
+            info = candidate_map.get(idx)
+            bank_selected_tag = str(info[7]) if info is not None and len(info) >= 8 else "unknown"
             p = center
             if use_zero_crossing and abs(float(phi_eff)) <= phi_gate:
                 off = -float(phi_eff) * n_i
@@ -1452,8 +1603,103 @@ class VoxelHashMap3D:
                 if max_off > 0.0 and off_norm > max_off:
                     off = off * (max_off / max(off_norm, 1e-9))
                 p = center + off
+            if bank_selected_tag.startswith("rear") and bool(getattr(self.cfg.update, 'rps_rear_density_gate_enable', False)):
+                radius = max(1, int(getattr(self.cfg.update, 'rps_rear_density_radius_cells', 1)))
+                min_nb = max(0, int(getattr(self.cfg.update, 'rps_rear_density_min_neighbors', 2)))
+                support_min = float(np.clip(getattr(self.cfg.update, 'rps_rear_density_support_min', 0.45), 0.0, 1.0))
+                rear_neighbors = 0
+                for dx in range(-radius, radius + 1):
+                    for dy in range(-radius, radius + 1):
+                        for dz in range(-radius, radius + 1):
+                            if dx == 0 and dy == 0 and dz == 0:
+                                continue
+                            nidx = (idx[0] + dx, idx[1] + dy, idx[2] + dz)
+                            if nidx not in accepted_idx:
+                                continue
+                            ninfo = candidate_map.get(nidx)
+                            if ninfo is not None and len(ninfo) >= 8 and str(ninfo[7]).startswith("rear"):
+                                rear_neighbors += 1
+                rear_support = float(p10_rear_state_support(self, _cell))
+                if rear_neighbors < min_nb and rear_support < support_min:
+                    rear_density_drops += 1
+                    continue
+            if bank_selected_tag.startswith("rear") and bool(getattr(self.cfg.update, 'rps_rear_hybrid_filter_enable', False)):
+                bridge_min = float(np.clip(getattr(self.cfg.update, 'rps_rear_hybrid_bridge_support_min', 0.20), 0.0, 1.0))
+                dyn_max = float(np.clip(getattr(self.cfg.update, 'rps_rear_hybrid_dyn_max', 0.22), 0.0, 1.0))
+                manifold_min = float(np.clip(getattr(self.cfg.update, 'rps_rear_hybrid_manifold_min', 0.25), 0.0, 1.0))
+                manifold = p10_manifold_state_components(_cell, self.cfg)
+                bridge_support = float(max(manifold.get('dense_support', 0.0), manifold.get('visible', 0.0)))
+                dyn_risk = float(max(float(np.clip(getattr(_cell, 'dyn_prob', 0.0), 0.0, 1.0)), float(np.clip(getattr(_cell, 'z_dyn', 0.0), 0.0, 1.0)), float(np.clip(getattr(_cell, 'wod_front_conf', 0.0), 0.0, 1.0))))
+                if bridge_support < bridge_min and (dyn_risk > dyn_max or float(manifold.get('visible', 0.0)) < manifold_min):
+                    rear_density_drops += 1
+                    continue
+            if bank_selected_tag.startswith("rear") and rear_selectivity_enabled:
+                comps = p10_rear_selectivity_components(
+                    self,
+                    idx=idx,
+                    cell=_cell,
+                    point=p,
+                    normal=n_i,
+                    accepted_idx=accepted_idx,
+                    candidate_map=candidate_map,
+                )
+                rear_records.append((idx, p, n_i, comps))
+                continue
             pts.append(p)
             nrm.append(n_i)
+            if bank_selected_tag.startswith("rear"):
+                rear_pts.append(p)
+                rear_nrm.append(n_i)
+            elif bank_selected_tag.startswith("background"):
+                bg_pts.append(p)
+                bg_nrm.append(n_i)
+            else:
+                front_pts.append(p)
+                front_nrm.append(n_i)
+
+        if rear_selectivity_enabled and rear_records:
+            kept_records, rear_selectivity_stats = p10_filter_rear_records(self, rear_records)
+            for _idx, p, n_i, _comps in kept_records:
+                pts.append(p)
+                nrm.append(n_i)
+                rear_pts.append(p)
+                rear_nrm.append(n_i)
+                rear_feature_rows.append({
+                    'x': float(p[0]),
+                    'y': float(p[1]),
+                    'z': float(p[2]),
+                    'nx': float(n_i[0]),
+                    'ny': float(n_i[1]),
+                    'nz': float(n_i[2]),
+                    'front_score': float(_comps.get('front_score', 0.0)),
+                    'rear_score': float(_comps.get('rear_score', 0.0)),
+                    'rear_gap': float(_comps.get('rear_gap', 0.0)),
+                    'competition': float(_comps.get('competition', 0.0)),
+                    'history_anchor': float(_comps.get('history_anchor', 0.0)),
+                    'surface_anchor': float(_comps.get('surface_anchor', 0.0)),
+                    'surface_distance': float(_comps.get('surface_distance', 0.0)),
+                    'dynamic_shell': float(_comps.get('dynamic_shell', 0.0)),
+                    'penetration_score': float(_comps.get('penetration_score', 0.0)),
+                    'penetration_free_span': float(_comps.get('penetration_free_span', 0.0)),
+                    'topology_thickness': float(_comps.get('topology_thickness', 0.0)),
+                    'observation_count': float(_comps.get('observation_count', 0.0)),
+                    'observation_support': float(_comps.get('observation_support', 0.0)),
+                    'static_coherence': float(_comps.get('static_coherence', 0.0)),
+                    'normal_consistency': float(_comps.get('normal_consistency', 0.0)),
+                    'ray_convergence': float(_comps.get('ray_convergence', 0.0)),
+                    'score': float(_comps.get('score', 0.0)),
+                    'risk': float(_comps.get('risk', 0.0)),
+                })
+
+        self.last_extract_bank_points = {
+            "rear_points": np.asarray(rear_pts, dtype=float) if rear_pts else np.zeros((0, 3), dtype=float),
+            "rear_normals": np.asarray(rear_nrm, dtype=float) if rear_nrm else np.zeros((0, 3), dtype=float),
+            "rear_feature_rows": rear_feature_rows,
+            "front_points": np.asarray(front_pts, dtype=float) if front_pts else np.zeros((0, 3), dtype=float),
+            "front_normals": np.asarray(front_nrm, dtype=float) if front_nrm else np.zeros((0, 3), dtype=float),
+            "background_points": np.asarray(bg_pts, dtype=float) if bg_pts else np.zeros((0, 3), dtype=float),
+            "background_normals": np.asarray(bg_nrm, dtype=float) if bg_nrm else np.zeros((0, 3), dtype=float),
+        }
 
         if not pts:
             self.last_extract_stats = {
@@ -1464,7 +1710,62 @@ class VoxelHashMap3D:
                 "xmap_rescues": float(xmap_rescue_count),
                 "xmap_front_drops": float(xmap_front_drop_count),
                 "accepted_points": 0.0,
-            }
+                "rear_density_drops": float(rear_density_drops),
+                "rear_selectivity_pre_count": float(rear_selectivity_stats.get('rear_selectivity_pre_count', 0.0)),
+                "rear_selectivity_kept_count": float(rear_selectivity_stats.get('rear_selectivity_kept_count', 0.0)),
+                "rear_selectivity_drop_count": float(rear_selectivity_stats.get('rear_selectivity_drop_count', 0.0)),
+                "rear_selectivity_topk_drop_count": float(rear_selectivity_stats.get('rear_selectivity_topk_drop_count', 0.0)),
+                "rear_selectivity_score_sum": float(rear_selectivity_stats.get('rear_selectivity_score_sum', 0.0)),
+                "rear_selectivity_risk_sum": float(rear_selectivity_stats.get('rear_selectivity_risk_sum', 0.0)),
+                "rear_selectivity_pre_front_score_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_front_score_sum', 0.0)),
+                "rear_selectivity_pre_front_residual_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_front_residual_sum', 0.0)),
+                "rear_selectivity_pre_occlusion_order_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_occlusion_order_sum', 0.0)),
+                "rear_selectivity_pre_local_conflict_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_local_conflict_sum', 0.0)),
+                "rear_selectivity_pre_dynamic_trail_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_dynamic_trail_sum', 0.0)),
+                "rear_selectivity_pre_dyn_risk_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_dyn_risk_sum', 0.0)),
+                "rear_selectivity_pre_history_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_history_anchor_sum', 0.0)),
+                "rear_selectivity_pre_surface_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_surface_anchor_sum', 0.0)),
+                "rear_selectivity_pre_surface_distance_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_surface_distance_sum', 0.0)),
+                "rear_selectivity_pre_dynamic_shell_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_dynamic_shell_sum', 0.0)),
+                "rear_selectivity_pre_penetration_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_penetration_sum', 0.0)),
+                "rear_selectivity_pre_penetration_free_span_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_penetration_free_span_sum', 0.0)),
+                "rear_selectivity_pre_observation_count_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_observation_count_sum', 0.0)),
+                "rear_selectivity_pre_observation_support_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_observation_support_sum', 0.0)),
+                "rear_selectivity_pre_static_coherence_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_static_coherence_sum', 0.0)),
+                "rear_selectivity_pre_topology_thickness_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_topology_thickness_sum', 0.0)),
+                "rear_selectivity_pre_normal_consistency_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_normal_consistency_sum', 0.0)),
+                "rear_selectivity_pre_ray_convergence_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_ray_convergence_sum', 0.0)),
+                "rear_selectivity_front_score_sum": float(rear_selectivity_stats.get('rear_selectivity_front_score_sum', 0.0)),
+                "rear_selectivity_rear_score_sum": float(rear_selectivity_stats.get('rear_selectivity_rear_score_sum', 0.0)),
+                "rear_selectivity_gap_sum": float(rear_selectivity_stats.get('rear_selectivity_gap_sum', 0.0)),
+                "rear_selectivity_competition_sum": float(rear_selectivity_stats.get('rear_selectivity_competition_sum', 0.0)),
+                "rear_selectivity_occlusion_order_sum": float(rear_selectivity_stats.get('rear_selectivity_occlusion_order_sum', 0.0)),
+                "rear_selectivity_occluder_protect_sum": float(rear_selectivity_stats.get('rear_selectivity_occluder_protect_sum', 0.0)),
+                "rear_selectivity_local_conflict_sum": float(rear_selectivity_stats.get('rear_selectivity_local_conflict_sum', 0.0)),
+                "rear_selectivity_front_residual_sum": float(rear_selectivity_stats.get('rear_selectivity_front_residual_sum', 0.0)),
+                "rear_selectivity_dynamic_trail_sum": float(rear_selectivity_stats.get('rear_selectivity_dynamic_trail_sum', 0.0)),
+                "rear_selectivity_dyn_risk_sum": float(rear_selectivity_stats.get('rear_selectivity_dyn_risk_sum', 0.0)),
+                "rear_selectivity_history_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_history_anchor_sum', 0.0)),
+                "rear_selectivity_surface_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_surface_anchor_sum', 0.0)),
+                "rear_selectivity_surface_distance_sum": float(rear_selectivity_stats.get('rear_selectivity_surface_distance_sum', 0.0)),
+                "rear_selectivity_dynamic_shell_sum": float(rear_selectivity_stats.get('rear_selectivity_dynamic_shell_sum', 0.0)),
+                "rear_selectivity_penetration_sum": float(rear_selectivity_stats.get('rear_selectivity_penetration_sum', 0.0)),
+                "rear_selectivity_penetration_free_span_sum": float(rear_selectivity_stats.get('rear_selectivity_penetration_free_span_sum', 0.0)),
+                "rear_selectivity_observation_count_sum": float(rear_selectivity_stats.get('rear_selectivity_observation_count_sum', 0.0)),
+                "rear_selectivity_observation_support_sum": float(rear_selectivity_stats.get('rear_selectivity_observation_support_sum', 0.0)),
+                "rear_selectivity_static_coherence_sum": float(rear_selectivity_stats.get('rear_selectivity_static_coherence_sum', 0.0)),
+                "rear_selectivity_topology_thickness_sum": float(rear_selectivity_stats.get('rear_selectivity_topology_thickness_sum', 0.0)),
+                "rear_selectivity_normal_consistency_sum": float(rear_selectivity_stats.get('rear_selectivity_normal_consistency_sum', 0.0)),
+                "rear_selectivity_ray_convergence_sum": float(rear_selectivity_stats.get('rear_selectivity_ray_convergence_sum', 0.0)),
+                "rear_density_drops": float(rear_density_drops),
+        }
+            if prev_extract_ctx is None:
+                try:
+                    delattr(self, '_ptdsf_context')
+                except AttributeError:
+                    pass
+            else:
+                self._ptdsf_context = prev_extract_ctx
             return np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float)
         self.last_extract_stats = {
             "candidates_prefilter": float(prefilter_candidates),
@@ -1474,7 +1775,61 @@ class VoxelHashMap3D:
             "xmap_rescues": float(xmap_rescue_count),
             "xmap_front_drops": float(xmap_front_drop_count),
             "accepted_points": float(len(pts)),
+            "rear_density_drops": float(rear_density_drops),
+            "rear_selectivity_pre_count": float(rear_selectivity_stats.get('rear_selectivity_pre_count', 0.0)),
+            "rear_selectivity_kept_count": float(rear_selectivity_stats.get('rear_selectivity_kept_count', 0.0)),
+            "rear_selectivity_drop_count": float(rear_selectivity_stats.get('rear_selectivity_drop_count', 0.0)),
+            "rear_selectivity_topk_drop_count": float(rear_selectivity_stats.get('rear_selectivity_topk_drop_count', 0.0)),
+            "rear_selectivity_score_sum": float(rear_selectivity_stats.get('rear_selectivity_score_sum', 0.0)),
+            "rear_selectivity_risk_sum": float(rear_selectivity_stats.get('rear_selectivity_risk_sum', 0.0)),
+            "rear_selectivity_pre_front_score_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_front_score_sum', 0.0)),
+            "rear_selectivity_pre_front_residual_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_front_residual_sum', 0.0)),
+            "rear_selectivity_pre_occlusion_order_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_occlusion_order_sum', 0.0)),
+            "rear_selectivity_pre_local_conflict_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_local_conflict_sum', 0.0)),
+            "rear_selectivity_pre_dynamic_trail_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_dynamic_trail_sum', 0.0)),
+            "rear_selectivity_pre_dyn_risk_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_dyn_risk_sum', 0.0)),
+            "rear_selectivity_pre_history_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_history_anchor_sum', 0.0)),
+            "rear_selectivity_pre_surface_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_surface_anchor_sum', 0.0)),
+            "rear_selectivity_pre_surface_distance_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_surface_distance_sum', 0.0)),
+            "rear_selectivity_pre_dynamic_shell_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_dynamic_shell_sum', 0.0)),
+            "rear_selectivity_pre_penetration_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_penetration_sum', 0.0)),
+            "rear_selectivity_pre_penetration_free_span_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_penetration_free_span_sum', 0.0)),
+            "rear_selectivity_pre_observation_count_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_observation_count_sum', 0.0)),
+            "rear_selectivity_pre_observation_support_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_observation_support_sum', 0.0)),
+            "rear_selectivity_pre_static_coherence_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_static_coherence_sum', 0.0)),
+            "rear_selectivity_pre_topology_thickness_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_topology_thickness_sum', 0.0)),
+            "rear_selectivity_pre_normal_consistency_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_normal_consistency_sum', 0.0)),
+            "rear_selectivity_pre_ray_convergence_sum": float(rear_selectivity_stats.get('rear_selectivity_pre_ray_convergence_sum', 0.0)),
+            "rear_selectivity_front_score_sum": float(rear_selectivity_stats.get('rear_selectivity_front_score_sum', 0.0)),
+            "rear_selectivity_rear_score_sum": float(rear_selectivity_stats.get('rear_selectivity_rear_score_sum', 0.0)),
+            "rear_selectivity_gap_sum": float(rear_selectivity_stats.get('rear_selectivity_gap_sum', 0.0)),
+            "rear_selectivity_competition_sum": float(rear_selectivity_stats.get('rear_selectivity_competition_sum', 0.0)),
+            "rear_selectivity_occlusion_order_sum": float(rear_selectivity_stats.get('rear_selectivity_occlusion_order_sum', 0.0)),
+            "rear_selectivity_occluder_protect_sum": float(rear_selectivity_stats.get('rear_selectivity_occluder_protect_sum', 0.0)),
+            "rear_selectivity_local_conflict_sum": float(rear_selectivity_stats.get('rear_selectivity_local_conflict_sum', 0.0)),
+            "rear_selectivity_front_residual_sum": float(rear_selectivity_stats.get('rear_selectivity_front_residual_sum', 0.0)),
+            "rear_selectivity_dynamic_trail_sum": float(rear_selectivity_stats.get('rear_selectivity_dynamic_trail_sum', 0.0)),
+            "rear_selectivity_dyn_risk_sum": float(rear_selectivity_stats.get('rear_selectivity_dyn_risk_sum', 0.0)),
+            "rear_selectivity_history_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_history_anchor_sum', 0.0)),
+            "rear_selectivity_surface_anchor_sum": float(rear_selectivity_stats.get('rear_selectivity_surface_anchor_sum', 0.0)),
+            "rear_selectivity_surface_distance_sum": float(rear_selectivity_stats.get('rear_selectivity_surface_distance_sum', 0.0)),
+            "rear_selectivity_dynamic_shell_sum": float(rear_selectivity_stats.get('rear_selectivity_dynamic_shell_sum', 0.0)),
+            "rear_selectivity_penetration_sum": float(rear_selectivity_stats.get('rear_selectivity_penetration_sum', 0.0)),
+            "rear_selectivity_penetration_free_span_sum": float(rear_selectivity_stats.get('rear_selectivity_penetration_free_span_sum', 0.0)),
+            "rear_selectivity_observation_count_sum": float(rear_selectivity_stats.get('rear_selectivity_observation_count_sum', 0.0)),
+            "rear_selectivity_observation_support_sum": float(rear_selectivity_stats.get('rear_selectivity_observation_support_sum', 0.0)),
+            "rear_selectivity_static_coherence_sum": float(rear_selectivity_stats.get('rear_selectivity_static_coherence_sum', 0.0)),
+            "rear_selectivity_topology_thickness_sum": float(rear_selectivity_stats.get('rear_selectivity_topology_thickness_sum', 0.0)),
+            "rear_selectivity_normal_consistency_sum": float(rear_selectivity_stats.get('rear_selectivity_normal_consistency_sum', 0.0)),
+            "rear_selectivity_ray_convergence_sum": float(rear_selectivity_stats.get('rear_selectivity_ray_convergence_sum', 0.0)),
         }
+        if prev_extract_ctx is None:
+            try:
+                delattr(self, '_ptdsf_context')
+            except AttributeError:
+                pass
+        else:
+            self._ptdsf_context = prev_extract_ctx
         return np.asarray(pts, dtype=float), np.asarray(nrm, dtype=float)
 
     def __len__(self) -> int:

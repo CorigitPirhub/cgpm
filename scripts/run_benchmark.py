@@ -648,6 +648,7 @@ def run_method(
     egf_assoc_contra_rho_guard: float,
     egf_assoc_contra_d2_boost_max: float,
     egf_truncation: float,
+    egf_depth_bias_offset_m: float,
     egf_static_truncation: float,
     egf_rho_decay: float,
     egf_phi_w_decay: float,
@@ -687,7 +688,281 @@ def run_method(
     egf_rps_enable: bool,
     egf_rps_hard_commit_enable: bool,
     egf_rps_surface_bank_enable: bool,
+    egf_rps_bank_margin: float,
+    egf_rps_bank_separation_ref: float,
+    egf_rps_bank_rear_min_score: float,
+    egf_rps_bank_sep_gate: float,
+    egf_rps_bank_bg_support_gain: float,
+    egf_rps_bank_front_dyn_penalty_gain: float,
+    egf_rps_bank_rear_score_bias: float,
+    egf_rps_bank_soft_competition_enable: bool,
+    egf_rps_bank_soft_competition_gap: float,
+    egf_rps_bank_soft_sep_relax: float,
+    egf_rps_bank_soft_rear_min_relax: float,
+    egf_rps_bank_soft_support_min: float,
+    egf_rps_bank_soft_local_support_gain: float,
+    egf_rps_soft_bank_export_enable: bool,
+    egf_rps_soft_bank_min_score: float,
+    egf_rps_soft_bank_gain: float,
+    egf_rps_soft_bank_commit_relax: float,
+    egf_rps_candidate_rescue_enable: bool,
+    egf_rps_candidate_support_gain: float,
+    egf_rps_candidate_bg_gain: float,
+    egf_rps_candidate_rho_gain: float,
+    egf_rps_candidate_front_relax: float,
+    egf_rps_commit_activation_enable: bool,
+    egf_rps_commit_threshold: float,
+    egf_rps_commit_release: float,
+    egf_rps_commit_age_threshold: float,
+    egf_rps_commit_rho_ref: float,
+    egf_rps_commit_weight_ref: float,
+    egf_rps_commit_min_cand_rho: float,
+    egf_rps_commit_min_cand_w: float,
+    egf_rps_commit_evidence_weight: float,
+    egf_rps_commit_geometry_weight: float,
+    egf_rps_commit_bg_weight: float,
+    egf_rps_commit_static_weight: float,
+    egf_rps_commit_front_penalty: float,
+    egf_rps_admission_support_enable: bool,
+    egf_rps_admission_support_on: float,
+    egf_rps_admission_support_gain: float,
+    egf_rps_admission_score_relax: float,
+    egf_rps_admission_active_floor: float,
+    egf_rps_admission_rho_ref: float,
+    egf_rps_admission_weight_ref: float,
+    egf_rps_admission_geometry_enable: bool,
+    egf_rps_admission_geometry_weight: float,
+    egf_rps_admission_geometry_floor: float,
+    egf_rps_admission_occlusion_enable: bool,
+    egf_rps_admission_occlusion_weight: float,
+    egf_rps_space_redirect_history_enable: bool,
+    egf_rps_space_redirect_history_weight: float,
+    egf_rps_space_redirect_history_bg_weight: float,
+    egf_rps_space_redirect_history_static_weight: float,
+    egf_rps_space_redirect_history_floor: float,
+    egf_rps_space_redirect_ghost_suppress_enable: bool,
+    egf_rps_space_redirect_ghost_suppress_weight: float,
+    egf_rps_space_redirect_visual_anchor_enable: bool,
+    egf_rps_space_redirect_visual_anchor_weight: float,
+    egf_rps_space_redirect_visual_anchor_min: float,
+    egf_rps_history_obstructed_gate_enable: bool,
+    egf_rps_history_visible_min: float,
+    egf_rps_obstruction_min: float,
+    egf_rps_non_hole_min: float,
+    egf_rps_history_manifold_enable: bool,
+    egf_rps_history_manifold_visible_min: float,
+    egf_rps_history_manifold_obstruction_min: float,
+    egf_rps_history_manifold_bg_weight: float,
+    egf_rps_history_manifold_geo_weight: float,
+    egf_rps_history_manifold_static_weight: float,
+    egf_rps_history_manifold_blend: float,
+    egf_rps_history_manifold_max_offset: float,
+    egf_rps_bg_manifold_state_enable: bool,
+    egf_rps_bg_manifold_alpha_up: float,
+    egf_rps_bg_manifold_alpha_down: float,
+    egf_rps_bg_manifold_rho_alpha: float,
+    egf_rps_bg_manifold_weight_gain: float,
+    egf_rps_bg_manifold_rho_ref: float,
+    egf_rps_bg_manifold_weight_ref: float,
+    egf_rps_bg_manifold_history_weight: float,
+    egf_rps_bg_manifold_obstruction_weight: float,
+    egf_rps_bg_manifold_visible_lo: float,
+    egf_rps_bg_manifold_visible_hi: float,
+    egf_rps_bg_dense_state_enable: bool,
+    egf_rps_bg_dense_neighbor_radius: int,
+    egf_rps_bg_dense_neighbor_weight: float,
+    egf_rps_bg_dense_geometry_weight: float,
+    egf_rps_bg_dense_max_weight: float,
+    egf_rps_bg_dense_support_floor: float,
+    egf_rps_bg_dense_decay: float,
+    egf_rps_bg_surface_constrained_enable: bool,
+    egf_rps_bg_surface_min_conf: float,
+    egf_rps_bg_surface_agree_weight: float,
+    egf_rps_bg_surface_tangent_enable: bool,
+    egf_rps_bg_surface_tangent_weight: float,
+    egf_rps_bg_surface_tangent_floor: float,
+    egf_rps_bg_bridge_enable: bool,
+    egf_rps_bg_bridge_min_visible: float,
+    egf_rps_bg_bridge_min_obstruction: float,
+    egf_rps_bg_bridge_min_step: int,
+    egf_rps_bg_bridge_max_step: int,
+    egf_rps_bg_bridge_gain: float,
+    egf_rps_bg_bridge_phi_blend: float,
+    egf_rps_bg_bridge_target_dyn_max: float,
+    egf_rps_bg_bridge_target_surface_max: float,
+    egf_rps_bg_bridge_ghost_suppress_enable: bool,
+    egf_rps_bg_bridge_ghost_suppress_weight: float,
+    egf_rps_bg_bridge_relaxed_dyn_max: float,
+    egf_rps_bg_bridge_keep_multi_hits: bool,
+    egf_rps_bg_bridge_max_hits_per_source: int,
+    egf_rps_bg_bridge_cone_enable: bool,
+    egf_rps_bg_bridge_cone_radius_cells: int,
+    egf_rps_bg_bridge_cone_gain_scale: float,
+    egf_rps_bg_bridge_patch_radius_cells: int,
+    egf_rps_bg_bridge_patch_gain_scale: float,
+    egf_rps_bg_bridge_depth_hypothesis_count: int,
+    egf_rps_bg_bridge_depth_step_scale: float,
+    egf_rps_bg_bridge_rear_synth_enable: bool,
+    egf_rps_bg_bridge_rear_support_gain: float,
+    egf_rps_bg_bridge_rear_rho_gain: float,
+    egf_rps_bg_bridge_rear_phi_blend: float,
+    egf_rps_bg_bridge_rear_score_floor: float,
+    egf_rps_bg_bridge_rear_active_floor: float,
+    egf_rps_bg_bridge_rear_age_floor: float,
+    egf_rps_rear_hybrid_filter_enable: bool,
+    egf_rps_rear_hybrid_bridge_support_min: float,
+    egf_rps_rear_hybrid_dyn_max: float,
+    egf_rps_rear_hybrid_manifold_min: float,
+    egf_rps_rear_density_gate_enable: bool,
+    egf_rps_rear_density_radius_cells: int,
+    egf_rps_rear_density_min_neighbors: int,
+    egf_rps_rear_density_support_min: float,
+    egf_rps_rear_selectivity_enable: bool,
+    egf_rps_rear_selectivity_support_weight: float,
+    egf_rps_rear_selectivity_history_weight: float,
+    egf_rps_rear_selectivity_static_weight: float,
+    egf_rps_rear_selectivity_geom_weight: float,
+    egf_rps_rear_selectivity_bridge_weight: float,
+    egf_rps_rear_selectivity_density_weight: float,
+    egf_rps_rear_selectivity_rear_score_weight: float,
+    egf_rps_rear_selectivity_front_score_weight: float,
+    egf_rps_rear_selectivity_competition_weight: float,
+    egf_rps_rear_selectivity_competition_alpha: float,
+    egf_rps_rear_selectivity_gap_weight: float,
+    egf_rps_rear_selectivity_sep_weight: float,
+    egf_rps_rear_selectivity_dyn_weight: float,
+    egf_rps_rear_selectivity_ghost_weight: float,
+    egf_rps_rear_selectivity_front_weight: float,
+    egf_rps_rear_selectivity_geom_risk_weight: float,
+    egf_rps_rear_selectivity_history_risk_weight: float,
+    egf_rps_rear_selectivity_density_risk_weight: float,
+    egf_rps_rear_selectivity_bridge_relief_weight: float,
+    egf_rps_rear_selectivity_static_relief_weight: float,
+    egf_rps_rear_selectivity_gap_risk_weight: float,
+    egf_rps_rear_selectivity_score_min: float,
+    egf_rps_rear_selectivity_risk_max: float,
+    egf_rps_rear_selectivity_geom_floor: float,
+    egf_rps_rear_selectivity_history_floor: float,
+    egf_rps_rear_selectivity_bridge_floor: float,
+    egf_rps_rear_selectivity_competition_floor: float,
+    egf_rps_rear_selectivity_front_score_max: float,
+    egf_rps_rear_selectivity_gap_min: float,
+    egf_rps_rear_selectivity_gap_max: float,
+    egf_rps_rear_selectivity_gap_valid_min: float,
+    egf_rps_rear_selectivity_occlusion_order_weight: float,
+    egf_rps_rear_selectivity_occlusion_order_floor: float,
+    egf_rps_rear_selectivity_occlusion_order_risk_weight: float,
+    egf_rps_rear_selectivity_local_conflict_weight: float,
+    egf_rps_rear_selectivity_local_conflict_max: float,
+    egf_rps_rear_selectivity_front_residual_weight: float,
+    egf_rps_rear_selectivity_front_residual_max: float,
+    egf_rps_rear_selectivity_occluder_protect_weight: float,
+    egf_rps_rear_selectivity_occluder_protect_floor: float,
+    egf_rps_rear_selectivity_occluder_relief_weight: float,
+    egf_rps_rear_selectivity_dynamic_trail_weight: float,
+    egf_rps_rear_selectivity_dynamic_trail_max: float,
+    egf_rps_rear_selectivity_dynamic_trail_relief_weight: float,
+    egf_rps_rear_selectivity_history_anchor_weight: float,
+    egf_rps_rear_selectivity_history_anchor_floor: float,
+    egf_rps_rear_selectivity_history_anchor_relief_weight: float,
+    egf_rps_rear_selectivity_surface_anchor_weight: float,
+    egf_rps_rear_selectivity_surface_anchor_floor: float,
+    egf_rps_rear_selectivity_surface_anchor_risk_weight: float,
+    egf_rps_rear_selectivity_surface_distance_ref: float,
+    egf_rps_rear_selectivity_dynamic_shell_weight: float,
+    egf_rps_rear_selectivity_dynamic_shell_max: float,
+    egf_rps_rear_selectivity_dynamic_shell_gap_ref: float,
+    egf_rps_rear_selectivity_conflict_radius_cells: int,
+    egf_rps_rear_selectivity_conflict_front_score_min: float,
+    egf_rps_rear_selectivity_conflict_static_score_min: float,
+    egf_rps_rear_selectivity_conflict_dist_scale: float,
+    egf_rps_rear_selectivity_conflict_gap_ref: float,
+    egf_rps_rear_selectivity_conflict_ref: float,
+    egf_rps_rear_selectivity_trail_radius_cells: int,
+    egf_rps_rear_selectivity_trail_ref: float,
+    egf_rps_rear_selectivity_density_radius_cells: int,
+    egf_rps_rear_selectivity_density_ref: int,
+    egf_rps_rear_selectivity_topk: int,
+    egf_rps_rear_selectivity_rank_risk_weight: float,
+    egf_rps_rear_selectivity_penetration_weight: float,
+    egf_rps_rear_selectivity_penetration_floor: float,
+    egf_rps_rear_selectivity_penetration_risk_weight: float,
+    egf_rps_rear_selectivity_penetration_free_ref: float,
+    egf_rps_rear_selectivity_penetration_max_steps: int,
+    egf_rps_rear_selectivity_observation_weight: float,
+    egf_rps_rear_selectivity_observation_floor: float,
+    egf_rps_rear_selectivity_observation_risk_weight: float,
+    egf_rps_rear_selectivity_observation_count_ref: float,
+    egf_rps_rear_selectivity_observation_min_count: float,
+    egf_rps_rear_selectivity_unobserved_veto_enable: bool,
+    egf_rps_rear_selectivity_static_coherence_weight: float,
+    egf_rps_rear_selectivity_static_coherence_floor: float,
+    egf_rps_rear_selectivity_static_coherence_relief_weight: float,
+    egf_rps_rear_selectivity_static_coherence_radius_cells: int,
+    egf_rps_rear_selectivity_static_coherence_ref: float,
+    egf_rps_rear_selectivity_static_neighbor_min_weight: float,
+    egf_rps_rear_selectivity_static_neighbor_dyn_max: float,
+    egf_rps_rear_selectivity_thickness_weight: float,
+    egf_rps_rear_selectivity_thickness_floor: float,
+    egf_rps_rear_selectivity_thickness_risk_weight: float,
+    egf_rps_rear_selectivity_thickness_ref: float,
+    egf_rps_rear_selectivity_normal_consistency_weight: float,
+    egf_rps_rear_selectivity_normal_consistency_floor: float,
+    egf_rps_rear_selectivity_normal_consistency_relief_weight: float,
+    egf_rps_rear_selectivity_normal_consistency_radius_cells: int,
+    egf_rps_rear_selectivity_normal_consistency_dyn_max: float,
+    egf_rps_rear_selectivity_ray_convergence_weight: float,
+    egf_rps_rear_selectivity_ray_convergence_floor: float,
+    egf_rps_rear_selectivity_ray_convergence_relief_weight: float,
+    egf_rps_rear_selectivity_ray_convergence_radius_cells: int,
+    egf_rps_rear_selectivity_ray_convergence_gap_ref: float,
+    egf_rps_rear_selectivity_ray_convergence_normal_cos: float,
+    egf_rps_rear_selectivity_ray_convergence_thickness_ref: float,
+    egf_rps_rear_selectivity_ray_convergence_ref: float,
+    egf_rps_rear_state_protect_enable: bool,
+    egf_rps_rear_state_decay_relax: float,
+    egf_rps_rear_state_active_floor: float,
+    egf_rps_commit_quality_enable: bool,
+    egf_rps_commit_quality_transfer_gain: float,
+    egf_rps_commit_quality_rho_gain: float,
+    egf_rps_commit_quality_geom_blend: float,
+    egf_rps_commit_quality_sep_scale: float,
+    egf_joint_bg_state_enable: bool,
+    egf_joint_bg_state_on: float,
+    egf_joint_bg_state_gain: float,
+    egf_joint_bg_state_rho_gain: float,
+    egf_joint_bg_state_front_penalty: float,
     egf_wdsg_enable: bool,
+    egf_wdsg_front_shift_vox: float,
+    egf_wdsg_rear_shift_vox: float,
+    egf_wdsg_shell_shift_vox: float,
+    egf_wdsg_front_mix_gain: float,
+    egf_wdsg_rear_mix_gain: float,
+    egf_wdsg_synth_mode: str,
+    egf_wdsg_synth_anchor_gain: float,
+    egf_wdsg_synth_geo_gain: float,
+    egf_wdsg_synth_bg_gain: float,
+    egf_wdsg_synth_counterfactual_gain: float,
+    egf_wdsg_synth_front_repel_gain: float,
+    egf_wdsg_synth_energy_temp: float,
+    egf_wdsg_synth_clip_vox: float,
+    egf_wdsg_conservative_enable: bool,
+    egf_wdsg_conservative_ref_vox: float,
+    egf_wdsg_conservative_min_clip_scale: float,
+    egf_wdsg_conservative_static_gain: float,
+    egf_wdsg_conservative_rear_gain: float,
+    egf_wdsg_conservative_geo_gain: float,
+    egf_wdsg_conservative_front_penalty: float,
+    egf_wdsg_local_clip_enable: bool,
+    egf_wdsg_local_clip_min_scale: float,
+    egf_wdsg_local_clip_max_scale: float,
+    egf_wdsg_local_clip_risk_gain: float,
+    egf_wdsg_local_clip_expand_gain: float,
+    egf_wdsg_local_clip_front_gate: float,
+    egf_wdsg_local_clip_support_gate: float,
+    egf_wdsg_local_clip_ambiguity_gate: float,
+    egf_wdsg_local_clip_pfv_gain: float,
+    egf_wdsg_local_clip_bg_gain: float,
     egf_wdsg_route_enable: bool,
     egf_spg_enable: bool,
     egf_otv_enable: bool,
@@ -853,6 +1128,11 @@ def run_method(
     egf_surface_omhs_enable: bool,
     egf_surface_zero_crossing_max_offset: float,
     egf_surface_zero_crossing_phi_gate: float,
+    egf_surface_point_bias_along_normal_m: float,
+    egf_surface_geometry_chain_coupling_enable: bool,
+    egf_surface_geometry_chain_coupling_mode: str,
+    egf_surface_geometry_chain_coupling_donor_root: str,
+    egf_surface_geometry_chain_coupling_project_dist: float,
     egf_surface_consistency_enable: bool,
     egf_surface_consistency_radius: int,
     egf_surface_consistency_min_neighbors: int,
@@ -1061,6 +1341,8 @@ def run_method(
             cmd += [
                 "--truncation",
                 str(float(max(1.5 * voxel_size, egf_truncation))),
+                "--depth_bias_offset_m",
+                str(float(egf_depth_bias_offset_m)),
                 "--sigma_n0",
                 str(float(egf_sigma_n0)),
                 "--assoc_hetero_inc_ref_cos",
@@ -1318,6 +1600,14 @@ def run_method(
                 str(float(max(0.0, egf_surface_zero_crossing_max_offset))),
                 "--surface_zero_crossing_phi_gate",
                 str(float(max(1e-4, egf_surface_zero_crossing_phi_gate))),
+                "--surface_point_bias_along_normal_m",
+                str(float(egf_surface_point_bias_along_normal_m)),
+                "--surface_geometry_chain_coupling_mode",
+                str(egf_surface_geometry_chain_coupling_mode),
+                "--surface_geometry_chain_coupling_donor_root",
+                str(egf_surface_geometry_chain_coupling_donor_root),
+                "--surface_geometry_chain_coupling_project_dist",
+                str(float(max(0.0, egf_surface_geometry_chain_coupling_project_dist))),
                 "--surface_adaptive_rho_ref",
                 str(float(max(1e-6, adaptive_rho_ref))),
                 "--surface_adaptive_phi_min_scale",
@@ -1463,8 +1753,546 @@ def run_method(
                 cmd.append("--rps_hard_commit_enable")
             if bool(egf_rps_surface_bank_enable):
                 cmd.append("--rps_surface_bank_enable")
+            if bool(egf_rps_bank_soft_competition_enable):
+                cmd.append("--rps_bank_soft_competition_enable")
+            cmd += [
+                "--rps_bank_margin",
+                str(float(max(0.0, egf_rps_bank_margin))),
+                "--rps_bank_separation_ref",
+                str(float(max(1e-6, egf_rps_bank_separation_ref))),
+                "--rps_bank_rear_min_score",
+                str(float(np.clip(egf_rps_bank_rear_min_score, 0.0, 1.0))),
+                "--rps_bank_sep_gate",
+                str(float(np.clip(egf_rps_bank_sep_gate, 0.0, 1.0))),
+                "--rps_bank_bg_support_gain",
+                str(float(max(0.0, egf_rps_bank_bg_support_gain))),
+                "--rps_bank_front_dyn_penalty_gain",
+                str(float(max(0.0, egf_rps_bank_front_dyn_penalty_gain))),
+                "--rps_bank_rear_score_bias",
+                str(float(max(0.0, egf_rps_bank_rear_score_bias))),
+                "--rps_bank_soft_competition_gap",
+                str(float(max(0.0, egf_rps_bank_soft_competition_gap))),
+                "--rps_bank_soft_sep_relax",
+                str(float(max(0.0, egf_rps_bank_soft_sep_relax))),
+                "--rps_bank_soft_rear_min_relax",
+                str(float(max(0.0, egf_rps_bank_soft_rear_min_relax))),
+                "--rps_bank_soft_support_min",
+                str(float(np.clip(egf_rps_bank_soft_support_min, 0.0, 1.0))),
+                "--rps_bank_soft_local_support_gain",
+                str(float(max(0.0, egf_rps_bank_soft_local_support_gain))),
+                "--rps_soft_bank_min_score",
+                str(float(np.clip(egf_rps_soft_bank_min_score, 0.0, 1.0))),
+                "--rps_soft_bank_gain",
+                str(float(max(0.0, egf_rps_soft_bank_gain))),
+                "--rps_soft_bank_commit_relax",
+                str(float(np.clip(egf_rps_soft_bank_commit_relax, 0.0, 1.0))),
+                "--rps_candidate_support_gain",
+                str(float(max(0.0, egf_rps_candidate_support_gain))),
+                "--rps_candidate_bg_gain",
+                str(float(max(0.0, egf_rps_candidate_bg_gain))),
+                "--rps_candidate_rho_gain",
+                str(float(max(0.0, egf_rps_candidate_rho_gain))),
+                "--rps_candidate_front_relax",
+                str(float(np.clip(egf_rps_candidate_front_relax, 0.0, 1.0))),
+                "--rps_commit_threshold",
+                str(float(np.clip(egf_rps_commit_threshold, 0.0, 1.0))),
+                "--rps_commit_release",
+                str(float(np.clip(egf_rps_commit_release, 0.0, 1.0))),
+                "--rps_commit_age_threshold",
+                str(float(max(1.0, egf_rps_commit_age_threshold))),
+                "--rps_commit_rho_ref",
+                str(float(max(1e-6, egf_rps_commit_rho_ref))),
+                "--rps_commit_weight_ref",
+                str(float(max(1e-6, egf_rps_commit_weight_ref))),
+                "--rps_commit_min_cand_rho",
+                str(float(max(0.0, egf_rps_commit_min_cand_rho))),
+                "--rps_commit_min_cand_w",
+                str(float(max(0.0, egf_rps_commit_min_cand_w))),
+                "--rps_commit_evidence_weight",
+                str(float(max(0.0, egf_rps_commit_evidence_weight))),
+                "--rps_commit_geometry_weight",
+                str(float(max(0.0, egf_rps_commit_geometry_weight))),
+                "--rps_commit_bg_weight",
+                str(float(max(0.0, egf_rps_commit_bg_weight))),
+                "--rps_commit_static_weight",
+                str(float(max(0.0, egf_rps_commit_static_weight))),
+                "--rps_commit_front_penalty",
+                str(float(max(0.0, egf_rps_commit_front_penalty))),
+                "--rps_admission_support_on",
+                str(float(np.clip(egf_rps_admission_support_on, 0.0, 1.0))),
+                "--rps_admission_support_gain",
+                str(float(max(0.0, egf_rps_admission_support_gain))),
+                "--rps_admission_score_relax",
+                str(float(max(0.0, egf_rps_admission_score_relax))),
+                "--rps_admission_active_floor",
+                str(float(np.clip(egf_rps_admission_active_floor, 0.0, 1.0))),
+                "--rps_admission_rho_ref",
+                str(float(max(1e-6, egf_rps_admission_rho_ref))),
+                "--rps_admission_weight_ref",
+                str(float(max(1e-6, egf_rps_admission_weight_ref))),
+                "--rps_admission_geometry_weight",
+                str(float(max(0.0, egf_rps_admission_geometry_weight))),
+                "--rps_admission_geometry_floor",
+                str(float(np.clip(egf_rps_admission_geometry_floor, 0.0, 1.0))),
+                "--rps_admission_occlusion_weight",
+                str(float(max(0.0, egf_rps_admission_occlusion_weight))),
+                "--rps_space_redirect_history_weight",
+                str(float(max(0.0, egf_rps_space_redirect_history_weight))),
+                "--rps_space_redirect_history_bg_weight",
+                str(float(max(0.0, egf_rps_space_redirect_history_bg_weight))),
+                "--rps_space_redirect_history_static_weight",
+                str(float(max(0.0, egf_rps_space_redirect_history_static_weight))),
+                "--rps_space_redirect_history_floor",
+                str(float(np.clip(egf_rps_space_redirect_history_floor, 0.0, 1.0))),
+                "--rps_space_redirect_ghost_suppress_weight",
+                str(float(max(0.0, egf_rps_space_redirect_ghost_suppress_weight))),
+                "--rps_space_redirect_visual_anchor_weight",
+                str(float(max(0.0, egf_rps_space_redirect_visual_anchor_weight))),
+                "--rps_space_redirect_visual_anchor_min",
+                str(float(np.clip(egf_rps_space_redirect_visual_anchor_min, 0.0, 1.0))),
+                "--rps_history_visible_min",
+                str(float(np.clip(egf_rps_history_visible_min, 0.0, 1.0))),
+                "--rps_obstruction_min",
+                str(float(np.clip(egf_rps_obstruction_min, 0.0, 1.0))),
+                "--rps_non_hole_min",
+                str(float(np.clip(egf_rps_non_hole_min, 0.0, 1.0))),
+                "--rps_history_manifold_visible_min",
+                str(float(np.clip(egf_rps_history_manifold_visible_min, 0.0, 1.0))),
+                "--rps_history_manifold_obstruction_min",
+                str(float(np.clip(egf_rps_history_manifold_obstruction_min, 0.0, 1.0))),
+                "--rps_history_manifold_bg_weight",
+                str(float(max(0.0, egf_rps_history_manifold_bg_weight))),
+                "--rps_history_manifold_geo_weight",
+                str(float(max(0.0, egf_rps_history_manifold_geo_weight))),
+                "--rps_history_manifold_static_weight",
+                str(float(max(0.0, egf_rps_history_manifold_static_weight))),
+                "--rps_history_manifold_blend",
+                str(float(np.clip(egf_rps_history_manifold_blend, 0.0, 1.0))),
+                "--rps_history_manifold_max_offset",
+                str(float(max(0.0, egf_rps_history_manifold_max_offset))),
+                "--rps_bg_manifold_alpha_up",
+                str(float(max(0.0, egf_rps_bg_manifold_alpha_up))),
+                "--rps_bg_manifold_alpha_down",
+                str(float(max(0.0, egf_rps_bg_manifold_alpha_down))),
+                "--rps_bg_manifold_rho_alpha",
+                str(float(max(0.0, egf_rps_bg_manifold_rho_alpha))),
+                "--rps_bg_manifold_weight_gain",
+                str(float(max(0.0, egf_rps_bg_manifold_weight_gain))),
+                "--rps_bg_manifold_rho_ref",
+                str(float(max(1e-6, egf_rps_bg_manifold_rho_ref))),
+                "--rps_bg_manifold_weight_ref",
+                str(float(max(1e-6, egf_rps_bg_manifold_weight_ref))),
+                "--rps_bg_manifold_history_weight",
+                str(float(max(0.0, egf_rps_bg_manifold_history_weight))),
+                "--rps_bg_manifold_obstruction_weight",
+                str(float(max(0.0, egf_rps_bg_manifold_obstruction_weight))),
+                "--rps_bg_manifold_visible_lo",
+                str(float(np.clip(egf_rps_bg_manifold_visible_lo, 0.0, 1.0))),
+                "--rps_bg_manifold_visible_hi",
+                str(float(np.clip(egf_rps_bg_manifold_visible_hi, 0.0, 1.0))),
+                "--rps_bg_dense_neighbor_radius",
+                str(int(max(1, egf_rps_bg_dense_neighbor_radius))),
+                "--rps_bg_dense_neighbor_weight",
+                str(float(max(0.0, egf_rps_bg_dense_neighbor_weight))),
+                "--rps_bg_dense_geometry_weight",
+                str(float(max(0.0, egf_rps_bg_dense_geometry_weight))),
+                "--rps_bg_dense_max_weight",
+                str(float(max(0.0, egf_rps_bg_dense_max_weight))),
+                "--rps_bg_dense_support_floor",
+                str(float(np.clip(egf_rps_bg_dense_support_floor, 0.0, 1.0))),
+                "--rps_bg_dense_decay",
+                str(float(max(0.0, egf_rps_bg_dense_decay))),
+                "--rps_bg_surface_min_conf",
+                str(float(np.clip(egf_rps_bg_surface_min_conf, 0.0, 1.0))),
+                "--rps_bg_surface_agree_weight",
+                str(float(max(0.0, egf_rps_bg_surface_agree_weight))),
+                "--rps_bg_surface_tangent_weight",
+                str(float(max(0.0, egf_rps_bg_surface_tangent_weight))),
+                "--rps_bg_surface_tangent_floor",
+                str(float(np.clip(egf_rps_bg_surface_tangent_floor, 0.0, 1.0))),
+                "--rps_bg_bridge_min_visible",
+                str(float(np.clip(egf_rps_bg_bridge_min_visible, 0.0, 1.0))),
+                "--rps_bg_bridge_min_obstruction",
+                str(float(np.clip(egf_rps_bg_bridge_min_obstruction, 0.0, 1.0))),
+                "--rps_bg_bridge_min_step",
+                str(int(max(1, egf_rps_bg_bridge_min_step))),
+                "--rps_bg_bridge_max_step",
+                str(int(max(1, egf_rps_bg_bridge_max_step))),
+                "--rps_bg_bridge_gain",
+                str(float(max(0.0, egf_rps_bg_bridge_gain))),
+                "--rps_bg_bridge_phi_blend",
+                str(float(np.clip(egf_rps_bg_bridge_phi_blend, 0.0, 1.0))),
+                "--rps_bg_bridge_target_dyn_max",
+                str(float(np.clip(egf_rps_bg_bridge_target_dyn_max, 0.0, 1.0))),
+                "--rps_bg_bridge_target_surface_max",
+                str(float(np.clip(egf_rps_bg_bridge_target_surface_max, 0.0, 1.0))),
+                "--rps_bg_bridge_ghost_suppress_weight",
+                str(float(max(0.0, egf_rps_bg_bridge_ghost_suppress_weight))),
+                "--rps_bg_bridge_relaxed_dyn_max",
+                str(float(np.clip(egf_rps_bg_bridge_relaxed_dyn_max, 0.0, 1.0))),
+                "--rps_bg_bridge_max_hits_per_source",
+                str(int(max(1, egf_rps_bg_bridge_max_hits_per_source))),
+                "--rps_bg_bridge_cone_radius_cells",
+                str(int(max(0, egf_rps_bg_bridge_cone_radius_cells))),
+                "--rps_bg_bridge_cone_gain_scale",
+                str(float(max(0.0, egf_rps_bg_bridge_cone_gain_scale))),
+                "--rps_bg_bridge_patch_radius_cells",
+                str(int(max(0, egf_rps_bg_bridge_patch_radius_cells))),
+                "--rps_bg_bridge_patch_gain_scale",
+                str(float(max(0.0, egf_rps_bg_bridge_patch_gain_scale))),
+                "--rps_bg_bridge_depth_hypothesis_count",
+                str(int(max(0, egf_rps_bg_bridge_depth_hypothesis_count))),
+                "--rps_bg_bridge_depth_step_scale",
+                str(float(max(0.0, egf_rps_bg_bridge_depth_step_scale))),
+                "--rps_bg_bridge_rear_support_gain",
+                str(float(max(0.0, egf_rps_bg_bridge_rear_support_gain))),
+                "--rps_bg_bridge_rear_rho_gain",
+                str(float(max(0.0, egf_rps_bg_bridge_rear_rho_gain))),
+                "--rps_bg_bridge_rear_phi_blend",
+                str(float(np.clip(egf_rps_bg_bridge_rear_phi_blend, 0.0, 1.0))),
+                "--rps_bg_bridge_rear_score_floor",
+                str(float(np.clip(egf_rps_bg_bridge_rear_score_floor, 0.0, 1.0))),
+                "--rps_bg_bridge_rear_active_floor",
+                str(float(np.clip(egf_rps_bg_bridge_rear_active_floor, 0.0, 1.0))),
+                "--rps_bg_bridge_rear_age_floor",
+                str(float(max(0.0, egf_rps_bg_bridge_rear_age_floor))),
+                "--rps_rear_hybrid_bridge_support_min",
+                str(float(np.clip(egf_rps_rear_hybrid_bridge_support_min, 0.0, 1.0))),
+                "--rps_rear_hybrid_dyn_max",
+                str(float(np.clip(egf_rps_rear_hybrid_dyn_max, 0.0, 1.0))),
+                "--rps_rear_hybrid_manifold_min",
+                str(float(np.clip(egf_rps_rear_hybrid_manifold_min, 0.0, 1.0))),
+                "--rps_rear_density_radius_cells",
+                str(int(max(1, egf_rps_rear_density_radius_cells))),
+                "--rps_rear_density_min_neighbors",
+                str(int(max(0, egf_rps_rear_density_min_neighbors))),
+                "--rps_rear_density_support_min",
+                str(float(np.clip(egf_rps_rear_density_support_min, 0.0, 1.0))),
+                "--rps_rear_selectivity_support_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_support_weight))),
+                "--rps_rear_selectivity_history_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_history_weight))),
+                "--rps_rear_selectivity_static_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_static_weight))),
+                "--rps_rear_selectivity_geom_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_geom_weight))),
+                "--rps_rear_selectivity_bridge_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_bridge_weight))),
+                "--rps_rear_selectivity_density_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_density_weight))),
+                "--rps_rear_selectivity_rear_score_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_rear_score_weight))),
+                "--rps_rear_selectivity_front_score_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_front_score_weight))),
+                "--rps_rear_selectivity_competition_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_competition_weight))),
+                "--rps_rear_selectivity_competition_alpha",
+                str(float(max(0.0, egf_rps_rear_selectivity_competition_alpha))),
+                "--rps_rear_selectivity_gap_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_gap_weight))),
+                "--rps_rear_selectivity_sep_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_sep_weight))),
+                "--rps_rear_selectivity_dyn_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_dyn_weight))),
+                "--rps_rear_selectivity_ghost_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_ghost_weight))),
+                "--rps_rear_selectivity_front_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_front_weight))),
+                "--rps_rear_selectivity_geom_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_geom_risk_weight))),
+                "--rps_rear_selectivity_history_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_history_risk_weight))),
+                "--rps_rear_selectivity_density_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_density_risk_weight))),
+                "--rps_rear_selectivity_bridge_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_bridge_relief_weight))),
+                "--rps_rear_selectivity_static_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_static_relief_weight))),
+                "--rps_rear_selectivity_gap_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_gap_risk_weight))),
+                "--rps_rear_selectivity_score_min",
+                str(float(np.clip(egf_rps_rear_selectivity_score_min, 0.0, 1.0))),
+                "--rps_rear_selectivity_risk_max",
+                str(float(max(0.0, egf_rps_rear_selectivity_risk_max))),
+                "--rps_rear_selectivity_geom_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_geom_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_history_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_history_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_bridge_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_bridge_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_competition_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_competition_floor, -1.0, 1.0))),
+                "--rps_rear_selectivity_front_score_max",
+                str(float(np.clip(egf_rps_rear_selectivity_front_score_max, 0.0, 1.0))),
+                "--rps_rear_selectivity_gap_min",
+                str(float(max(0.0, egf_rps_rear_selectivity_gap_min))),
+                "--rps_rear_selectivity_gap_max",
+                str(float(max(0.0, egf_rps_rear_selectivity_gap_max))),
+                "--rps_rear_selectivity_gap_valid_min",
+                str(float(np.clip(egf_rps_rear_selectivity_gap_valid_min, 0.0, 1.0))),
+                "--rps_rear_selectivity_occlusion_order_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_occlusion_order_weight))),
+                "--rps_rear_selectivity_occlusion_order_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_occlusion_order_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_occlusion_order_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_occlusion_order_risk_weight))),
+                "--rps_rear_selectivity_local_conflict_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_local_conflict_weight))),
+                "--rps_rear_selectivity_local_conflict_max",
+                str(float(max(0.0, egf_rps_rear_selectivity_local_conflict_max))),
+                "--rps_rear_selectivity_front_residual_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_front_residual_weight))),
+                "--rps_rear_selectivity_front_residual_max",
+                str(float(max(0.0, egf_rps_rear_selectivity_front_residual_max))),
+                "--rps_rear_selectivity_occluder_protect_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_occluder_protect_weight))),
+                "--rps_rear_selectivity_occluder_protect_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_occluder_protect_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_occluder_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_occluder_relief_weight))),
+                "--rps_rear_selectivity_dynamic_trail_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_dynamic_trail_weight))),
+                "--rps_rear_selectivity_dynamic_trail_max",
+                str(float(max(0.0, egf_rps_rear_selectivity_dynamic_trail_max))),
+                "--rps_rear_selectivity_dynamic_trail_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_dynamic_trail_relief_weight))),
+                "--rps_rear_selectivity_history_anchor_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_history_anchor_weight))),
+                "--rps_rear_selectivity_history_anchor_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_history_anchor_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_history_anchor_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_history_anchor_relief_weight))),
+                "--rps_rear_selectivity_surface_anchor_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_surface_anchor_weight))),
+                "--rps_rear_selectivity_surface_anchor_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_surface_anchor_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_surface_anchor_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_surface_anchor_risk_weight))),
+                "--rps_rear_selectivity_surface_distance_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_surface_distance_ref))),
+                "--rps_rear_selectivity_dynamic_shell_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_dynamic_shell_weight))),
+                "--rps_rear_selectivity_dynamic_shell_max",
+                str(float(max(0.0, egf_rps_rear_selectivity_dynamic_shell_max))),
+                "--rps_rear_selectivity_dynamic_shell_gap_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_dynamic_shell_gap_ref))),
+                "--rps_rear_selectivity_conflict_radius_cells",
+                str(int(max(1, egf_rps_rear_selectivity_conflict_radius_cells))),
+                "--rps_rear_selectivity_conflict_front_score_min",
+                str(float(np.clip(egf_rps_rear_selectivity_conflict_front_score_min, 0.0, 1.0))),
+                "--rps_rear_selectivity_conflict_static_score_min",
+                str(float(np.clip(egf_rps_rear_selectivity_conflict_static_score_min, 0.0, 1.0))),
+                "--rps_rear_selectivity_conflict_dist_scale",
+                str(float(max(0.1, egf_rps_rear_selectivity_conflict_dist_scale))),
+                "--rps_rear_selectivity_conflict_gap_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_conflict_gap_ref))),
+                "--rps_rear_selectivity_conflict_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_conflict_ref))),
+                "--rps_rear_selectivity_trail_radius_cells",
+                str(int(max(1, egf_rps_rear_selectivity_trail_radius_cells))),
+                "--rps_rear_selectivity_trail_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_trail_ref))),
+                "--rps_rear_selectivity_density_radius_cells",
+                str(int(max(1, egf_rps_rear_selectivity_density_radius_cells))),
+                "--rps_rear_selectivity_density_ref",
+                str(int(max(1, egf_rps_rear_selectivity_density_ref))),
+                "--rps_rear_selectivity_topk",
+                str(int(max(0, egf_rps_rear_selectivity_topk))),
+                "--rps_rear_selectivity_rank_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_rank_risk_weight))),
+                "--rps_rear_selectivity_penetration_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_penetration_weight))),
+                "--rps_rear_selectivity_penetration_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_penetration_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_penetration_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_penetration_risk_weight))),
+                "--rps_rear_selectivity_penetration_free_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_penetration_free_ref))),
+                "--rps_rear_selectivity_penetration_max_steps",
+                str(int(max(2, egf_rps_rear_selectivity_penetration_max_steps))),
+                "--rps_rear_selectivity_observation_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_observation_weight))),
+                "--rps_rear_selectivity_observation_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_observation_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_observation_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_observation_risk_weight))),
+                "--rps_rear_selectivity_observation_count_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_observation_count_ref))),
+                "--rps_rear_selectivity_observation_min_count",
+                str(float(max(0.0, egf_rps_rear_selectivity_observation_min_count))),
+                "--rps_rear_selectivity_static_coherence_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_static_coherence_weight))),
+                "--rps_rear_selectivity_static_coherence_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_static_coherence_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_static_coherence_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_static_coherence_relief_weight))),
+                "--rps_rear_selectivity_static_coherence_radius_cells",
+                str(int(max(1, egf_rps_rear_selectivity_static_coherence_radius_cells))),
+                "--rps_rear_selectivity_static_coherence_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_static_coherence_ref))),
+                "--rps_rear_selectivity_static_neighbor_min_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_static_neighbor_min_weight))),
+                "--rps_rear_selectivity_static_neighbor_dyn_max",
+                str(float(np.clip(egf_rps_rear_selectivity_static_neighbor_dyn_max, 0.0, 1.0))),
+                "--rps_rear_selectivity_thickness_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_thickness_weight))),
+                "--rps_rear_selectivity_thickness_floor",
+                str(float(max(0.0, egf_rps_rear_selectivity_thickness_floor))),
+                "--rps_rear_selectivity_thickness_risk_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_thickness_risk_weight))),
+                "--rps_rear_selectivity_thickness_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_thickness_ref))),
+                "--rps_rear_selectivity_normal_consistency_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_normal_consistency_weight))),
+                "--rps_rear_selectivity_normal_consistency_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_normal_consistency_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_normal_consistency_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_normal_consistency_relief_weight))),
+                "--rps_rear_selectivity_normal_consistency_radius_cells",
+                str(int(max(1, egf_rps_rear_selectivity_normal_consistency_radius_cells))),
+                "--rps_rear_selectivity_normal_consistency_dyn_max",
+                str(float(np.clip(egf_rps_rear_selectivity_normal_consistency_dyn_max, 0.0, 1.0))),
+                "--rps_rear_selectivity_ray_convergence_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_ray_convergence_weight))),
+                "--rps_rear_selectivity_ray_convergence_floor",
+                str(float(np.clip(egf_rps_rear_selectivity_ray_convergence_floor, 0.0, 1.0))),
+                "--rps_rear_selectivity_ray_convergence_relief_weight",
+                str(float(max(0.0, egf_rps_rear_selectivity_ray_convergence_relief_weight))),
+                "--rps_rear_selectivity_ray_convergence_radius_cells",
+                str(int(max(1, egf_rps_rear_selectivity_ray_convergence_radius_cells))),
+                "--rps_rear_selectivity_ray_convergence_gap_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_ray_convergence_gap_ref))),
+                "--rps_rear_selectivity_ray_convergence_normal_cos",
+                str(float(np.clip(egf_rps_rear_selectivity_ray_convergence_normal_cos, 0.0, 1.0))),
+                "--rps_rear_selectivity_ray_convergence_thickness_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_ray_convergence_thickness_ref))),
+                "--rps_rear_selectivity_ray_convergence_ref",
+                str(float(max(1e-6, egf_rps_rear_selectivity_ray_convergence_ref))),
+                "--rps_rear_state_decay_relax",
+                str(float(max(0.0, egf_rps_rear_state_decay_relax))),
+                "--rps_rear_state_active_floor",
+                str(float(np.clip(egf_rps_rear_state_active_floor, 0.0, 1.0))),
+                "--rps_commit_quality_transfer_gain",
+                str(float(max(0.0, egf_rps_commit_quality_transfer_gain))),
+                "--rps_commit_quality_rho_gain",
+                str(float(max(0.0, egf_rps_commit_quality_rho_gain))),
+                "--rps_commit_quality_geom_blend",
+                str(float(np.clip(egf_rps_commit_quality_geom_blend, 0.0, 1.0))),
+                "--rps_commit_quality_sep_scale",
+                str(float(max(0.0, egf_rps_commit_quality_sep_scale))),
+                "--joint_bg_state_on",
+                str(float(np.clip(egf_joint_bg_state_on, 0.0, 1.0))),
+                "--joint_bg_state_gain",
+                str(float(max(0.0, egf_joint_bg_state_gain))),
+                "--joint_bg_state_rho_gain",
+                str(float(max(0.0, egf_joint_bg_state_rho_gain))),
+                "--joint_bg_state_front_penalty",
+                str(float(np.clip(egf_joint_bg_state_front_penalty, 0.0, 1.0))),
+            ]
+            if bool(egf_rps_soft_bank_export_enable):
+                cmd.append("--rps_soft_bank_export_enable")
+            if bool(egf_rps_candidate_rescue_enable):
+                cmd.append("--rps_candidate_rescue_enable")
+            if bool(egf_rps_commit_activation_enable):
+                cmd.append("--rps_commit_activation_enable")
+            if bool(egf_rps_admission_support_enable):
+                cmd.append("--rps_admission_support_enable")
+            if bool(egf_rps_admission_geometry_enable):
+                cmd.append("--rps_admission_geometry_enable")
+            if bool(egf_rps_admission_occlusion_enable):
+                cmd.append("--rps_admission_occlusion_enable")
+            if bool(egf_rps_space_redirect_history_enable):
+                cmd.append("--rps_space_redirect_history_enable")
+            if bool(egf_rps_space_redirect_ghost_suppress_enable):
+                cmd.append("--rps_space_redirect_ghost_suppress_enable")
+            if bool(egf_rps_space_redirect_visual_anchor_enable):
+                cmd.append("--rps_space_redirect_visual_anchor_enable")
+            if bool(egf_rps_history_obstructed_gate_enable):
+                cmd.append("--rps_history_obstructed_gate_enable")
+            if bool(egf_rps_history_manifold_enable):
+                cmd.append("--rps_history_manifold_enable")
+            if bool(egf_rps_bg_manifold_state_enable):
+                cmd.append("--rps_bg_manifold_state_enable")
+            if bool(egf_rps_bg_dense_state_enable):
+                cmd.append("--rps_bg_dense_state_enable")
+            if bool(egf_rps_bg_surface_constrained_enable):
+                cmd.append("--rps_bg_surface_constrained_enable")
+            if bool(egf_rps_bg_surface_tangent_enable):
+                cmd.append("--rps_bg_surface_tangent_enable")
+            if bool(egf_rps_bg_bridge_enable):
+                cmd.append("--rps_bg_bridge_enable")
+            if bool(egf_rps_bg_bridge_ghost_suppress_enable):
+                cmd.append("--rps_bg_bridge_ghost_suppress_enable")
+            if bool(egf_rps_bg_bridge_keep_multi_hits):
+                cmd.append("--rps_bg_bridge_keep_multi_hits")
+            if bool(egf_rps_bg_bridge_cone_enable):
+                cmd.append("--rps_bg_bridge_cone_enable")
+            if bool(egf_rps_bg_bridge_rear_synth_enable):
+                cmd.append("--rps_bg_bridge_rear_synth_enable")
+            if bool(egf_rps_rear_hybrid_filter_enable):
+                cmd.append("--rps_rear_hybrid_filter_enable")
+            if bool(egf_rps_rear_density_gate_enable):
+                cmd.append("--rps_rear_density_gate_enable")
+            if bool(egf_rps_rear_selectivity_enable):
+                cmd.append("--rps_rear_selectivity_enable")
+            if bool(egf_rps_rear_selectivity_unobserved_veto_enable):
+                cmd.append("--rps_rear_selectivity_unobserved_veto_enable")
+            if bool(egf_rps_rear_state_protect_enable):
+                cmd.append("--rps_rear_state_protect_enable")
+            if bool(egf_rps_commit_quality_enable):
+                cmd.append("--rps_commit_quality_enable")
+            if bool(egf_joint_bg_state_enable):
+                cmd.append("--joint_bg_state_enable")
             if bool(egf_wdsg_enable):
                 cmd.append("--wdsg_enable")
+            cmd += [
+                "--wdsg_front_shift_vox",
+                str(float(max(0.0, egf_wdsg_front_shift_vox))),
+                "--wdsg_rear_shift_vox",
+                str(float(max(0.0, egf_wdsg_rear_shift_vox))),
+                "--wdsg_shell_shift_vox",
+                str(float(max(0.0, egf_wdsg_shell_shift_vox))),
+                "--wdsg_front_mix_gain",
+                str(float(max(0.0, egf_wdsg_front_mix_gain))),
+                "--wdsg_rear_mix_gain",
+                str(float(max(0.0, egf_wdsg_rear_mix_gain))),
+                "--wdsg_synth_mode",
+                str(egf_wdsg_synth_mode),
+                "--wdsg_synth_anchor_gain",
+                str(float(max(0.0, egf_wdsg_synth_anchor_gain))),
+                "--wdsg_synth_geo_gain",
+                str(float(max(0.0, egf_wdsg_synth_geo_gain))),
+                "--wdsg_synth_bg_gain",
+                str(float(max(0.0, egf_wdsg_synth_bg_gain))),
+                "--wdsg_synth_counterfactual_gain",
+                str(float(max(0.0, egf_wdsg_synth_counterfactual_gain))),
+                "--wdsg_synth_front_repel_gain",
+                str(float(max(0.0, egf_wdsg_synth_front_repel_gain))),
+                "--wdsg_synth_energy_temp",
+                str(float(max(1e-3, egf_wdsg_synth_energy_temp))),
+                "--wdsg_synth_clip_vox",
+                str(float(max(0.1, egf_wdsg_synth_clip_vox))),
+                "--wdsg_local_clip_min_scale",
+                str(float(np.clip(egf_wdsg_local_clip_min_scale, 0.25, 1.0))),
+                "--wdsg_local_clip_max_scale",
+                str(float(max(np.clip(egf_wdsg_local_clip_min_scale, 0.25, 1.0), egf_wdsg_local_clip_max_scale))),
+                "--wdsg_local_clip_risk_gain",
+                str(float(max(0.0, egf_wdsg_local_clip_risk_gain))),
+                "--wdsg_local_clip_expand_gain",
+                str(float(max(0.0, egf_wdsg_local_clip_expand_gain))),
+                "--wdsg_local_clip_front_gate",
+                str(float(np.clip(egf_wdsg_local_clip_front_gate, 0.0, 0.95))),
+                "--wdsg_local_clip_support_gate",
+                str(float(np.clip(egf_wdsg_local_clip_support_gate, 1e-3, 1.0))),
+                "--wdsg_local_clip_ambiguity_gate",
+                str(float(np.clip(egf_wdsg_local_clip_ambiguity_gate, 0.0, 0.95))),
+                "--wdsg_local_clip_pfv_gain",
+                str(float(max(0.0, egf_wdsg_local_clip_pfv_gain))),
+                "--wdsg_local_clip_bg_gain",
+                str(float(max(0.0, egf_wdsg_local_clip_bg_gain))),
+            ]
+            if bool(egf_wdsg_local_clip_enable):
+                cmd.append("--wdsg_local_clip_enable")
             if bool(egf_wdsg_route_enable):
                 cmd.append("--wdsg_route_enable")
             if bool(egf_spg_enable):
@@ -1638,8 +2466,10 @@ def run_method(
                     cmd.append("--surface_two_stage_dynamic_require_low_rho")
                 else:
                     cmd.append("--surface_two_stage_dynamic_no_require_low_rho")
-            if adaptive_enable:
-                cmd.append("--surface_adaptive_enable")
+        if adaptive_enable:
+            cmd.append("--surface_adaptive_enable")
+        if bool(egf_surface_geometry_chain_coupling_enable):
+            cmd.append("--surface_geometry_chain_coupling_enable")
             if egf_ablation_no_evidence:
                 cmd.append("--ablation_no_evidence")
             if egf_ablation_no_gradient:
@@ -2312,6 +3142,7 @@ def main():
     parser.add_argument("--egf_assoc_contra_rho_guard", type=float, default=0.55)
     parser.add_argument("--egf_assoc_contra_d2_boost_max", type=float, default=2.2)
     parser.add_argument("--egf_truncation", type=float, default=0.08)
+    parser.add_argument("--egf_depth_bias_offset_m", type=float, default=0.0)
     parser.add_argument("--egf_static_truncation", type=float, default=0.08)
     parser.add_argument("--egf_rho_decay", type=float, default=0.998)
     parser.add_argument("--egf_phi_w_decay", type=float, default=0.998)
@@ -2351,7 +3182,281 @@ def main():
     parser.add_argument("--egf_rps_enable", action="store_true")
     parser.add_argument("--egf_rps_hard_commit_enable", action="store_true")
     parser.add_argument("--egf_rps_surface_bank_enable", action="store_true")
+    parser.add_argument("--egf_rps_bank_margin", type=float, default=0.08)
+    parser.add_argument("--egf_rps_bank_separation_ref", type=float, default=0.04)
+    parser.add_argument("--egf_rps_bank_rear_min_score", type=float, default=0.52)
+    parser.add_argument("--egf_rps_bank_sep_gate", type=float, default=0.22)
+    parser.add_argument("--egf_rps_bank_bg_support_gain", type=float, default=0.0)
+    parser.add_argument("--egf_rps_bank_front_dyn_penalty_gain", type=float, default=0.0)
+    parser.add_argument("--egf_rps_bank_rear_score_bias", type=float, default=0.0)
+    parser.add_argument("--egf_rps_bank_soft_competition_enable", action="store_true")
+    parser.add_argument("--egf_rps_bank_soft_competition_gap", type=float, default=0.0)
+    parser.add_argument("--egf_rps_bank_soft_sep_relax", type=float, default=0.0)
+    parser.add_argument("--egf_rps_bank_soft_rear_min_relax", type=float, default=0.0)
+    parser.add_argument("--egf_rps_bank_soft_support_min", type=float, default=0.45)
+    parser.add_argument("--egf_rps_bank_soft_local_support_gain", type=float, default=1.0)
+    parser.add_argument("--egf_rps_soft_bank_export_enable", action="store_true")
+    parser.add_argument("--egf_rps_soft_bank_min_score", type=float, default=0.18)
+    parser.add_argument("--egf_rps_soft_bank_gain", type=float, default=0.65)
+    parser.add_argument("--egf_rps_soft_bank_commit_relax", type=float, default=0.70)
+    parser.add_argument("--egf_rps_candidate_rescue_enable", action="store_true")
+    parser.add_argument("--egf_rps_candidate_support_gain", type=float, default=0.28)
+    parser.add_argument("--egf_rps_candidate_bg_gain", type=float, default=0.22)
+    parser.add_argument("--egf_rps_candidate_rho_gain", type=float, default=0.18)
+    parser.add_argument("--egf_rps_candidate_front_relax", type=float, default=0.20)
+    parser.add_argument("--egf_rps_commit_activation_enable", action="store_true")
+    parser.add_argument("--egf_rps_commit_threshold", type=float, default=0.62)
+    parser.add_argument("--egf_rps_commit_release", type=float, default=0.40)
+    parser.add_argument("--egf_rps_commit_age_threshold", type=float, default=2.0)
+    parser.add_argument("--egf_rps_commit_rho_ref", type=float, default=0.08)
+    parser.add_argument("--egf_rps_commit_weight_ref", type=float, default=0.80)
+    parser.add_argument("--egf_rps_commit_min_cand_rho", type=float, default=0.02)
+    parser.add_argument("--egf_rps_commit_min_cand_w", type=float, default=0.08)
+    parser.add_argument("--egf_rps_commit_evidence_weight", type=float, default=0.34)
+    parser.add_argument("--egf_rps_commit_geometry_weight", type=float, default=0.28)
+    parser.add_argument("--egf_rps_commit_bg_weight", type=float, default=0.20)
+    parser.add_argument("--egf_rps_commit_static_weight", type=float, default=0.18)
+    parser.add_argument("--egf_rps_commit_front_penalty", type=float, default=0.22)
+    parser.add_argument("--egf_rps_admission_support_enable", action="store_true")
+    parser.add_argument("--egf_rps_admission_support_on", type=float, default=0.42)
+    parser.add_argument("--egf_rps_admission_support_gain", type=float, default=0.55)
+    parser.add_argument("--egf_rps_admission_score_relax", type=float, default=0.10)
+    parser.add_argument("--egf_rps_admission_active_floor", type=float, default=0.32)
+    parser.add_argument("--egf_rps_admission_rho_ref", type=float, default=0.08)
+    parser.add_argument("--egf_rps_admission_weight_ref", type=float, default=0.35)
+    parser.add_argument("--egf_rps_admission_geometry_enable", action="store_true")
+    parser.add_argument("--egf_rps_admission_geometry_weight", type=float, default=0.25)
+    parser.add_argument("--egf_rps_admission_geometry_floor", type=float, default=0.40)
+    parser.add_argument("--egf_rps_admission_occlusion_enable", action="store_true")
+    parser.add_argument("--egf_rps_admission_occlusion_weight", type=float, default=0.12)
+    parser.add_argument("--egf_rps_space_redirect_history_enable", action="store_true")
+    parser.add_argument("--egf_rps_space_redirect_history_weight", type=float, default=0.32)
+    parser.add_argument("--egf_rps_space_redirect_history_bg_weight", type=float, default=0.60)
+    parser.add_argument("--egf_rps_space_redirect_history_static_weight", type=float, default=0.40)
+    parser.add_argument("--egf_rps_space_redirect_history_floor", type=float, default=0.30)
+    parser.add_argument("--egf_rps_space_redirect_ghost_suppress_enable", action="store_true")
+    parser.add_argument("--egf_rps_space_redirect_ghost_suppress_weight", type=float, default=0.22)
+    parser.add_argument("--egf_rps_space_redirect_visual_anchor_enable", action="store_true")
+    parser.add_argument("--egf_rps_space_redirect_visual_anchor_weight", type=float, default=0.16)
+    parser.add_argument("--egf_rps_space_redirect_visual_anchor_min", type=float, default=0.36)
+    parser.add_argument("--egf_rps_history_obstructed_gate_enable", action="store_true")
+    parser.add_argument("--egf_rps_history_visible_min", type=float, default=0.45)
+    parser.add_argument("--egf_rps_obstruction_min", type=float, default=0.28)
+    parser.add_argument("--egf_rps_non_hole_min", type=float, default=0.30)
+    parser.add_argument("--egf_rps_history_manifold_enable", action="store_true")
+    parser.add_argument("--egf_rps_history_manifold_visible_min", type=float, default=0.45)
+    parser.add_argument("--egf_rps_history_manifold_obstruction_min", type=float, default=0.28)
+    parser.add_argument("--egf_rps_history_manifold_bg_weight", type=float, default=0.50)
+    parser.add_argument("--egf_rps_history_manifold_geo_weight", type=float, default=0.30)
+    parser.add_argument("--egf_rps_history_manifold_static_weight", type=float, default=0.20)
+    parser.add_argument("--egf_rps_history_manifold_blend", type=float, default=0.75)
+    parser.add_argument("--egf_rps_history_manifold_max_offset", type=float, default=0.04)
+    parser.add_argument("--egf_rps_bg_manifold_state_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_manifold_alpha_up", type=float, default=0.08)
+    parser.add_argument("--egf_rps_bg_manifold_alpha_down", type=float, default=0.02)
+    parser.add_argument("--egf_rps_bg_manifold_rho_alpha", type=float, default=0.10)
+    parser.add_argument("--egf_rps_bg_manifold_weight_gain", type=float, default=0.55)
+    parser.add_argument("--egf_rps_bg_manifold_rho_ref", type=float, default=0.08)
+    parser.add_argument("--egf_rps_bg_manifold_weight_ref", type=float, default=0.35)
+    parser.add_argument("--egf_rps_bg_manifold_history_weight", type=float, default=0.30)
+    parser.add_argument("--egf_rps_bg_manifold_obstruction_weight", type=float, default=0.20)
+    parser.add_argument("--egf_rps_bg_manifold_visible_lo", type=float, default=0.25)
+    parser.add_argument("--egf_rps_bg_manifold_visible_hi", type=float, default=0.50)
+    parser.add_argument("--egf_rps_bg_dense_state_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_dense_neighbor_radius", type=int, default=1)
+    parser.add_argument("--egf_rps_bg_dense_neighbor_weight", type=float, default=0.55)
+    parser.add_argument("--egf_rps_bg_dense_geometry_weight", type=float, default=0.30)
+    parser.add_argument("--egf_rps_bg_dense_max_weight", type=float, default=1.0)
+    parser.add_argument("--egf_rps_bg_dense_support_floor", type=float, default=0.18)
+    parser.add_argument("--egf_rps_bg_dense_decay", type=float, default=0.996)
+    parser.add_argument("--egf_rps_bg_surface_constrained_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_surface_min_conf", type=float, default=0.12)
+    parser.add_argument("--egf_rps_bg_surface_agree_weight", type=float, default=0.40)
+    parser.add_argument("--egf_rps_bg_surface_tangent_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_surface_tangent_weight", type=float, default=0.65)
+    parser.add_argument("--egf_rps_bg_surface_tangent_floor", type=float, default=0.15)
+    parser.add_argument("--egf_rps_bg_bridge_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_bridge_min_visible", type=float, default=0.35)
+    parser.add_argument("--egf_rps_bg_bridge_min_obstruction", type=float, default=0.30)
+    parser.add_argument("--egf_rps_bg_bridge_min_step", type=int, default=1)
+    parser.add_argument("--egf_rps_bg_bridge_max_step", type=int, default=3)
+    parser.add_argument("--egf_rps_bg_bridge_gain", type=float, default=0.65)
+    parser.add_argument("--egf_rps_bg_bridge_phi_blend", type=float, default=0.85)
+    parser.add_argument("--egf_rps_bg_bridge_target_dyn_max", type=float, default=0.35)
+    parser.add_argument("--egf_rps_bg_bridge_target_surface_max", type=float, default=0.35)
+    parser.add_argument("--egf_rps_bg_bridge_ghost_suppress_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_bridge_ghost_suppress_weight", type=float, default=0.22)
+    parser.add_argument("--egf_rps_bg_bridge_relaxed_dyn_max", type=float, default=0.45)
+    parser.add_argument("--egf_rps_bg_bridge_keep_multi_hits", action="store_true")
+    parser.add_argument("--egf_rps_bg_bridge_max_hits_per_source", type=int, default=3)
+    parser.add_argument("--egf_rps_bg_bridge_cone_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_bridge_cone_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_bg_bridge_cone_gain_scale", type=float, default=0.65)
+    parser.add_argument("--egf_rps_bg_bridge_patch_radius_cells", type=int, default=0)
+    parser.add_argument("--egf_rps_bg_bridge_patch_gain_scale", type=float, default=0.55)
+    parser.add_argument("--egf_rps_bg_bridge_depth_hypothesis_count", type=int, default=0)
+    parser.add_argument("--egf_rps_bg_bridge_depth_step_scale", type=float, default=0.50)
+    parser.add_argument("--egf_rps_bg_bridge_rear_synth_enable", action="store_true")
+    parser.add_argument("--egf_rps_bg_bridge_rear_support_gain", type=float, default=0.28)
+    parser.add_argument("--egf_rps_bg_bridge_rear_rho_gain", type=float, default=0.10)
+    parser.add_argument("--egf_rps_bg_bridge_rear_phi_blend", type=float, default=0.80)
+    parser.add_argument("--egf_rps_bg_bridge_rear_score_floor", type=float, default=0.22)
+    parser.add_argument("--egf_rps_bg_bridge_rear_active_floor", type=float, default=0.52)
+    parser.add_argument("--egf_rps_bg_bridge_rear_age_floor", type=float, default=1.0)
+    parser.add_argument("--egf_rps_rear_hybrid_filter_enable", action="store_true")
+    parser.add_argument("--egf_rps_rear_hybrid_bridge_support_min", type=float, default=0.20)
+    parser.add_argument("--egf_rps_rear_hybrid_dyn_max", type=float, default=0.22)
+    parser.add_argument("--egf_rps_rear_hybrid_manifold_min", type=float, default=0.25)
+    parser.add_argument("--egf_rps_rear_density_gate_enable", action="store_true")
+    parser.add_argument("--egf_rps_rear_density_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_density_min_neighbors", type=int, default=2)
+    parser.add_argument("--egf_rps_rear_density_support_min", type=float, default=0.45)
+    parser.add_argument("--egf_rps_rear_selectivity_enable", action="store_true")
+    parser.add_argument("--egf_rps_rear_selectivity_support_weight", type=float, default=0.18)
+    parser.add_argument("--egf_rps_rear_selectivity_history_weight", type=float, default=0.24)
+    parser.add_argument("--egf_rps_rear_selectivity_static_weight", type=float, default=0.16)
+    parser.add_argument("--egf_rps_rear_selectivity_geom_weight", type=float, default=0.22)
+    parser.add_argument("--egf_rps_rear_selectivity_bridge_weight", type=float, default=0.10)
+    parser.add_argument("--egf_rps_rear_selectivity_density_weight", type=float, default=0.10)
+    parser.add_argument("--egf_rps_rear_selectivity_rear_score_weight", type=float, default=0.28)
+    parser.add_argument("--egf_rps_rear_selectivity_front_score_weight", type=float, default=0.28)
+    parser.add_argument("--egf_rps_rear_selectivity_competition_weight", type=float, default=0.34)
+    parser.add_argument("--egf_rps_rear_selectivity_competition_alpha", type=float, default=0.80)
+    parser.add_argument("--egf_rps_rear_selectivity_gap_weight", type=float, default=0.18)
+    parser.add_argument("--egf_rps_rear_selectivity_sep_weight", type=float, default=0.08)
+    parser.add_argument("--egf_rps_rear_selectivity_dyn_weight", type=float, default=0.22)
+    parser.add_argument("--egf_rps_rear_selectivity_ghost_weight", type=float, default=0.18)
+    parser.add_argument("--egf_rps_rear_selectivity_front_weight", type=float, default=0.16)
+    parser.add_argument("--egf_rps_rear_selectivity_geom_risk_weight", type=float, default=0.22)
+    parser.add_argument("--egf_rps_rear_selectivity_history_risk_weight", type=float, default=0.16)
+    parser.add_argument("--egf_rps_rear_selectivity_density_risk_weight", type=float, default=0.10)
+    parser.add_argument("--egf_rps_rear_selectivity_bridge_relief_weight", type=float, default=0.10)
+    parser.add_argument("--egf_rps_rear_selectivity_static_relief_weight", type=float, default=0.08)
+    parser.add_argument("--egf_rps_rear_selectivity_gap_risk_weight", type=float, default=0.18)
+    parser.add_argument("--egf_rps_rear_selectivity_score_min", type=float, default=0.46)
+    parser.add_argument("--egf_rps_rear_selectivity_risk_max", type=float, default=0.45)
+    parser.add_argument("--egf_rps_rear_selectivity_geom_floor", type=float, default=0.48)
+    parser.add_argument("--egf_rps_rear_selectivity_history_floor", type=float, default=0.36)
+    parser.add_argument("--egf_rps_rear_selectivity_bridge_floor", type=float, default=0.12)
+    parser.add_argument("--egf_rps_rear_selectivity_competition_floor", type=float, default=-0.02)
+    parser.add_argument("--egf_rps_rear_selectivity_front_score_max", type=float, default=0.92)
+    parser.add_argument("--egf_rps_rear_selectivity_gap_min", type=float, default=0.018)
+    parser.add_argument("--egf_rps_rear_selectivity_gap_max", type=float, default=0.090)
+    parser.add_argument("--egf_rps_rear_selectivity_gap_valid_min", type=float, default=0.28)
+    parser.add_argument("--egf_rps_rear_selectivity_occlusion_order_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_occlusion_order_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_occlusion_order_risk_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_local_conflict_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_local_conflict_max", type=float, default=1.5)
+    parser.add_argument("--egf_rps_rear_selectivity_front_residual_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_front_residual_max", type=float, default=1.5)
+    parser.add_argument("--egf_rps_rear_selectivity_occluder_protect_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_occluder_protect_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_occluder_relief_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_dynamic_trail_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_dynamic_trail_max", type=float, default=1.5)
+    parser.add_argument("--egf_rps_rear_selectivity_dynamic_trail_relief_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_history_anchor_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_history_anchor_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_history_anchor_relief_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_surface_anchor_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_surface_anchor_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_surface_anchor_risk_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_surface_distance_ref", type=float, default=0.05)
+    parser.add_argument("--egf_rps_rear_selectivity_dynamic_shell_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_dynamic_shell_max", type=float, default=1.5)
+    parser.add_argument("--egf_rps_rear_selectivity_dynamic_shell_gap_ref", type=float, default=0.05)
+    parser.add_argument("--egf_rps_rear_selectivity_conflict_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_selectivity_conflict_front_score_min", type=float, default=0.20)
+    parser.add_argument("--egf_rps_rear_selectivity_conflict_static_score_min", type=float, default=0.35)
+    parser.add_argument("--egf_rps_rear_selectivity_conflict_dist_scale", type=float, default=1.2)
+    parser.add_argument("--egf_rps_rear_selectivity_conflict_gap_ref", type=float, default=0.06)
+    parser.add_argument("--egf_rps_rear_selectivity_conflict_ref", type=float, default=1.8)
+    parser.add_argument("--egf_rps_rear_selectivity_trail_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_selectivity_trail_ref", type=float, default=2.0)
+    parser.add_argument("--egf_rps_rear_selectivity_density_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_selectivity_density_ref", type=int, default=8)
+    parser.add_argument("--egf_rps_rear_selectivity_topk", type=int, default=0)
+    parser.add_argument("--egf_rps_rear_selectivity_rank_risk_weight", type=float, default=0.55)
+    parser.add_argument("--egf_rps_rear_selectivity_penetration_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_penetration_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_penetration_risk_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_penetration_free_ref", type=float, default=0.05)
+    parser.add_argument("--egf_rps_rear_selectivity_penetration_max_steps", type=int, default=10)
+    parser.add_argument("--egf_rps_rear_selectivity_observation_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_observation_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_observation_risk_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_observation_count_ref", type=float, default=6.0)
+    parser.add_argument("--egf_rps_rear_selectivity_observation_min_count", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_unobserved_veto_enable", action="store_true")
+    parser.add_argument("--egf_rps_rear_selectivity_static_coherence_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_static_coherence_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_static_coherence_relief_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_static_coherence_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_selectivity_static_coherence_ref", type=float, default=0.35)
+    parser.add_argument("--egf_rps_rear_selectivity_static_neighbor_min_weight", type=float, default=0.20)
+    parser.add_argument("--egf_rps_rear_selectivity_static_neighbor_dyn_max", type=float, default=0.35)
+    parser.add_argument("--egf_rps_rear_selectivity_thickness_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_thickness_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_thickness_risk_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_thickness_ref", type=float, default=0.08)
+    parser.add_argument("--egf_rps_rear_selectivity_normal_consistency_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_normal_consistency_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_normal_consistency_relief_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_normal_consistency_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_selectivity_normal_consistency_dyn_max", type=float, default=0.35)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_floor", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_relief_weight", type=float, default=0.0)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_radius_cells", type=int, default=1)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_gap_ref", type=float, default=0.06)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_normal_cos", type=float, default=0.75)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_thickness_ref", type=float, default=0.08)
+    parser.add_argument("--egf_rps_rear_selectivity_ray_convergence_ref", type=float, default=2.0)
+    parser.add_argument("--egf_rps_rear_state_protect_enable", action="store_true")
+    parser.add_argument("--egf_rps_rear_state_decay_relax", type=float, default=0.45)
+    parser.add_argument("--egf_rps_rear_state_active_floor", type=float, default=0.28)
+    parser.add_argument("--egf_rps_commit_quality_enable", action="store_true")
+    parser.add_argument("--egf_rps_commit_quality_transfer_gain", type=float, default=0.18)
+    parser.add_argument("--egf_rps_commit_quality_rho_gain", type=float, default=0.55)
+    parser.add_argument("--egf_rps_commit_quality_geom_blend", type=float, default=0.35)
+    parser.add_argument("--egf_rps_commit_quality_sep_scale", type=float, default=0.65)
+    parser.add_argument("--egf_joint_bg_state_enable", action="store_true")
+    parser.add_argument("--egf_joint_bg_state_on", type=float, default=0.20)
+    parser.add_argument("--egf_joint_bg_state_gain", type=float, default=0.55)
+    parser.add_argument("--egf_joint_bg_state_rho_gain", type=float, default=0.20)
+    parser.add_argument("--egf_joint_bg_state_front_penalty", type=float, default=0.22)
     parser.add_argument("--egf_wdsg_enable", action="store_true")
+    parser.add_argument("--egf_wdsg_front_shift_vox", type=float, default=0.90)
+    parser.add_argument("--egf_wdsg_rear_shift_vox", type=float, default=1.10)
+    parser.add_argument("--egf_wdsg_shell_shift_vox", type=float, default=0.40)
+    parser.add_argument("--egf_wdsg_front_mix_gain", type=float, default=0.95)
+    parser.add_argument("--egf_wdsg_rear_mix_gain", type=float, default=1.00)
+    parser.add_argument("--egf_wdsg_synth_mode", type=str, default="legacy", choices=["legacy", "anchor", "counterfactual", "energy"])
+    parser.add_argument("--egf_wdsg_synth_anchor_gain", type=float, default=0.55)
+    parser.add_argument("--egf_wdsg_synth_geo_gain", type=float, default=0.35)
+    parser.add_argument("--egf_wdsg_synth_bg_gain", type=float, default=0.20)
+    parser.add_argument("--egf_wdsg_synth_counterfactual_gain", type=float, default=0.45)
+    parser.add_argument("--egf_wdsg_synth_front_repel_gain", type=float, default=0.35)
+    parser.add_argument("--egf_wdsg_synth_energy_temp", type=float, default=0.18)
+    parser.add_argument("--egf_wdsg_synth_clip_vox", type=float, default=2.40)
+    parser.add_argument("--egf_wdsg_conservative_enable", action="store_true")
+    parser.add_argument("--egf_wdsg_conservative_ref_vox", type=float, default=0.60)
+    parser.add_argument("--egf_wdsg_conservative_min_clip_scale", type=float, default=0.20)
+    parser.add_argument("--egf_wdsg_conservative_static_gain", type=float, default=0.45)
+    parser.add_argument("--egf_wdsg_conservative_rear_gain", type=float, default=0.25)
+    parser.add_argument("--egf_wdsg_conservative_geo_gain", type=float, default=0.20)
+    parser.add_argument("--egf_wdsg_conservative_front_penalty", type=float, default=0.35)
+    parser.add_argument("--egf_wdsg_local_clip_enable", action="store_true")
+    parser.add_argument("--egf_wdsg_local_clip_min_scale", type=float, default=0.70)
+    parser.add_argument("--egf_wdsg_local_clip_max_scale", type=float, default=1.18)
+    parser.add_argument("--egf_wdsg_local_clip_risk_gain", type=float, default=0.52)
+    parser.add_argument("--egf_wdsg_local_clip_expand_gain", type=float, default=0.22)
+    parser.add_argument("--egf_wdsg_local_clip_front_gate", type=float, default=0.48)
+    parser.add_argument("--egf_wdsg_local_clip_support_gate", type=float, default=0.52)
+    parser.add_argument("--egf_wdsg_local_clip_ambiguity_gate", type=float, default=0.12)
+    parser.add_argument("--egf_wdsg_local_clip_pfv_gain", type=float, default=0.20)
+    parser.add_argument("--egf_wdsg_local_clip_bg_gain", type=float, default=0.18)
     parser.add_argument("--egf_wdsg_route_enable", action="store_true")
     parser.add_argument("--egf_spg_enable", action="store_true")
     parser.add_argument("--egf_otv_enable", action="store_true")
@@ -2593,6 +3698,11 @@ def main():
     parser.add_argument("--egf_surface_omhs_enable", action="store_true")
     parser.add_argument("--egf_surface_zero_crossing_max_offset", type=float, default=0.06)
     parser.add_argument("--egf_surface_zero_crossing_phi_gate", type=float, default=0.05)
+    parser.add_argument("--egf_surface_point_bias_along_normal_m", type=float, default=0.0)
+    parser.add_argument("--egf_surface_geometry_chain_coupling_enable", action="store_true")
+    parser.add_argument("--egf_surface_geometry_chain_coupling_mode", type=str, default="direct", choices=["direct", "projected"])
+    parser.add_argument("--egf_surface_geometry_chain_coupling_donor_root", type=str, default="")
+    parser.add_argument("--egf_surface_geometry_chain_coupling_project_dist", type=float, default=0.05)
     parser.add_argument("--egf_surface_consistency_enable", action="store_true")
     parser.add_argument("--egf_surface_consistency_radius", type=int, default=1)
     parser.add_argument("--egf_surface_consistency_min_neighbors", type=int, default=4)
@@ -2855,6 +3965,7 @@ def main():
                     egf_assoc_contra_rho_guard=args.egf_assoc_contra_rho_guard,
                     egf_assoc_contra_d2_boost_max=args.egf_assoc_contra_d2_boost_max,
                     egf_truncation=args.egf_truncation,
+                    egf_depth_bias_offset_m=args.egf_depth_bias_offset_m,
                     egf_static_truncation=args.egf_static_truncation,
                     egf_rho_decay=args.egf_rho_decay,
                     egf_phi_w_decay=args.egf_phi_w_decay,
@@ -2894,7 +4005,281 @@ def main():
                     egf_rps_enable=bool(args.egf_rps_enable),
                     egf_rps_hard_commit_enable=bool(args.egf_rps_hard_commit_enable),
                     egf_rps_surface_bank_enable=bool(args.egf_rps_surface_bank_enable),
+                    egf_rps_bank_margin=args.egf_rps_bank_margin,
+                    egf_rps_bank_separation_ref=args.egf_rps_bank_separation_ref,
+                    egf_rps_bank_rear_min_score=args.egf_rps_bank_rear_min_score,
+                    egf_rps_bank_sep_gate=args.egf_rps_bank_sep_gate,
+                    egf_rps_bank_bg_support_gain=args.egf_rps_bank_bg_support_gain,
+                    egf_rps_bank_front_dyn_penalty_gain=args.egf_rps_bank_front_dyn_penalty_gain,
+                    egf_rps_bank_rear_score_bias=args.egf_rps_bank_rear_score_bias,
+                    egf_rps_bank_soft_competition_enable=bool(args.egf_rps_bank_soft_competition_enable),
+                    egf_rps_bank_soft_competition_gap=args.egf_rps_bank_soft_competition_gap,
+                    egf_rps_bank_soft_sep_relax=args.egf_rps_bank_soft_sep_relax,
+                    egf_rps_bank_soft_rear_min_relax=args.egf_rps_bank_soft_rear_min_relax,
+                    egf_rps_bank_soft_support_min=args.egf_rps_bank_soft_support_min,
+                    egf_rps_bank_soft_local_support_gain=args.egf_rps_bank_soft_local_support_gain,
+                    egf_rps_soft_bank_export_enable=bool(args.egf_rps_soft_bank_export_enable),
+                    egf_rps_soft_bank_min_score=args.egf_rps_soft_bank_min_score,
+                    egf_rps_soft_bank_gain=args.egf_rps_soft_bank_gain,
+                    egf_rps_soft_bank_commit_relax=args.egf_rps_soft_bank_commit_relax,
+                    egf_rps_candidate_rescue_enable=bool(args.egf_rps_candidate_rescue_enable),
+                    egf_rps_candidate_support_gain=args.egf_rps_candidate_support_gain,
+                    egf_rps_candidate_bg_gain=args.egf_rps_candidate_bg_gain,
+                    egf_rps_candidate_rho_gain=args.egf_rps_candidate_rho_gain,
+                    egf_rps_candidate_front_relax=args.egf_rps_candidate_front_relax,
+                    egf_rps_commit_activation_enable=bool(args.egf_rps_commit_activation_enable),
+                    egf_rps_commit_threshold=args.egf_rps_commit_threshold,
+                    egf_rps_commit_release=args.egf_rps_commit_release,
+                    egf_rps_commit_age_threshold=args.egf_rps_commit_age_threshold,
+                    egf_rps_commit_rho_ref=args.egf_rps_commit_rho_ref,
+                    egf_rps_commit_weight_ref=args.egf_rps_commit_weight_ref,
+                    egf_rps_commit_min_cand_rho=args.egf_rps_commit_min_cand_rho,
+                    egf_rps_commit_min_cand_w=args.egf_rps_commit_min_cand_w,
+                    egf_rps_commit_evidence_weight=args.egf_rps_commit_evidence_weight,
+                    egf_rps_commit_geometry_weight=args.egf_rps_commit_geometry_weight,
+                    egf_rps_commit_bg_weight=args.egf_rps_commit_bg_weight,
+                    egf_rps_commit_static_weight=args.egf_rps_commit_static_weight,
+                    egf_rps_commit_front_penalty=args.egf_rps_commit_front_penalty,
+                    egf_rps_admission_support_enable=bool(args.egf_rps_admission_support_enable),
+                    egf_rps_admission_support_on=args.egf_rps_admission_support_on,
+                    egf_rps_admission_support_gain=args.egf_rps_admission_support_gain,
+                    egf_rps_admission_score_relax=args.egf_rps_admission_score_relax,
+                    egf_rps_admission_active_floor=args.egf_rps_admission_active_floor,
+                    egf_rps_admission_rho_ref=args.egf_rps_admission_rho_ref,
+                    egf_rps_admission_weight_ref=args.egf_rps_admission_weight_ref,
+                    egf_rps_admission_geometry_enable=bool(args.egf_rps_admission_geometry_enable),
+                    egf_rps_admission_geometry_weight=args.egf_rps_admission_geometry_weight,
+                    egf_rps_admission_geometry_floor=args.egf_rps_admission_geometry_floor,
+                    egf_rps_admission_occlusion_enable=bool(args.egf_rps_admission_occlusion_enable),
+                    egf_rps_admission_occlusion_weight=args.egf_rps_admission_occlusion_weight,
+                    egf_rps_space_redirect_history_enable=bool(args.egf_rps_space_redirect_history_enable),
+                    egf_rps_space_redirect_history_weight=args.egf_rps_space_redirect_history_weight,
+                    egf_rps_space_redirect_history_bg_weight=args.egf_rps_space_redirect_history_bg_weight,
+                    egf_rps_space_redirect_history_static_weight=args.egf_rps_space_redirect_history_static_weight,
+                    egf_rps_space_redirect_history_floor=args.egf_rps_space_redirect_history_floor,
+                    egf_rps_space_redirect_ghost_suppress_enable=bool(args.egf_rps_space_redirect_ghost_suppress_enable),
+                    egf_rps_space_redirect_ghost_suppress_weight=args.egf_rps_space_redirect_ghost_suppress_weight,
+                    egf_rps_space_redirect_visual_anchor_enable=bool(args.egf_rps_space_redirect_visual_anchor_enable),
+                    egf_rps_space_redirect_visual_anchor_weight=args.egf_rps_space_redirect_visual_anchor_weight,
+                    egf_rps_space_redirect_visual_anchor_min=args.egf_rps_space_redirect_visual_anchor_min,
+                    egf_rps_history_obstructed_gate_enable=bool(args.egf_rps_history_obstructed_gate_enable),
+                    egf_rps_history_visible_min=args.egf_rps_history_visible_min,
+                    egf_rps_obstruction_min=args.egf_rps_obstruction_min,
+                    egf_rps_non_hole_min=args.egf_rps_non_hole_min,
+                    egf_rps_history_manifold_enable=bool(args.egf_rps_history_manifold_enable),
+                    egf_rps_history_manifold_visible_min=args.egf_rps_history_manifold_visible_min,
+                    egf_rps_history_manifold_obstruction_min=args.egf_rps_history_manifold_obstruction_min,
+                    egf_rps_history_manifold_bg_weight=args.egf_rps_history_manifold_bg_weight,
+                    egf_rps_history_manifold_geo_weight=args.egf_rps_history_manifold_geo_weight,
+                    egf_rps_history_manifold_static_weight=args.egf_rps_history_manifold_static_weight,
+                    egf_rps_history_manifold_blend=args.egf_rps_history_manifold_blend,
+                    egf_rps_history_manifold_max_offset=args.egf_rps_history_manifold_max_offset,
+                    egf_rps_bg_manifold_state_enable=bool(args.egf_rps_bg_manifold_state_enable),
+                    egf_rps_bg_manifold_alpha_up=args.egf_rps_bg_manifold_alpha_up,
+                    egf_rps_bg_manifold_alpha_down=args.egf_rps_bg_manifold_alpha_down,
+                    egf_rps_bg_manifold_rho_alpha=args.egf_rps_bg_manifold_rho_alpha,
+                    egf_rps_bg_manifold_weight_gain=args.egf_rps_bg_manifold_weight_gain,
+                    egf_rps_bg_manifold_rho_ref=args.egf_rps_bg_manifold_rho_ref,
+                    egf_rps_bg_manifold_weight_ref=args.egf_rps_bg_manifold_weight_ref,
+                    egf_rps_bg_manifold_history_weight=args.egf_rps_bg_manifold_history_weight,
+                    egf_rps_bg_manifold_obstruction_weight=args.egf_rps_bg_manifold_obstruction_weight,
+                    egf_rps_bg_manifold_visible_lo=args.egf_rps_bg_manifold_visible_lo,
+                    egf_rps_bg_manifold_visible_hi=args.egf_rps_bg_manifold_visible_hi,
+                    egf_rps_bg_dense_state_enable=bool(args.egf_rps_bg_dense_state_enable),
+                    egf_rps_bg_dense_neighbor_radius=args.egf_rps_bg_dense_neighbor_radius,
+                    egf_rps_bg_dense_neighbor_weight=args.egf_rps_bg_dense_neighbor_weight,
+                    egf_rps_bg_dense_geometry_weight=args.egf_rps_bg_dense_geometry_weight,
+                    egf_rps_bg_dense_max_weight=args.egf_rps_bg_dense_max_weight,
+                    egf_rps_bg_dense_support_floor=args.egf_rps_bg_dense_support_floor,
+                    egf_rps_bg_dense_decay=args.egf_rps_bg_dense_decay,
+                    egf_rps_bg_surface_constrained_enable=bool(args.egf_rps_bg_surface_constrained_enable),
+                    egf_rps_bg_surface_min_conf=args.egf_rps_bg_surface_min_conf,
+                    egf_rps_bg_surface_agree_weight=args.egf_rps_bg_surface_agree_weight,
+                    egf_rps_bg_surface_tangent_enable=bool(args.egf_rps_bg_surface_tangent_enable),
+                    egf_rps_bg_surface_tangent_weight=args.egf_rps_bg_surface_tangent_weight,
+                    egf_rps_bg_surface_tangent_floor=args.egf_rps_bg_surface_tangent_floor,
+                    egf_rps_bg_bridge_enable=bool(args.egf_rps_bg_bridge_enable),
+                    egf_rps_bg_bridge_min_visible=args.egf_rps_bg_bridge_min_visible,
+                    egf_rps_bg_bridge_min_obstruction=args.egf_rps_bg_bridge_min_obstruction,
+                    egf_rps_bg_bridge_min_step=args.egf_rps_bg_bridge_min_step,
+                    egf_rps_bg_bridge_max_step=args.egf_rps_bg_bridge_max_step,
+                    egf_rps_bg_bridge_gain=args.egf_rps_bg_bridge_gain,
+                    egf_rps_bg_bridge_phi_blend=args.egf_rps_bg_bridge_phi_blend,
+                    egf_rps_bg_bridge_target_dyn_max=args.egf_rps_bg_bridge_target_dyn_max,
+                    egf_rps_bg_bridge_target_surface_max=args.egf_rps_bg_bridge_target_surface_max,
+                    egf_rps_bg_bridge_ghost_suppress_enable=bool(args.egf_rps_bg_bridge_ghost_suppress_enable),
+                    egf_rps_bg_bridge_ghost_suppress_weight=args.egf_rps_bg_bridge_ghost_suppress_weight,
+                    egf_rps_bg_bridge_relaxed_dyn_max=args.egf_rps_bg_bridge_relaxed_dyn_max,
+                    egf_rps_bg_bridge_keep_multi_hits=bool(args.egf_rps_bg_bridge_keep_multi_hits),
+                    egf_rps_bg_bridge_max_hits_per_source=args.egf_rps_bg_bridge_max_hits_per_source,
+                    egf_rps_bg_bridge_cone_enable=bool(args.egf_rps_bg_bridge_cone_enable),
+                    egf_rps_bg_bridge_cone_radius_cells=args.egf_rps_bg_bridge_cone_radius_cells,
+                    egf_rps_bg_bridge_cone_gain_scale=args.egf_rps_bg_bridge_cone_gain_scale,
+                    egf_rps_bg_bridge_patch_radius_cells=args.egf_rps_bg_bridge_patch_radius_cells,
+                    egf_rps_bg_bridge_patch_gain_scale=args.egf_rps_bg_bridge_patch_gain_scale,
+                    egf_rps_bg_bridge_depth_hypothesis_count=args.egf_rps_bg_bridge_depth_hypothesis_count,
+                    egf_rps_bg_bridge_depth_step_scale=args.egf_rps_bg_bridge_depth_step_scale,
+                    egf_rps_bg_bridge_rear_synth_enable=bool(args.egf_rps_bg_bridge_rear_synth_enable),
+                    egf_rps_bg_bridge_rear_support_gain=args.egf_rps_bg_bridge_rear_support_gain,
+                    egf_rps_bg_bridge_rear_rho_gain=args.egf_rps_bg_bridge_rear_rho_gain,
+                    egf_rps_bg_bridge_rear_phi_blend=args.egf_rps_bg_bridge_rear_phi_blend,
+                    egf_rps_bg_bridge_rear_score_floor=args.egf_rps_bg_bridge_rear_score_floor,
+                    egf_rps_bg_bridge_rear_active_floor=args.egf_rps_bg_bridge_rear_active_floor,
+                    egf_rps_bg_bridge_rear_age_floor=args.egf_rps_bg_bridge_rear_age_floor,
+                    egf_rps_rear_hybrid_filter_enable=bool(args.egf_rps_rear_hybrid_filter_enable),
+                    egf_rps_rear_hybrid_bridge_support_min=args.egf_rps_rear_hybrid_bridge_support_min,
+                    egf_rps_rear_hybrid_dyn_max=args.egf_rps_rear_hybrid_dyn_max,
+                    egf_rps_rear_hybrid_manifold_min=args.egf_rps_rear_hybrid_manifold_min,
+                    egf_rps_rear_density_gate_enable=bool(args.egf_rps_rear_density_gate_enable),
+                    egf_rps_rear_density_radius_cells=args.egf_rps_rear_density_radius_cells,
+                    egf_rps_rear_density_min_neighbors=args.egf_rps_rear_density_min_neighbors,
+                    egf_rps_rear_density_support_min=args.egf_rps_rear_density_support_min,
+                    egf_rps_rear_selectivity_enable=bool(args.egf_rps_rear_selectivity_enable),
+                    egf_rps_rear_selectivity_support_weight=args.egf_rps_rear_selectivity_support_weight,
+                    egf_rps_rear_selectivity_history_weight=args.egf_rps_rear_selectivity_history_weight,
+                    egf_rps_rear_selectivity_static_weight=args.egf_rps_rear_selectivity_static_weight,
+                    egf_rps_rear_selectivity_geom_weight=args.egf_rps_rear_selectivity_geom_weight,
+                    egf_rps_rear_selectivity_bridge_weight=args.egf_rps_rear_selectivity_bridge_weight,
+                    egf_rps_rear_selectivity_density_weight=args.egf_rps_rear_selectivity_density_weight,
+                    egf_rps_rear_selectivity_rear_score_weight=args.egf_rps_rear_selectivity_rear_score_weight,
+                    egf_rps_rear_selectivity_front_score_weight=args.egf_rps_rear_selectivity_front_score_weight,
+                    egf_rps_rear_selectivity_competition_weight=args.egf_rps_rear_selectivity_competition_weight,
+                    egf_rps_rear_selectivity_competition_alpha=args.egf_rps_rear_selectivity_competition_alpha,
+                    egf_rps_rear_selectivity_gap_weight=args.egf_rps_rear_selectivity_gap_weight,
+                    egf_rps_rear_selectivity_sep_weight=args.egf_rps_rear_selectivity_sep_weight,
+                    egf_rps_rear_selectivity_dyn_weight=args.egf_rps_rear_selectivity_dyn_weight,
+                    egf_rps_rear_selectivity_ghost_weight=args.egf_rps_rear_selectivity_ghost_weight,
+                    egf_rps_rear_selectivity_front_weight=args.egf_rps_rear_selectivity_front_weight,
+                    egf_rps_rear_selectivity_geom_risk_weight=args.egf_rps_rear_selectivity_geom_risk_weight,
+                    egf_rps_rear_selectivity_history_risk_weight=args.egf_rps_rear_selectivity_history_risk_weight,
+                    egf_rps_rear_selectivity_density_risk_weight=args.egf_rps_rear_selectivity_density_risk_weight,
+                    egf_rps_rear_selectivity_bridge_relief_weight=args.egf_rps_rear_selectivity_bridge_relief_weight,
+                    egf_rps_rear_selectivity_static_relief_weight=args.egf_rps_rear_selectivity_static_relief_weight,
+                    egf_rps_rear_selectivity_gap_risk_weight=args.egf_rps_rear_selectivity_gap_risk_weight,
+                    egf_rps_rear_selectivity_score_min=args.egf_rps_rear_selectivity_score_min,
+                    egf_rps_rear_selectivity_risk_max=args.egf_rps_rear_selectivity_risk_max,
+                    egf_rps_rear_selectivity_geom_floor=args.egf_rps_rear_selectivity_geom_floor,
+                    egf_rps_rear_selectivity_history_floor=args.egf_rps_rear_selectivity_history_floor,
+                    egf_rps_rear_selectivity_bridge_floor=args.egf_rps_rear_selectivity_bridge_floor,
+                    egf_rps_rear_selectivity_competition_floor=args.egf_rps_rear_selectivity_competition_floor,
+                    egf_rps_rear_selectivity_front_score_max=args.egf_rps_rear_selectivity_front_score_max,
+                    egf_rps_rear_selectivity_gap_min=args.egf_rps_rear_selectivity_gap_min,
+                    egf_rps_rear_selectivity_gap_max=args.egf_rps_rear_selectivity_gap_max,
+                    egf_rps_rear_selectivity_gap_valid_min=args.egf_rps_rear_selectivity_gap_valid_min,
+                    egf_rps_rear_selectivity_occlusion_order_weight=args.egf_rps_rear_selectivity_occlusion_order_weight,
+                    egf_rps_rear_selectivity_occlusion_order_floor=args.egf_rps_rear_selectivity_occlusion_order_floor,
+                    egf_rps_rear_selectivity_occlusion_order_risk_weight=args.egf_rps_rear_selectivity_occlusion_order_risk_weight,
+                    egf_rps_rear_selectivity_local_conflict_weight=args.egf_rps_rear_selectivity_local_conflict_weight,
+                    egf_rps_rear_selectivity_local_conflict_max=args.egf_rps_rear_selectivity_local_conflict_max,
+                    egf_rps_rear_selectivity_front_residual_weight=args.egf_rps_rear_selectivity_front_residual_weight,
+                    egf_rps_rear_selectivity_front_residual_max=args.egf_rps_rear_selectivity_front_residual_max,
+                    egf_rps_rear_selectivity_occluder_protect_weight=args.egf_rps_rear_selectivity_occluder_protect_weight,
+                    egf_rps_rear_selectivity_occluder_protect_floor=args.egf_rps_rear_selectivity_occluder_protect_floor,
+                    egf_rps_rear_selectivity_occluder_relief_weight=args.egf_rps_rear_selectivity_occluder_relief_weight,
+                    egf_rps_rear_selectivity_dynamic_trail_weight=args.egf_rps_rear_selectivity_dynamic_trail_weight,
+                    egf_rps_rear_selectivity_dynamic_trail_max=args.egf_rps_rear_selectivity_dynamic_trail_max,
+                    egf_rps_rear_selectivity_dynamic_trail_relief_weight=args.egf_rps_rear_selectivity_dynamic_trail_relief_weight,
+                    egf_rps_rear_selectivity_history_anchor_weight=args.egf_rps_rear_selectivity_history_anchor_weight,
+                    egf_rps_rear_selectivity_history_anchor_floor=args.egf_rps_rear_selectivity_history_anchor_floor,
+                    egf_rps_rear_selectivity_history_anchor_relief_weight=args.egf_rps_rear_selectivity_history_anchor_relief_weight,
+                    egf_rps_rear_selectivity_surface_anchor_weight=args.egf_rps_rear_selectivity_surface_anchor_weight,
+                    egf_rps_rear_selectivity_surface_anchor_floor=args.egf_rps_rear_selectivity_surface_anchor_floor,
+                    egf_rps_rear_selectivity_surface_anchor_risk_weight=args.egf_rps_rear_selectivity_surface_anchor_risk_weight,
+                    egf_rps_rear_selectivity_surface_distance_ref=args.egf_rps_rear_selectivity_surface_distance_ref,
+                    egf_rps_rear_selectivity_dynamic_shell_weight=args.egf_rps_rear_selectivity_dynamic_shell_weight,
+                    egf_rps_rear_selectivity_dynamic_shell_max=args.egf_rps_rear_selectivity_dynamic_shell_max,
+                    egf_rps_rear_selectivity_dynamic_shell_gap_ref=args.egf_rps_rear_selectivity_dynamic_shell_gap_ref,
+                    egf_rps_rear_selectivity_conflict_radius_cells=args.egf_rps_rear_selectivity_conflict_radius_cells,
+                    egf_rps_rear_selectivity_conflict_front_score_min=args.egf_rps_rear_selectivity_conflict_front_score_min,
+                    egf_rps_rear_selectivity_conflict_static_score_min=args.egf_rps_rear_selectivity_conflict_static_score_min,
+                    egf_rps_rear_selectivity_conflict_dist_scale=args.egf_rps_rear_selectivity_conflict_dist_scale,
+                    egf_rps_rear_selectivity_conflict_gap_ref=args.egf_rps_rear_selectivity_conflict_gap_ref,
+                    egf_rps_rear_selectivity_conflict_ref=args.egf_rps_rear_selectivity_conflict_ref,
+                    egf_rps_rear_selectivity_trail_radius_cells=args.egf_rps_rear_selectivity_trail_radius_cells,
+                    egf_rps_rear_selectivity_trail_ref=args.egf_rps_rear_selectivity_trail_ref,
+                    egf_rps_rear_selectivity_density_radius_cells=args.egf_rps_rear_selectivity_density_radius_cells,
+                    egf_rps_rear_selectivity_density_ref=args.egf_rps_rear_selectivity_density_ref,
+                    egf_rps_rear_selectivity_topk=args.egf_rps_rear_selectivity_topk,
+                    egf_rps_rear_selectivity_rank_risk_weight=args.egf_rps_rear_selectivity_rank_risk_weight,
+                    egf_rps_rear_selectivity_penetration_weight=args.egf_rps_rear_selectivity_penetration_weight,
+                    egf_rps_rear_selectivity_penetration_floor=args.egf_rps_rear_selectivity_penetration_floor,
+                    egf_rps_rear_selectivity_penetration_risk_weight=args.egf_rps_rear_selectivity_penetration_risk_weight,
+                    egf_rps_rear_selectivity_penetration_free_ref=args.egf_rps_rear_selectivity_penetration_free_ref,
+                    egf_rps_rear_selectivity_penetration_max_steps=args.egf_rps_rear_selectivity_penetration_max_steps,
+                    egf_rps_rear_selectivity_observation_weight=args.egf_rps_rear_selectivity_observation_weight,
+                    egf_rps_rear_selectivity_observation_floor=args.egf_rps_rear_selectivity_observation_floor,
+                    egf_rps_rear_selectivity_observation_risk_weight=args.egf_rps_rear_selectivity_observation_risk_weight,
+                    egf_rps_rear_selectivity_observation_count_ref=args.egf_rps_rear_selectivity_observation_count_ref,
+                    egf_rps_rear_selectivity_observation_min_count=args.egf_rps_rear_selectivity_observation_min_count,
+                    egf_rps_rear_selectivity_unobserved_veto_enable=bool(args.egf_rps_rear_selectivity_unobserved_veto_enable),
+                    egf_rps_rear_selectivity_static_coherence_weight=args.egf_rps_rear_selectivity_static_coherence_weight,
+                    egf_rps_rear_selectivity_static_coherence_floor=args.egf_rps_rear_selectivity_static_coherence_floor,
+                    egf_rps_rear_selectivity_static_coherence_relief_weight=args.egf_rps_rear_selectivity_static_coherence_relief_weight,
+                    egf_rps_rear_selectivity_static_coherence_radius_cells=args.egf_rps_rear_selectivity_static_coherence_radius_cells,
+                    egf_rps_rear_selectivity_static_coherence_ref=args.egf_rps_rear_selectivity_static_coherence_ref,
+                    egf_rps_rear_selectivity_static_neighbor_min_weight=args.egf_rps_rear_selectivity_static_neighbor_min_weight,
+                    egf_rps_rear_selectivity_static_neighbor_dyn_max=args.egf_rps_rear_selectivity_static_neighbor_dyn_max,
+                    egf_rps_rear_selectivity_thickness_weight=args.egf_rps_rear_selectivity_thickness_weight,
+                    egf_rps_rear_selectivity_thickness_floor=args.egf_rps_rear_selectivity_thickness_floor,
+                    egf_rps_rear_selectivity_thickness_risk_weight=args.egf_rps_rear_selectivity_thickness_risk_weight,
+                    egf_rps_rear_selectivity_thickness_ref=args.egf_rps_rear_selectivity_thickness_ref,
+                    egf_rps_rear_selectivity_normal_consistency_weight=args.egf_rps_rear_selectivity_normal_consistency_weight,
+                    egf_rps_rear_selectivity_normal_consistency_floor=args.egf_rps_rear_selectivity_normal_consistency_floor,
+                    egf_rps_rear_selectivity_normal_consistency_relief_weight=args.egf_rps_rear_selectivity_normal_consistency_relief_weight,
+                    egf_rps_rear_selectivity_normal_consistency_radius_cells=args.egf_rps_rear_selectivity_normal_consistency_radius_cells,
+                    egf_rps_rear_selectivity_normal_consistency_dyn_max=args.egf_rps_rear_selectivity_normal_consistency_dyn_max,
+                    egf_rps_rear_selectivity_ray_convergence_weight=args.egf_rps_rear_selectivity_ray_convergence_weight,
+                    egf_rps_rear_selectivity_ray_convergence_floor=args.egf_rps_rear_selectivity_ray_convergence_floor,
+                    egf_rps_rear_selectivity_ray_convergence_relief_weight=args.egf_rps_rear_selectivity_ray_convergence_relief_weight,
+                    egf_rps_rear_selectivity_ray_convergence_radius_cells=args.egf_rps_rear_selectivity_ray_convergence_radius_cells,
+                    egf_rps_rear_selectivity_ray_convergence_gap_ref=args.egf_rps_rear_selectivity_ray_convergence_gap_ref,
+                    egf_rps_rear_selectivity_ray_convergence_normal_cos=args.egf_rps_rear_selectivity_ray_convergence_normal_cos,
+                    egf_rps_rear_selectivity_ray_convergence_thickness_ref=args.egf_rps_rear_selectivity_ray_convergence_thickness_ref,
+                    egf_rps_rear_selectivity_ray_convergence_ref=args.egf_rps_rear_selectivity_ray_convergence_ref,
+                    egf_rps_rear_state_protect_enable=bool(args.egf_rps_rear_state_protect_enable),
+                    egf_rps_rear_state_decay_relax=args.egf_rps_rear_state_decay_relax,
+                    egf_rps_rear_state_active_floor=args.egf_rps_rear_state_active_floor,
+                    egf_rps_commit_quality_enable=bool(args.egf_rps_commit_quality_enable),
+                    egf_rps_commit_quality_transfer_gain=args.egf_rps_commit_quality_transfer_gain,
+                    egf_rps_commit_quality_rho_gain=args.egf_rps_commit_quality_rho_gain,
+                    egf_rps_commit_quality_geom_blend=args.egf_rps_commit_quality_geom_blend,
+                    egf_rps_commit_quality_sep_scale=args.egf_rps_commit_quality_sep_scale,
+                    egf_joint_bg_state_enable=bool(args.egf_joint_bg_state_enable),
+                    egf_joint_bg_state_on=args.egf_joint_bg_state_on,
+                    egf_joint_bg_state_gain=args.egf_joint_bg_state_gain,
+                    egf_joint_bg_state_rho_gain=args.egf_joint_bg_state_rho_gain,
+                    egf_joint_bg_state_front_penalty=args.egf_joint_bg_state_front_penalty,
                     egf_wdsg_enable=bool(args.egf_wdsg_enable),
+                    egf_wdsg_front_shift_vox=args.egf_wdsg_front_shift_vox,
+                    egf_wdsg_rear_shift_vox=args.egf_wdsg_rear_shift_vox,
+                    egf_wdsg_shell_shift_vox=args.egf_wdsg_shell_shift_vox,
+                    egf_wdsg_front_mix_gain=args.egf_wdsg_front_mix_gain,
+                    egf_wdsg_rear_mix_gain=args.egf_wdsg_rear_mix_gain,
+                    egf_wdsg_synth_mode=args.egf_wdsg_synth_mode,
+                    egf_wdsg_synth_anchor_gain=args.egf_wdsg_synth_anchor_gain,
+                    egf_wdsg_synth_geo_gain=args.egf_wdsg_synth_geo_gain,
+                    egf_wdsg_synth_bg_gain=args.egf_wdsg_synth_bg_gain,
+                    egf_wdsg_synth_counterfactual_gain=args.egf_wdsg_synth_counterfactual_gain,
+                    egf_wdsg_synth_front_repel_gain=args.egf_wdsg_synth_front_repel_gain,
+                    egf_wdsg_synth_energy_temp=args.egf_wdsg_synth_energy_temp,
+                    egf_wdsg_synth_clip_vox=args.egf_wdsg_synth_clip_vox,
+                    egf_wdsg_conservative_enable=bool(args.egf_wdsg_conservative_enable),
+                    egf_wdsg_conservative_ref_vox=args.egf_wdsg_conservative_ref_vox,
+                    egf_wdsg_conservative_min_clip_scale=args.egf_wdsg_conservative_min_clip_scale,
+                    egf_wdsg_conservative_static_gain=args.egf_wdsg_conservative_static_gain,
+                    egf_wdsg_conservative_rear_gain=args.egf_wdsg_conservative_rear_gain,
+                    egf_wdsg_conservative_geo_gain=args.egf_wdsg_conservative_geo_gain,
+                    egf_wdsg_conservative_front_penalty=args.egf_wdsg_conservative_front_penalty,
+                    egf_wdsg_local_clip_enable=bool(args.egf_wdsg_local_clip_enable),
+                    egf_wdsg_local_clip_min_scale=args.egf_wdsg_local_clip_min_scale,
+                    egf_wdsg_local_clip_max_scale=args.egf_wdsg_local_clip_max_scale,
+                    egf_wdsg_local_clip_risk_gain=args.egf_wdsg_local_clip_risk_gain,
+                    egf_wdsg_local_clip_expand_gain=args.egf_wdsg_local_clip_expand_gain,
+                    egf_wdsg_local_clip_front_gate=args.egf_wdsg_local_clip_front_gate,
+                    egf_wdsg_local_clip_support_gate=args.egf_wdsg_local_clip_support_gate,
+                    egf_wdsg_local_clip_ambiguity_gate=args.egf_wdsg_local_clip_ambiguity_gate,
+                    egf_wdsg_local_clip_pfv_gain=args.egf_wdsg_local_clip_pfv_gain,
+                    egf_wdsg_local_clip_bg_gain=args.egf_wdsg_local_clip_bg_gain,
                     egf_wdsg_route_enable=bool(args.egf_wdsg_route_enable),
                     egf_spg_enable=bool(args.egf_spg_enable),
                     egf_otv_enable=bool(args.egf_otv_enable),
@@ -3060,6 +4445,11 @@ def main():
                     egf_surface_omhs_enable=args.egf_surface_omhs_enable,
                     egf_surface_zero_crossing_max_offset=args.egf_surface_zero_crossing_max_offset,
                     egf_surface_zero_crossing_phi_gate=args.egf_surface_zero_crossing_phi_gate,
+                    egf_surface_point_bias_along_normal_m=args.egf_surface_point_bias_along_normal_m,
+                    egf_surface_geometry_chain_coupling_enable=bool(args.egf_surface_geometry_chain_coupling_enable),
+                    egf_surface_geometry_chain_coupling_mode=args.egf_surface_geometry_chain_coupling_mode,
+                    egf_surface_geometry_chain_coupling_donor_root=args.egf_surface_geometry_chain_coupling_donor_root,
+                    egf_surface_geometry_chain_coupling_project_dist=args.egf_surface_geometry_chain_coupling_project_dist,
                     egf_surface_consistency_enable=args.egf_surface_consistency_enable,
                     egf_surface_consistency_radius=args.egf_surface_consistency_radius,
                     egf_surface_consistency_min_neighbors=args.egf_surface_consistency_min_neighbors,

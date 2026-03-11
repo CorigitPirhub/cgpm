@@ -107,7 +107,7 @@
 
 ### 1.2 当前 P10 专项硬门槛
 
-当前 `P10` 目标（见 `P10_METHOD_PROPOSALS.md:572`）：
+当前 `P10` 目标（见 `processes/p10/P10_METHOD_PROPOSALS.md:572`）：
 - TUM oracle：`Acc <= 1.80 cm`, `Comp-R >= 95%`
 - Bonn slam：`Acc <= 2.60 cm`, `Comp-R >= 95%`
 - `ghost_reduction_vs_tsdf >= 35%`

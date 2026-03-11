@@ -12,6 +12,12 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 
 合并文档入口：`MERGED_DOCS.md`（包含 README、设计、实现、基准与数据说明）。
 
+当前治理页：`processes/governance/CURRENT_STATE_BASELINE.md`（一页式现状基线），`processes/governance/MAINLINE_BRANCH_PRUNING_TABLE.md`（主线/支线裁剪表）。
+阶段重评估页：`processes/governance/S0_S1_S2_STAGE_REASSESSMENT_2026-03-09.md`。
+当前阶段状态：`S0/S1 已完成，S2 未通过且绝对不能进入 S3`。
+当前阶段状态：`S0/S1 已完成，S2 未通过且绝对不能进入 S3`。
+动态抑制状态统一说明：`processes/s2/S2_DYNAMIC_SUPPRESSION_STATUS_EXPLANATION.md`。
+
 > 当前仓库已完成结构精简：早期 2D/CGPM legacy 代码目录已移除，仅保留 3D 主线实现与复现实验脚本。
 
 ## 核心结果（置顶）

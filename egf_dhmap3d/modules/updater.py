@@ -16,6 +16,7 @@ from egf_dhmap3d.P10_method.pfv import update_persistent_free_space_volume as p1
 from egf_dhmap3d.P10_method.pfv import pfv_commit_delay_scales as p10_pfv_commit_delay_scales
 from egf_dhmap3d.P10_method.ptdsf import write_time_dual_surface_targets as p10_write_time_dual_surface_targets
 from egf_dhmap3d.P10_method.rps import update_rps_state as p10_update_rps_state
+from egf_dhmap3d.P10_method.rps_commit import update_rps_commit_activation as p10_update_rps_commit_activation
 from egf_dhmap3d.P10_method.spg import update_spg_state as p10_update_spg_state
 from egf_dhmap3d.P10_method.wod import write_time_occlusion_split as p10_write_time_occlusion_split
 from egf_dhmap3d.P10_method.xmem import update_xmem_state as p10_update_xmem_state
@@ -24,6 +25,7 @@ from egf_dhmap3d.P10_method.zcbf import zero_crossing_bias_field as p10_zero_cro
 from egf_dhmap3d.P10_method.bg_candidate import bg_candidate_route_score as p10_bg_candidate_route_score
 from egf_dhmap3d.P10_method.bg_candidate import update_bg_candidate_state as p10_update_bg_candidate_state
 from egf_dhmap3d.P10_method.bg_candidate import maybe_promote_bg_candidate as p10_maybe_promote_bg_candidate
+from egf_dhmap3d.P10_method.bg_manifold import update_bg_manifold_state as p10_update_bg_manifold_state
 
 
 class Updater3D:
@@ -235,6 +237,12 @@ class Updater3D:
         return p10_update_rps_state(self, voxel_map, cell, d_geo, w_obs, w_static, w_geo, static_mass, wod_front, wod_rear, wod_shell, q_dyn_obs, assoc_risk)
 
 
+    def _update_rps_commit_state(self, voxel_map: VoxelHashMap3D, cell, *, d_geo: float, w_obs: float, static_mass: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> None:
+        return p10_update_rps_commit_activation(self, voxel_map, cell, d_geo=d_geo, w_obs=w_obs, static_mass=static_mass, wod_front=wod_front, wod_rear=wod_rear, wod_shell=wod_shell, q_dyn_obs=q_dyn_obs, assoc_risk=assoc_risk)
+
+    def _update_bg_manifold_state(self, voxel_map: VoxelHashMap3D, cell, *, idx, view_axis, d_static_obs: float, d_bg_obs: float, d_geo: float, w_obs: float, static_mass: float, wod_rear: float, wod_shell: float, q_dyn_obs: float) -> None:
+        return p10_update_bg_manifold_state(self, voxel_map, cell, idx=idx, view_axis=view_axis, d_static_obs=d_static_obs, d_bg_obs=d_bg_obs, d_geo=d_geo, w_obs=w_obs, static_mass=static_mass, wod_rear=wod_rear, wod_shell=wod_shell, q_dyn_obs=q_dyn_obs)
+
 
     def _update_spg_state(self, voxel_map: VoxelHashMap3D, cell, w_static: float, w_geo: float, static_mass: float, wod_front: float, wod_rear: float, wod_shell: float, q_dyn_obs: float, assoc_risk: float) -> None:
         return p10_update_spg_state(self, voxel_map, cell, w_static, w_geo, static_mass, wod_front, wod_rear, wod_shell, q_dyn_obs, assoc_risk)
@@ -306,10 +314,14 @@ class Updater3D:
             view_axis = _view_vec / _view_norm if _view_norm > 1e-8 else -n
         else:
             view_axis = -n
+        depth_bias = float(getattr(self.cfg.update, 'depth_bias_offset_m', 0.0))
+        p_eff = np.asarray(p, dtype=float)
+        if abs(depth_bias) > 1e-9:
+            p_eff = p_eff + depth_bias * np.asarray(view_axis, dtype=float)
 
         for nidx in neighbor_iter:
             center = voxel_map.index_to_center(nidx)
-            rel = center - p
+            rel = center - p_eff
             d_signed = 0.0 if measurement.seed else float(np.dot(rel, n))
             if abs(d_signed) > trunc_eff:
                 continue
@@ -351,10 +363,48 @@ class Updater3D:
             pfv_commit_geo_keep = 1.0
             pfv_commit_rho_keep = 1.0
             pfv_commit_score = 0.0
+            w_static = float(w_obs)
+            w_transient = 0.0
+            static_mass = 1.0
+            transient_mass = 0.0
+            shell_mass = 0.0
+            d_static_obs = float(d_signed)
+            d_transient_obs = float(d_signed)
+            d_rear_obs = float(d_signed)
+            d_bg_obs = float(d_signed)
             if bool(self.cfg.update.dual_state_enable):
                 q_dyn = float(np.clip(q_dyn_obs, 0.0, 1.0))
                 min_static = float(np.clip(self.cfg.update.dual_state_min_static_ratio, 0.0, 0.5))
                 static_prior = float(np.clip(1.0 - q_dyn, min_static, 1.0))
+
+                if (not bool(getattr(self.cfg.update, 'dual_map_enable', False))) and bool(getattr(self.cfg.update, 'joint_bg_state_enable', False)) and bool(self.cfg.update.wod_enable):
+                    static_ratio_joint = float(locals().get('static_ratio', float(np.clip(w_static / max(1e-9, w_obs), 0.0, 1.0))))
+                    q_obl_route_joint = float(locals().get('q_obl_route', 0.0))
+                    front_dyn_joint = float(np.clip(wod_front + 0.50 * wod_shell + 0.35 * q_dyn_obs + 0.20 * assoc_risk, 0.0, 1.0))
+                    rear_bg_joint = float(np.clip(wod_rear + 0.35 * static_ratio_joint + 0.20 * q_obl_route_joint + 0.10 * (1.0 - q_dyn_obs), 0.0, 1.0))
+                    bg_on = float(np.clip(getattr(self.cfg.update, 'joint_bg_state_on', 0.20), 0.0, 1.0))
+                    bg_gain = float(max(0.0, getattr(self.cfg.update, 'joint_bg_state_gain', 0.55)))
+                    rho_gain = float(max(0.0, getattr(self.cfg.update, 'joint_bg_state_rho_gain', 0.20)))
+                    front_pen_joint = float(np.clip(getattr(self.cfg.update, 'joint_bg_state_front_penalty', 0.22), 0.0, 1.0))
+                    rho_ref_joint = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
+                    static_support_joint = float(np.clip(max(float(np.clip(getattr(cell, 'p_static', 0.0), 0.0, 1.0)), static_ratio_joint, float(np.clip(getattr(cell, 'rho_static', 0.0) / rho_ref_joint, 0.0, 1.0))), 0.0, 1.0))
+                    bg_score = float(np.clip(0.42 * rear_bg_joint + 0.28 * static_support_joint + 0.16 * float(np.clip(getattr(cell, 'rho_rear', 0.0) / rho_ref_joint, 0.0, 1.0)) + 0.14 * float(np.clip(getattr(cell, 'rho_rear_cand', 0.0) / rho_ref_joint, 0.0, 1.0)) - front_pen_joint * front_dyn_joint, 0.0, 1.0))
+                    if bg_score >= bg_on:
+                        w_bg_joint = float(w_obs * bg_gain * bg_score)
+                        d_bg_joint = float(d_rear_obs if rear_bg_joint >= max(0.20, 0.75 * front_dyn_joint) else d_static_obs)
+                        w_bg_old = float(getattr(cell, 'phi_bg_w', 0.0))
+                        w_bg_new = float(w_bg_old + w_bg_joint)
+                        if w_bg_new > 1e-12:
+                            cell.phi_bg = float((w_bg_old * float(getattr(cell, 'phi_bg', 0.0)) + w_bg_joint * d_bg_joint) / w_bg_new)
+                            cell.phi_bg_w = float(min(5000.0, w_bg_new))
+                            cell.rho_bg = float(float(getattr(cell, 'rho_bg', 0.0)) + rho_gain * w_bg_joint)
+                        w_c_old = float(getattr(cell, 'phi_bg_cand_w', 0.0))
+                        w_c_add = float(0.65 * w_bg_joint)
+                        w_c_new = float(w_c_old + w_c_add)
+                        if w_c_new > 1e-12:
+                            cell.phi_bg_cand = float((w_c_old * float(getattr(cell, 'phi_bg_cand', 0.0)) + w_c_add * d_bg_joint) / w_c_new)
+                            cell.phi_bg_cand_w = float(min(5000.0, w_c_new))
+                            cell.rho_bg_cand = float(float(getattr(cell, 'rho_bg_cand', 0.0)) + 0.65 * w_bg_joint)
 
                 if bool(self.cfg.update.ptdsf_enable):
                     age_ref = float(max(1.0, self.cfg.update.ptdsf_commit_age_ref))
@@ -624,6 +674,21 @@ class Updater3D:
                         cell.phi_transient = float((cell.phi_transient_w * cell.phi_transient + w_transient * d_transient_obs) / w_t_new)
                         cell.phi_transient_w = float(min(5000.0, w_t_new))
 
+                self._update_bg_manifold_state(
+                    voxel_map,
+                    cell,
+                    idx=nidx,
+                    view_axis=view_axis,
+                    d_static_obs=d_static_obs,
+                    d_bg_obs=d_bg_obs,
+                    d_geo=d_geo if 'd_geo' in locals() else d_signed,
+                    w_obs=w_obs,
+                    static_mass=static_mass,
+                    wod_rear=wod_rear,
+                    wod_shell=wod_shell,
+                    q_dyn_obs=q_dyn_obs,
+                )
+
                 if delayed_bg_role:
                     hold_frames = float(max(0.0, getattr(measurement, 'tri_map_hold_frames', 0.0)))
                     route_score = float(getattr(measurement, 'tri_map_route_score', 0.0))
@@ -786,6 +851,18 @@ class Updater3D:
                     q_dyn_obs=q_dyn_obs,
                     assoc_risk=assoc_risk,
                 )
+                self._update_rps_commit_state(
+                    voxel_map,
+                    cell,
+                    d_geo=d_rear_write,
+                    w_obs=w_obs,
+                    static_mass=static_mass,
+                    wod_front=wod_front,
+                    wod_rear=wod_rear,
+                    wod_shell=wod_shell,
+                    q_dyn_obs=q_dyn_obs,
+                    assoc_risk=assoc_risk,
+                )
                 self._update_spg_state(
                     voxel_map,
                     cell,
@@ -893,6 +970,7 @@ class Updater3D:
                 cell.g_mean = n
                 cell.g_cov = np.eye(3, dtype=float) * self.cfg.map3d.max_cov
             cell.frontier_score *= 0.75
+            cell.observation_count = float(min(1.0e6, float(getattr(cell, 'observation_count', 0.0)) + 1.0))
             cell.last_seen = int(frame_id)
             touched.add(nidx)
 

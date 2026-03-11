@@ -1,0 +1,5 @@
+variant,tum_acc_cm,tum_comp_r_5cm,bonn_acc_cm,bonn_comp_r_5cm,bonn_ghost_reduction_vs_tsdf,bonn_committed_cells_sum,bonn_active_cells_sum,bonn_extract_wr_present_sum,bonn_extract_hard_commit_on_sum,bonn_extract_rear_enabled_sum,bonn_extract_rear_selected_sum,bonn_extract_fail_active_sum,bonn_extract_fail_score_sum,hit_2of4_partial,pass_comp,decision
+30_rps_commit_geom_bg_soft_bank,0.935798295196066,93.12222222222222,4.238879574944237,70.86666666666666,13.245242513521386,179.0,179.0,179.0,7.0,7.0,7.0,0.0,172.0,1.0,False,control
+37_bonn_admission_gate_relax,0.935798295196066,93.12222222222222,4.243051439963374,70.77777777777779,15.00405151264513,201.0,201.0,201.0,193.0,193.0,193.0,0.0,8.0,1.0,False,abandon
+38_bonn_state_protect,0.935798295196066,93.12222222222222,4.243464042124832,70.83333333333333,15.469948183346332,201.0,201.0,201.0,108.0,108.0,108.0,0.0,93.0,1.0,False,iterate
+39_bonn_admission_gate_plus_protect,0.935798295196066,93.12222222222222,4.243076904727337,70.77777777777779,15.110169454821513,202.0,202.0,202.0,202.0,202.0,202.0,0.0,0.0,1.0,False,abandon

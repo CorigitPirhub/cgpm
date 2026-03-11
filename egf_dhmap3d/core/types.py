@@ -129,6 +129,14 @@ class VoxelCell3D:
     phi_bg_cand: float = 0.0
     phi_bg_cand_w: float = 0.0
     rho_bg_cand: float = 0.0
+    phi_bg_memory: float = 0.0
+    phi_bg_memory_w: float = 0.0
+    rho_bg_stable: float = 0.0
+    bg_visible_mem: float = 0.0
+    bg_obstruction_mem: float = 0.0
+    bg_dense_support: float = 0.0
+    bg_dense_phi: float = 0.0
+    bg_dense_w: float = 0.0
     bg_cand_score: float = 0.0
     bg_cand_age: float = 0.0
     bg_cand_active: float = 0.0
@@ -181,6 +189,8 @@ class VoxelCell3D:
     clear_hits: float = 0.0
     # Frontier activation score (cold-start growth support).
     frontier_score: float = 0.0
+    # Number of direct measurement integrations that touched this voxel.
+    observation_count: float = 0.0
     # Last frame index when the voxel was updated by a measurement.
     last_seen: int = 0
 

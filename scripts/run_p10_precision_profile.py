@@ -211,6 +211,14 @@ class Profile:
     rps_hard_commit_enable: bool = False
     rps_surface_bank_enable: bool = False
     wdsg_enable: bool = False
+    wdsg_synth_mode: str = "legacy"
+    wdsg_synth_anchor_gain: float = 0.55
+    wdsg_synth_geo_gain: float = 0.35
+    wdsg_synth_bg_gain: float = 0.20
+    wdsg_synth_counterfactual_gain: float = 0.45
+    wdsg_synth_front_repel_gain: float = 0.35
+    wdsg_synth_energy_temp: float = 0.18
+    wdsg_synth_clip_vox: float = 2.40
     wdsg_route_enable: bool = False
     spg_enable: bool = False
     otv_enable: bool = False
@@ -5286,6 +5294,8 @@ PROFILES.extend(
             assoc_hetero_enable=True,
             zdyn_enable=True,
         ),
+
+
         replace(
             _BASE_P10_STRUCT,
             name="p10_ptdsf_zcbf_dccm_b",
@@ -5349,6 +5359,49 @@ PROFILES.extend(
         ),
     ]
 )
+
+_BASE_S2_SYNTH = next(p for p in PROFILES if p.name == "p10_ptdsf_zcbf_dccm_wdsgr_spg_a")
+PROFILES.extend(
+    [
+        replace(
+            _BASE_S2_SYNTH,
+            name="s2_wdsg_synth_anchor_a",
+            wdsg_synth_mode="anchor",
+            wdsg_synth_anchor_gain=0.62,
+            wdsg_synth_geo_gain=0.38,
+            wdsg_synth_bg_gain=0.08,
+            wdsg_synth_counterfactual_gain=0.18,
+            wdsg_synth_front_repel_gain=0.22,
+            wdsg_synth_energy_temp=0.18,
+            wdsg_synth_clip_vox=2.20,
+        ),
+        replace(
+            _BASE_S2_SYNTH,
+            name="s2_wdsg_synth_counterfactual_a",
+            wdsg_synth_mode="counterfactual",
+            wdsg_synth_anchor_gain=0.66,
+            wdsg_synth_geo_gain=0.42,
+            wdsg_synth_bg_gain=0.10,
+            wdsg_synth_counterfactual_gain=0.62,
+            wdsg_synth_front_repel_gain=0.38,
+            wdsg_synth_energy_temp=0.16,
+            wdsg_synth_clip_vox=2.60,
+        ),
+        replace(
+            _BASE_S2_SYNTH,
+            name="s2_wdsg_synth_energy_a",
+            wdsg_synth_mode="energy",
+            wdsg_synth_anchor_gain=0.70,
+            wdsg_synth_geo_gain=0.48,
+            wdsg_synth_bg_gain=0.16,
+            wdsg_synth_counterfactual_gain=0.40,
+            wdsg_synth_front_repel_gain=0.30,
+            wdsg_synth_energy_temp=0.12,
+            wdsg_synth_clip_vox=2.80,
+        ),
+    ]
+)
+
 
 
 def _run(cmd: List[str], dry_run: bool) -> None:
@@ -6018,6 +6071,24 @@ def main() -> None:
             common_egf.append("--egf_rps_surface_bank_enable")
         if p.wdsg_enable:
             common_egf.append("--egf_wdsg_enable")
+        common_egf += [
+            "--egf_wdsg_synth_mode",
+            str(p.wdsg_synth_mode),
+            "--egf_wdsg_synth_anchor_gain",
+            str(float(max(0.0, p.wdsg_synth_anchor_gain))),
+            "--egf_wdsg_synth_geo_gain",
+            str(float(max(0.0, p.wdsg_synth_geo_gain))),
+            "--egf_wdsg_synth_bg_gain",
+            str(float(max(0.0, p.wdsg_synth_bg_gain))),
+            "--egf_wdsg_synth_counterfactual_gain",
+            str(float(max(0.0, p.wdsg_synth_counterfactual_gain))),
+            "--egf_wdsg_synth_front_repel_gain",
+            str(float(max(0.0, p.wdsg_synth_front_repel_gain))),
+            "--egf_wdsg_synth_energy_temp",
+            str(float(max(1e-3, p.wdsg_synth_energy_temp))),
+            "--egf_wdsg_synth_clip_vox",
+            str(float(max(0.1, p.wdsg_synth_clip_vox))),
+        ]
         if p.wdsg_route_enable:
             common_egf.append("--egf_wdsg_route_enable")
         if p.spg_enable:

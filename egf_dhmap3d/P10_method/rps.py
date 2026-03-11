@@ -77,6 +77,29 @@ def update_rps_state(
 
     cand_min = float(np.clip(getattr(self.cfg.update, 'rps_candidate_gate_min', 0.16), 0.0, 0.8))
     cand_gate = float(np.clip((rear_gate - cand_min) / max(1e-6, 1.0 - cand_min), 0.0, 1.0))
+    penalty = float(
+        np.clip(
+            0.58 * wod_front
+            + 0.18 * float(np.clip(q_dyn_obs, 0.0, 1.0))
+            + 0.14 * float(np.clip(assoc_risk, 0.0, 1.0))
+            + 0.10 * max(0.0, 1.0 - max(static_cons, geo_cons)),
+            0.0,
+            1.0,
+        )
+    )
+    rho_ref = float(max(1e-6, getattr(self.cfg.update, 'dual_state_static_protect_rho', 0.90)))
+    if bool(getattr(self.cfg.update, 'rps_candidate_rescue_enable', False)):
+        static_rho_n = float(np.clip(getattr(cell, 'rho_static', 0.0) / rho_ref, 0.0, 1.5))
+        bg_rho_n = float(np.clip(getattr(cell, 'rho_bg', 0.0) / rho_ref, 0.0, 1.5))
+        static_w_n = float(1.0 - np.exp(-max(0.0, getattr(cell, 'phi_static_w', 0.0)) / 3.0))
+        bg_w_n = float(1.0 - np.exp(-max(0.0, getattr(cell, 'phi_bg_w', 0.0)) / 3.0))
+        persistent_support = float(np.clip(max(float(np.clip(getattr(cell, 'p_static', 0.0), 0.0, 1.0)), static_mass, min(1.0, static_rho_n), static_w_n), 0.0, 1.0))
+        bg_support = float(np.clip(max(min(1.0, bg_rho_n), bg_w_n, wod_rear), 0.0, 1.0))
+        support_gain = float(max(0.0, getattr(self.cfg.update, 'rps_candidate_support_gain', 0.28)))
+        bg_gain = float(max(0.0, getattr(self.cfg.update, 'rps_candidate_bg_gain', 0.22)))
+        front_relax = float(np.clip(getattr(self.cfg.update, 'rps_candidate_front_relax', 0.20), 0.0, 1.0))
+        rescue_gate = float(np.clip(0.45 * rear_gate + support_gain * persistent_support + bg_gain * bg_support - (1.0 - front_relax) * penalty, 0.0, 1.0))
+        cand_gate = float(max(cand_gate, rescue_gate))
     support_obs = float(
         np.clip(
             0.34 * rear_gate
@@ -90,17 +113,11 @@ def update_rps_state(
             1.0,
         )
     )
-    penalty = float(
-        np.clip(
-            0.58 * wod_front
-            + 0.18 * float(np.clip(q_dyn_obs, 0.0, 1.0))
-            + 0.14 * float(np.clip(assoc_risk, 0.0, 1.0))
-            + 0.10 * max(0.0, 1.0 - max(static_cons, geo_cons)),
-            0.0,
-            1.0,
-        )
-    )
-    score_obs = float(self._sigmoid(3.2 * (support_obs - penalty - 0.10)))
+    if bool(getattr(self.cfg.update, 'rps_candidate_rescue_enable', False)):
+        rho_gain = float(max(0.0, getattr(self.cfg.update, 'rps_candidate_rho_gain', 0.18)))
+        score_obs = float(self._sigmoid(3.2 * (support_obs - penalty - 0.10 + rho_gain * float(np.clip(getattr(cell, 'rho_bg', 0.0) / rho_ref, 0.0, 1.0)))))
+    else:
+        score_obs = float(self._sigmoid(3.2 * (support_obs - penalty - 0.10)))
     alpha = float(np.clip(getattr(self.cfg.update, 'rps_score_alpha', 0.18), 0.01, 0.8))
     cell.rps_commit_score = float(np.clip((1.0 - alpha) * float(getattr(cell, 'rps_commit_score', 0.0)) + alpha * score_obs, 0.0, 1.0))
     if cand_gate > 1e-6 and w_base > 1e-12:

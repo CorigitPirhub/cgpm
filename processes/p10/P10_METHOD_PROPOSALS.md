@@ -67,7 +67,7 @@
 
 ### 2.2 P10 当前失败模式
 
-结合 `P10_RESEARCH_ASSESSMENT.md` 与 `output/summary_tables/local_mapping_precision_profile*.csv`，当前失败模式可以概括为：
+结合 `processes/p10/P10_RESEARCH_ASSESSMENT.md` 与 `output/summary_tables/local_mapping_precision_profile*.csv`，当前失败模式可以概括为：
 
 1. **`Comp-R` 很强，但 `Acc` 仍偏高**
    - 说明问题不是“没建满”，而是“建得偏”。

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import tarfile
 import time
@@ -18,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from egf_dhmap3d.core.config import EGF3DConfig
+from egf_dhmap3d.P10_method.geometry_chain import apply_geometry_chain_coupling
 from egf_dhmap3d.data.tum_rgbd import TUMRGBDStream
 from egf_dhmap3d.eval.metrics import compute_reconstruction_metrics, compute_trajectory_metrics
 from egf_dhmap3d.modules.pipeline import EGFDHMap3D
@@ -62,6 +64,26 @@ def save_point_cloud(path: Path, points: np.ndarray, normals: np.ndarray | None 
     if normals is not None and normals.shape == points.shape:
         pcd.normals = o3d.utility.Vector3dVector(np.asarray(normals, dtype=float))
     o3d.io.write_point_cloud(str(path), pcd)
+
+
+def save_feature_rows(path: Path, rows: List[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        with path.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["x", "y", "z"])
+        return
+    fieldnames = []
+    seen = set()
+    for row in rows:
+        for key in row.keys():
+            if key not in seen:
+                seen.add(key)
+                fieldnames.append(key)
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def save_poisson_mesh_from_surface(
@@ -119,6 +141,7 @@ def main():
     parser.set_defaults(slam_use_gt_delta_odom=False)
     parser.add_argument("--voxel_size", type=float, default=0.05)
     parser.add_argument("--truncation", type=float, default=None)
+    parser.add_argument("--depth_bias_offset_m", type=float, default=0.0)
     parser.add_argument("--rho_decay", type=float, default=None)
     parser.add_argument("--phi_w_decay", type=float, default=None)
     parser.add_argument("--surface_phi_thresh", type=float, default=0.04)
@@ -138,6 +161,11 @@ def main():
     parser.set_defaults(surface_use_phi_geo_channel=False)
     parser.add_argument("--surface_zero_crossing_max_offset", type=float, default=0.06)
     parser.add_argument("--surface_zero_crossing_phi_gate", type=float, default=0.05)
+    parser.add_argument("--surface_point_bias_along_normal_m", type=float, default=0.0)
+    parser.add_argument("--surface_geometry_chain_coupling_enable", action="store_true")
+    parser.add_argument("--surface_geometry_chain_coupling_mode", type=str, default="direct", choices=["direct", "projected"])
+    parser.add_argument("--surface_geometry_chain_coupling_donor_root", type=str, default="")
+    parser.add_argument("--surface_geometry_chain_coupling_project_dist", type=float, default=0.05)
     parser.add_argument("--surface_consistency_enable", action="store_true")
     parser.add_argument("--surface_consistency_radius", type=int, default=1)
     parser.add_argument("--surface_consistency_min_neighbors", type=int, default=4)
@@ -357,7 +385,281 @@ def main():
     parser.add_argument("--rps_enable", action="store_true")
     parser.add_argument("--rps_hard_commit_enable", action="store_true")
     parser.add_argument("--rps_surface_bank_enable", action="store_true")
+    parser.add_argument("--rps_bank_margin", type=float, default=0.08)
+    parser.add_argument("--rps_bank_separation_ref", type=float, default=0.04)
+    parser.add_argument("--rps_bank_rear_min_score", type=float, default=0.52)
+    parser.add_argument("--rps_bank_sep_gate", type=float, default=0.22)
+    parser.add_argument("--rps_bank_bg_support_gain", type=float, default=0.0)
+    parser.add_argument("--rps_bank_front_dyn_penalty_gain", type=float, default=0.0)
+    parser.add_argument("--rps_bank_rear_score_bias", type=float, default=0.0)
+    parser.add_argument("--rps_bank_soft_competition_enable", action="store_true")
+    parser.add_argument("--rps_bank_soft_competition_gap", type=float, default=0.0)
+    parser.add_argument("--rps_bank_soft_sep_relax", type=float, default=0.0)
+    parser.add_argument("--rps_bank_soft_rear_min_relax", type=float, default=0.0)
+    parser.add_argument("--rps_bank_soft_support_min", type=float, default=0.45)
+    parser.add_argument("--rps_bank_soft_local_support_gain", type=float, default=1.0)
+    parser.add_argument("--rps_soft_bank_export_enable", action="store_true")
+    parser.add_argument("--rps_soft_bank_min_score", type=float, default=0.18)
+    parser.add_argument("--rps_soft_bank_gain", type=float, default=0.65)
+    parser.add_argument("--rps_soft_bank_commit_relax", type=float, default=0.70)
+    parser.add_argument("--rps_candidate_rescue_enable", action="store_true")
+    parser.add_argument("--rps_candidate_support_gain", type=float, default=0.28)
+    parser.add_argument("--rps_candidate_bg_gain", type=float, default=0.22)
+    parser.add_argument("--rps_candidate_rho_gain", type=float, default=0.18)
+    parser.add_argument("--rps_candidate_front_relax", type=float, default=0.20)
+    parser.add_argument("--rps_commit_activation_enable", action="store_true")
+    parser.add_argument("--rps_commit_threshold", type=float, default=0.62)
+    parser.add_argument("--rps_commit_release", type=float, default=0.40)
+    parser.add_argument("--rps_commit_age_threshold", type=float, default=2.0)
+    parser.add_argument("--rps_commit_rho_ref", type=float, default=0.08)
+    parser.add_argument("--rps_commit_weight_ref", type=float, default=0.80)
+    parser.add_argument("--rps_commit_min_cand_rho", type=float, default=0.02)
+    parser.add_argument("--rps_commit_min_cand_w", type=float, default=0.08)
+    parser.add_argument("--rps_commit_evidence_weight", type=float, default=0.34)
+    parser.add_argument("--rps_commit_geometry_weight", type=float, default=0.28)
+    parser.add_argument("--rps_commit_bg_weight", type=float, default=0.20)
+    parser.add_argument("--rps_commit_static_weight", type=float, default=0.18)
+    parser.add_argument("--rps_commit_front_penalty", type=float, default=0.22)
+    parser.add_argument("--rps_admission_support_enable", action="store_true")
+    parser.add_argument("--rps_admission_support_on", type=float, default=0.42)
+    parser.add_argument("--rps_admission_support_gain", type=float, default=0.55)
+    parser.add_argument("--rps_admission_score_relax", type=float, default=0.10)
+    parser.add_argument("--rps_admission_active_floor", type=float, default=0.32)
+    parser.add_argument("--rps_admission_rho_ref", type=float, default=0.08)
+    parser.add_argument("--rps_admission_weight_ref", type=float, default=0.35)
+    parser.add_argument("--rps_admission_geometry_enable", action="store_true")
+    parser.add_argument("--rps_admission_geometry_weight", type=float, default=0.25)
+    parser.add_argument("--rps_admission_geometry_floor", type=float, default=0.40)
+    parser.add_argument("--rps_admission_occlusion_enable", action="store_true")
+    parser.add_argument("--rps_admission_occlusion_weight", type=float, default=0.12)
+    parser.add_argument("--rps_space_redirect_history_enable", action="store_true")
+    parser.add_argument("--rps_space_redirect_history_weight", type=float, default=0.32)
+    parser.add_argument("--rps_space_redirect_history_bg_weight", type=float, default=0.60)
+    parser.add_argument("--rps_space_redirect_history_static_weight", type=float, default=0.40)
+    parser.add_argument("--rps_space_redirect_history_floor", type=float, default=0.30)
+    parser.add_argument("--rps_space_redirect_ghost_suppress_enable", action="store_true")
+    parser.add_argument("--rps_space_redirect_ghost_suppress_weight", type=float, default=0.22)
+    parser.add_argument("--rps_space_redirect_visual_anchor_enable", action="store_true")
+    parser.add_argument("--rps_space_redirect_visual_anchor_weight", type=float, default=0.16)
+    parser.add_argument("--rps_space_redirect_visual_anchor_min", type=float, default=0.36)
+    parser.add_argument("--rps_history_obstructed_gate_enable", action="store_true")
+    parser.add_argument("--rps_history_visible_min", type=float, default=0.45)
+    parser.add_argument("--rps_obstruction_min", type=float, default=0.28)
+    parser.add_argument("--rps_non_hole_min", type=float, default=0.30)
+    parser.add_argument("--rps_history_manifold_enable", action="store_true")
+    parser.add_argument("--rps_history_manifold_visible_min", type=float, default=0.45)
+    parser.add_argument("--rps_history_manifold_obstruction_min", type=float, default=0.28)
+    parser.add_argument("--rps_history_manifold_bg_weight", type=float, default=0.50)
+    parser.add_argument("--rps_history_manifold_geo_weight", type=float, default=0.30)
+    parser.add_argument("--rps_history_manifold_static_weight", type=float, default=0.20)
+    parser.add_argument("--rps_history_manifold_blend", type=float, default=0.75)
+    parser.add_argument("--rps_history_manifold_max_offset", type=float, default=0.04)
+    parser.add_argument("--rps_bg_manifold_state_enable", action="store_true")
+    parser.add_argument("--rps_bg_manifold_alpha_up", type=float, default=0.08)
+    parser.add_argument("--rps_bg_manifold_alpha_down", type=float, default=0.02)
+    parser.add_argument("--rps_bg_manifold_rho_alpha", type=float, default=0.10)
+    parser.add_argument("--rps_bg_manifold_weight_gain", type=float, default=0.55)
+    parser.add_argument("--rps_bg_manifold_rho_ref", type=float, default=0.08)
+    parser.add_argument("--rps_bg_manifold_weight_ref", type=float, default=0.35)
+    parser.add_argument("--rps_bg_manifold_history_weight", type=float, default=0.30)
+    parser.add_argument("--rps_bg_manifold_obstruction_weight", type=float, default=0.20)
+    parser.add_argument("--rps_bg_manifold_visible_lo", type=float, default=0.25)
+    parser.add_argument("--rps_bg_manifold_visible_hi", type=float, default=0.50)
+    parser.add_argument("--rps_bg_dense_state_enable", action="store_true")
+    parser.add_argument("--rps_bg_dense_neighbor_radius", type=int, default=1)
+    parser.add_argument("--rps_bg_dense_neighbor_weight", type=float, default=0.55)
+    parser.add_argument("--rps_bg_dense_geometry_weight", type=float, default=0.30)
+    parser.add_argument("--rps_bg_dense_max_weight", type=float, default=1.0)
+    parser.add_argument("--rps_bg_dense_support_floor", type=float, default=0.18)
+    parser.add_argument("--rps_bg_dense_decay", type=float, default=0.996)
+    parser.add_argument("--rps_bg_surface_constrained_enable", action="store_true")
+    parser.add_argument("--rps_bg_surface_min_conf", type=float, default=0.12)
+    parser.add_argument("--rps_bg_surface_agree_weight", type=float, default=0.40)
+    parser.add_argument("--rps_bg_surface_tangent_enable", action="store_true")
+    parser.add_argument("--rps_bg_surface_tangent_weight", type=float, default=0.65)
+    parser.add_argument("--rps_bg_surface_tangent_floor", type=float, default=0.15)
+    parser.add_argument("--rps_bg_bridge_enable", action="store_true")
+    parser.add_argument("--rps_bg_bridge_min_visible", type=float, default=0.35)
+    parser.add_argument("--rps_bg_bridge_min_obstruction", type=float, default=0.30)
+    parser.add_argument("--rps_bg_bridge_min_step", type=int, default=1)
+    parser.add_argument("--rps_bg_bridge_max_step", type=int, default=3)
+    parser.add_argument("--rps_bg_bridge_gain", type=float, default=0.65)
+    parser.add_argument("--rps_bg_bridge_phi_blend", type=float, default=0.85)
+    parser.add_argument("--rps_bg_bridge_target_dyn_max", type=float, default=0.35)
+    parser.add_argument("--rps_bg_bridge_target_surface_max", type=float, default=0.35)
+    parser.add_argument("--rps_bg_bridge_ghost_suppress_enable", action="store_true")
+    parser.add_argument("--rps_bg_bridge_ghost_suppress_weight", type=float, default=0.22)
+    parser.add_argument("--rps_bg_bridge_relaxed_dyn_max", type=float, default=0.45)
+    parser.add_argument("--rps_bg_bridge_keep_multi_hits", action="store_true")
+    parser.add_argument("--rps_bg_bridge_max_hits_per_source", type=int, default=3)
+    parser.add_argument("--rps_bg_bridge_cone_enable", action="store_true")
+    parser.add_argument("--rps_bg_bridge_cone_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_bg_bridge_cone_gain_scale", type=float, default=0.65)
+    parser.add_argument("--rps_bg_bridge_patch_radius_cells", type=int, default=0)
+    parser.add_argument("--rps_bg_bridge_patch_gain_scale", type=float, default=0.55)
+    parser.add_argument("--rps_bg_bridge_depth_hypothesis_count", type=int, default=0)
+    parser.add_argument("--rps_bg_bridge_depth_step_scale", type=float, default=0.50)
+    parser.add_argument("--rps_bg_bridge_rear_synth_enable", action="store_true")
+    parser.add_argument("--rps_bg_bridge_rear_support_gain", type=float, default=0.28)
+    parser.add_argument("--rps_bg_bridge_rear_rho_gain", type=float, default=0.10)
+    parser.add_argument("--rps_bg_bridge_rear_phi_blend", type=float, default=0.80)
+    parser.add_argument("--rps_bg_bridge_rear_score_floor", type=float, default=0.22)
+    parser.add_argument("--rps_bg_bridge_rear_active_floor", type=float, default=0.52)
+    parser.add_argument("--rps_bg_bridge_rear_age_floor", type=float, default=1.0)
+    parser.add_argument("--rps_rear_hybrid_filter_enable", action="store_true")
+    parser.add_argument("--rps_rear_hybrid_bridge_support_min", type=float, default=0.20)
+    parser.add_argument("--rps_rear_hybrid_dyn_max", type=float, default=0.22)
+    parser.add_argument("--rps_rear_hybrid_manifold_min", type=float, default=0.25)
+    parser.add_argument("--rps_rear_density_gate_enable", action="store_true")
+    parser.add_argument("--rps_rear_density_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_density_min_neighbors", type=int, default=2)
+    parser.add_argument("--rps_rear_density_support_min", type=float, default=0.45)
+    parser.add_argument("--rps_rear_selectivity_enable", action="store_true")
+    parser.add_argument("--rps_rear_selectivity_support_weight", type=float, default=0.18)
+    parser.add_argument("--rps_rear_selectivity_history_weight", type=float, default=0.24)
+    parser.add_argument("--rps_rear_selectivity_static_weight", type=float, default=0.16)
+    parser.add_argument("--rps_rear_selectivity_geom_weight", type=float, default=0.22)
+    parser.add_argument("--rps_rear_selectivity_bridge_weight", type=float, default=0.10)
+    parser.add_argument("--rps_rear_selectivity_density_weight", type=float, default=0.10)
+    parser.add_argument("--rps_rear_selectivity_rear_score_weight", type=float, default=0.28)
+    parser.add_argument("--rps_rear_selectivity_front_score_weight", type=float, default=0.28)
+    parser.add_argument("--rps_rear_selectivity_competition_weight", type=float, default=0.34)
+    parser.add_argument("--rps_rear_selectivity_competition_alpha", type=float, default=0.80)
+    parser.add_argument("--rps_rear_selectivity_gap_weight", type=float, default=0.18)
+    parser.add_argument("--rps_rear_selectivity_sep_weight", type=float, default=0.08)
+    parser.add_argument("--rps_rear_selectivity_dyn_weight", type=float, default=0.22)
+    parser.add_argument("--rps_rear_selectivity_ghost_weight", type=float, default=0.18)
+    parser.add_argument("--rps_rear_selectivity_front_weight", type=float, default=0.16)
+    parser.add_argument("--rps_rear_selectivity_geom_risk_weight", type=float, default=0.22)
+    parser.add_argument("--rps_rear_selectivity_history_risk_weight", type=float, default=0.16)
+    parser.add_argument("--rps_rear_selectivity_density_risk_weight", type=float, default=0.10)
+    parser.add_argument("--rps_rear_selectivity_bridge_relief_weight", type=float, default=0.10)
+    parser.add_argument("--rps_rear_selectivity_static_relief_weight", type=float, default=0.08)
+    parser.add_argument("--rps_rear_selectivity_gap_risk_weight", type=float, default=0.18)
+    parser.add_argument("--rps_rear_selectivity_score_min", type=float, default=0.46)
+    parser.add_argument("--rps_rear_selectivity_risk_max", type=float, default=0.45)
+    parser.add_argument("--rps_rear_selectivity_geom_floor", type=float, default=0.48)
+    parser.add_argument("--rps_rear_selectivity_history_floor", type=float, default=0.36)
+    parser.add_argument("--rps_rear_selectivity_bridge_floor", type=float, default=0.12)
+    parser.add_argument("--rps_rear_selectivity_competition_floor", type=float, default=-0.02)
+    parser.add_argument("--rps_rear_selectivity_front_score_max", type=float, default=0.92)
+    parser.add_argument("--rps_rear_selectivity_gap_min", type=float, default=0.018)
+    parser.add_argument("--rps_rear_selectivity_gap_max", type=float, default=0.090)
+    parser.add_argument("--rps_rear_selectivity_gap_valid_min", type=float, default=0.28)
+    parser.add_argument("--rps_rear_selectivity_occlusion_order_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_occlusion_order_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_occlusion_order_risk_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_local_conflict_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_local_conflict_max", type=float, default=1.5)
+    parser.add_argument("--rps_rear_selectivity_front_residual_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_front_residual_max", type=float, default=1.5)
+    parser.add_argument("--rps_rear_selectivity_occluder_protect_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_occluder_protect_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_occluder_relief_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_dynamic_trail_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_dynamic_trail_max", type=float, default=1.5)
+    parser.add_argument("--rps_rear_selectivity_dynamic_trail_relief_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_history_anchor_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_history_anchor_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_history_anchor_relief_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_surface_anchor_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_surface_anchor_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_surface_anchor_risk_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_surface_distance_ref", type=float, default=0.05)
+    parser.add_argument("--rps_rear_selectivity_dynamic_shell_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_dynamic_shell_max", type=float, default=1.5)
+    parser.add_argument("--rps_rear_selectivity_dynamic_shell_gap_ref", type=float, default=0.05)
+    parser.add_argument("--rps_rear_selectivity_conflict_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_selectivity_conflict_front_score_min", type=float, default=0.20)
+    parser.add_argument("--rps_rear_selectivity_conflict_static_score_min", type=float, default=0.35)
+    parser.add_argument("--rps_rear_selectivity_conflict_dist_scale", type=float, default=1.2)
+    parser.add_argument("--rps_rear_selectivity_conflict_gap_ref", type=float, default=0.06)
+    parser.add_argument("--rps_rear_selectivity_conflict_ref", type=float, default=1.8)
+    parser.add_argument("--rps_rear_selectivity_trail_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_selectivity_trail_ref", type=float, default=2.0)
+    parser.add_argument("--rps_rear_selectivity_density_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_selectivity_density_ref", type=int, default=8)
+    parser.add_argument("--rps_rear_selectivity_topk", type=int, default=0)
+    parser.add_argument("--rps_rear_selectivity_rank_risk_weight", type=float, default=0.55)
+    parser.add_argument("--rps_rear_selectivity_penetration_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_penetration_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_penetration_risk_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_penetration_free_ref", type=float, default=0.05)
+    parser.add_argument("--rps_rear_selectivity_penetration_max_steps", type=int, default=10)
+    parser.add_argument("--rps_rear_selectivity_observation_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_observation_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_observation_risk_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_observation_count_ref", type=float, default=6.0)
+    parser.add_argument("--rps_rear_selectivity_observation_min_count", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_unobserved_veto_enable", action="store_true")
+    parser.add_argument("--rps_rear_selectivity_static_coherence_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_static_coherence_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_static_coherence_relief_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_static_coherence_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_selectivity_static_coherence_ref", type=float, default=0.35)
+    parser.add_argument("--rps_rear_selectivity_static_neighbor_min_weight", type=float, default=0.20)
+    parser.add_argument("--rps_rear_selectivity_static_neighbor_dyn_max", type=float, default=0.35)
+    parser.add_argument("--rps_rear_selectivity_thickness_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_thickness_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_thickness_risk_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_thickness_ref", type=float, default=0.08)
+    parser.add_argument("--rps_rear_selectivity_normal_consistency_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_normal_consistency_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_normal_consistency_relief_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_normal_consistency_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_selectivity_normal_consistency_dyn_max", type=float, default=0.35)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_floor", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_relief_weight", type=float, default=0.0)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_radius_cells", type=int, default=1)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_gap_ref", type=float, default=0.06)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_normal_cos", type=float, default=0.75)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_thickness_ref", type=float, default=0.08)
+    parser.add_argument("--rps_rear_selectivity_ray_convergence_ref", type=float, default=2.0)
+    parser.add_argument("--rps_rear_state_protect_enable", action="store_true")
+    parser.add_argument("--rps_rear_state_decay_relax", type=float, default=0.45)
+    parser.add_argument("--rps_rear_state_active_floor", type=float, default=0.28)
+    parser.add_argument("--rps_commit_quality_enable", action="store_true")
+    parser.add_argument("--rps_commit_quality_transfer_gain", type=float, default=0.18)
+    parser.add_argument("--rps_commit_quality_rho_gain", type=float, default=0.55)
+    parser.add_argument("--rps_commit_quality_geom_blend", type=float, default=0.35)
+    parser.add_argument("--rps_commit_quality_sep_scale", type=float, default=0.65)
+    parser.add_argument("--joint_bg_state_enable", action="store_true")
+    parser.add_argument("--joint_bg_state_on", type=float, default=0.20)
+    parser.add_argument("--joint_bg_state_gain", type=float, default=0.55)
+    parser.add_argument("--joint_bg_state_rho_gain", type=float, default=0.20)
+    parser.add_argument("--joint_bg_state_front_penalty", type=float, default=0.22)
     parser.add_argument("--wdsg_enable", action="store_true")
+    parser.add_argument("--wdsg_front_shift_vox", type=float, default=0.90)
+    parser.add_argument("--wdsg_rear_shift_vox", type=float, default=1.10)
+    parser.add_argument("--wdsg_shell_shift_vox", type=float, default=0.40)
+    parser.add_argument("--wdsg_front_mix_gain", type=float, default=0.95)
+    parser.add_argument("--wdsg_rear_mix_gain", type=float, default=1.00)
+    parser.add_argument("--wdsg_synth_mode", type=str, default="legacy", choices=["legacy", "anchor", "counterfactual", "energy"])
+    parser.add_argument("--wdsg_synth_anchor_gain", type=float, default=0.55)
+    parser.add_argument("--wdsg_synth_geo_gain", type=float, default=0.35)
+    parser.add_argument("--wdsg_synth_bg_gain", type=float, default=0.20)
+    parser.add_argument("--wdsg_synth_counterfactual_gain", type=float, default=0.45)
+    parser.add_argument("--wdsg_synth_front_repel_gain", type=float, default=0.35)
+    parser.add_argument("--wdsg_synth_energy_temp", type=float, default=0.18)
+    parser.add_argument("--wdsg_synth_clip_vox", type=float, default=2.40)
+    parser.add_argument("--wdsg_conservative_enable", action="store_true")
+    parser.add_argument("--wdsg_conservative_ref_vox", type=float, default=0.60)
+    parser.add_argument("--wdsg_conservative_min_clip_scale", type=float, default=0.20)
+    parser.add_argument("--wdsg_conservative_static_gain", type=float, default=0.45)
+    parser.add_argument("--wdsg_conservative_rear_gain", type=float, default=0.25)
+    parser.add_argument("--wdsg_conservative_geo_gain", type=float, default=0.20)
+    parser.add_argument("--wdsg_conservative_front_penalty", type=float, default=0.35)
+    parser.add_argument("--wdsg_local_clip_enable", action="store_true")
+    parser.add_argument("--wdsg_local_clip_min_scale", type=float, default=0.70)
+    parser.add_argument("--wdsg_local_clip_max_scale", type=float, default=1.18)
+    parser.add_argument("--wdsg_local_clip_risk_gain", type=float, default=0.52)
+    parser.add_argument("--wdsg_local_clip_expand_gain", type=float, default=0.22)
+    parser.add_argument("--wdsg_local_clip_front_gate", type=float, default=0.48)
+    parser.add_argument("--wdsg_local_clip_support_gate", type=float, default=0.52)
+    parser.add_argument("--wdsg_local_clip_ambiguity_gate", type=float, default=0.12)
+    parser.add_argument("--wdsg_local_clip_pfv_gain", type=float, default=0.20)
+    parser.add_argument("--wdsg_local_clip_bg_gain", type=float, default=0.18)
     parser.add_argument("--wdsg_route_enable", action="store_true")
     parser.add_argument("--spg_enable", action="store_true")
     parser.add_argument("--otv_enable", action="store_true")
@@ -544,6 +846,7 @@ def main():
         cfg.map3d.rho_decay = float(args.rho_decay)
     if args.phi_w_decay is not None:
         cfg.map3d.phi_w_decay = float(args.phi_w_decay)
+    cfg.update.depth_bias_offset_m = float(args.depth_bias_offset_m)
     cfg.surface.phi_thresh = float(args.surface_phi_thresh)
     cfg.surface.rho_thresh = float(args.surface_rho_thresh)
     cfg.surface.min_weight = float(args.surface_min_weight)
@@ -557,6 +860,11 @@ def main():
     cfg.surface.use_phi_geo_channel = bool(args.surface_use_phi_geo_channel)
     cfg.surface.zero_crossing_max_offset = float(max(0.0, args.surface_zero_crossing_max_offset))
     cfg.surface.zero_crossing_phi_gate = float(max(1e-4, args.surface_zero_crossing_phi_gate))
+    cfg.surface.point_bias_along_normal_m = float(args.surface_point_bias_along_normal_m)
+    cfg.surface.geometry_chain_coupling_enable = bool(args.surface_geometry_chain_coupling_enable)
+    cfg.surface.geometry_chain_coupling_mode = str(args.surface_geometry_chain_coupling_mode)
+    cfg.surface.geometry_chain_coupling_donor_root = str(args.surface_geometry_chain_coupling_donor_root)
+    cfg.surface.geometry_chain_coupling_project_dist = float(max(0.0, args.surface_geometry_chain_coupling_project_dist))
     cfg.surface.consistency_enable = bool(args.surface_consistency_enable)
     cfg.surface.consistency_radius = int(max(1, args.surface_consistency_radius))
     cfg.surface.consistency_min_neighbors = int(max(0, args.surface_consistency_min_neighbors))
@@ -725,7 +1033,281 @@ def main():
     cfg.update.rps_enable = bool(args.rps_enable)
     cfg.update.rps_hard_commit_enable = bool(args.rps_hard_commit_enable)
     cfg.update.rps_surface_bank_enable = bool(args.rps_surface_bank_enable)
+    cfg.update.rps_bank_margin = float(max(0.0, args.rps_bank_margin))
+    cfg.update.rps_bank_separation_ref = float(max(1e-6, args.rps_bank_separation_ref))
+    cfg.update.rps_bank_rear_min_score = float(min(1.0, max(0.0, args.rps_bank_rear_min_score)))
+    cfg.update.rps_bank_sep_gate = float(min(1.0, max(0.0, args.rps_bank_sep_gate)))
+    cfg.update.rps_bank_bg_support_gain = float(max(0.0, args.rps_bank_bg_support_gain))
+    cfg.update.rps_bank_front_dyn_penalty_gain = float(max(0.0, args.rps_bank_front_dyn_penalty_gain))
+    cfg.update.rps_bank_rear_score_bias = float(max(0.0, args.rps_bank_rear_score_bias))
+    cfg.update.rps_bank_soft_competition_enable = bool(args.rps_bank_soft_competition_enable)
+    cfg.update.rps_bank_soft_competition_gap = float(max(0.0, args.rps_bank_soft_competition_gap))
+    cfg.update.rps_bank_soft_sep_relax = float(max(0.0, args.rps_bank_soft_sep_relax))
+    cfg.update.rps_bank_soft_rear_min_relax = float(max(0.0, args.rps_bank_soft_rear_min_relax))
+    cfg.update.rps_bank_soft_support_min = float(min(1.0, max(0.0, args.rps_bank_soft_support_min)))
+    cfg.update.rps_bank_soft_local_support_gain = float(max(0.0, args.rps_bank_soft_local_support_gain))
+    cfg.update.rps_soft_bank_export_enable = bool(args.rps_soft_bank_export_enable)
+    cfg.update.rps_soft_bank_min_score = float(min(1.0, max(0.0, args.rps_soft_bank_min_score)))
+    cfg.update.rps_soft_bank_gain = float(max(0.0, args.rps_soft_bank_gain))
+    cfg.update.rps_soft_bank_commit_relax = float(min(1.0, max(0.0, args.rps_soft_bank_commit_relax)))
+    cfg.update.rps_candidate_rescue_enable = bool(args.rps_candidate_rescue_enable)
+    cfg.update.rps_candidate_support_gain = float(max(0.0, args.rps_candidate_support_gain))
+    cfg.update.rps_candidate_bg_gain = float(max(0.0, args.rps_candidate_bg_gain))
+    cfg.update.rps_candidate_rho_gain = float(max(0.0, args.rps_candidate_rho_gain))
+    cfg.update.rps_candidate_front_relax = float(min(1.0, max(0.0, args.rps_candidate_front_relax)))
+    cfg.update.rps_commit_activation_enable = bool(args.rps_commit_activation_enable)
+    cfg.update.rps_commit_threshold = float(min(1.0, max(0.0, args.rps_commit_threshold)))
+    cfg.update.rps_commit_release = float(min(1.0, max(0.0, args.rps_commit_release)))
+    cfg.update.rps_commit_age_threshold = float(max(1.0, args.rps_commit_age_threshold))
+    cfg.update.rps_commit_rho_ref = float(max(1e-6, args.rps_commit_rho_ref))
+    cfg.update.rps_commit_weight_ref = float(max(1e-6, args.rps_commit_weight_ref))
+    cfg.update.rps_commit_min_cand_rho = float(max(0.0, args.rps_commit_min_cand_rho))
+    cfg.update.rps_commit_min_cand_w = float(max(0.0, args.rps_commit_min_cand_w))
+    cfg.update.rps_commit_evidence_weight = float(max(0.0, args.rps_commit_evidence_weight))
+    cfg.update.rps_commit_geometry_weight = float(max(0.0, args.rps_commit_geometry_weight))
+    cfg.update.rps_commit_bg_weight = float(max(0.0, args.rps_commit_bg_weight))
+    cfg.update.rps_commit_static_weight = float(max(0.0, args.rps_commit_static_weight))
+    cfg.update.rps_commit_front_penalty = float(max(0.0, args.rps_commit_front_penalty))
+    cfg.update.rps_admission_support_enable = bool(args.rps_admission_support_enable)
+    cfg.update.rps_admission_support_on = float(min(1.0, max(0.0, args.rps_admission_support_on)))
+    cfg.update.rps_admission_support_gain = float(max(0.0, args.rps_admission_support_gain))
+    cfg.update.rps_admission_score_relax = float(max(0.0, args.rps_admission_score_relax))
+    cfg.update.rps_admission_active_floor = float(min(1.0, max(0.0, args.rps_admission_active_floor)))
+    cfg.update.rps_admission_rho_ref = float(max(1e-6, args.rps_admission_rho_ref))
+    cfg.update.rps_admission_weight_ref = float(max(1e-6, args.rps_admission_weight_ref))
+    cfg.update.rps_admission_geometry_enable = bool(args.rps_admission_geometry_enable)
+    cfg.update.rps_admission_geometry_weight = float(max(0.0, args.rps_admission_geometry_weight))
+    cfg.update.rps_admission_geometry_floor = float(min(1.0, max(0.0, args.rps_admission_geometry_floor)))
+    cfg.update.rps_admission_occlusion_enable = bool(args.rps_admission_occlusion_enable)
+    cfg.update.rps_admission_occlusion_weight = float(max(0.0, args.rps_admission_occlusion_weight))
+    cfg.update.rps_space_redirect_history_enable = bool(args.rps_space_redirect_history_enable)
+    cfg.update.rps_space_redirect_history_weight = float(max(0.0, args.rps_space_redirect_history_weight))
+    cfg.update.rps_space_redirect_history_bg_weight = float(max(0.0, args.rps_space_redirect_history_bg_weight))
+    cfg.update.rps_space_redirect_history_static_weight = float(max(0.0, args.rps_space_redirect_history_static_weight))
+    cfg.update.rps_space_redirect_history_floor = float(min(1.0, max(0.0, args.rps_space_redirect_history_floor)))
+    cfg.update.rps_space_redirect_ghost_suppress_enable = bool(args.rps_space_redirect_ghost_suppress_enable)
+    cfg.update.rps_space_redirect_ghost_suppress_weight = float(max(0.0, args.rps_space_redirect_ghost_suppress_weight))
+    cfg.update.rps_space_redirect_visual_anchor_enable = bool(args.rps_space_redirect_visual_anchor_enable)
+    cfg.update.rps_space_redirect_visual_anchor_weight = float(max(0.0, args.rps_space_redirect_visual_anchor_weight))
+    cfg.update.rps_space_redirect_visual_anchor_min = float(min(1.0, max(0.0, args.rps_space_redirect_visual_anchor_min)))
+    cfg.update.rps_history_obstructed_gate_enable = bool(args.rps_history_obstructed_gate_enable)
+    cfg.update.rps_history_visible_min = float(min(1.0, max(0.0, args.rps_history_visible_min)))
+    cfg.update.rps_obstruction_min = float(min(1.0, max(0.0, args.rps_obstruction_min)))
+    cfg.update.rps_non_hole_min = float(min(1.0, max(0.0, args.rps_non_hole_min)))
+    cfg.update.rps_history_manifold_enable = bool(args.rps_history_manifold_enable)
+    cfg.update.rps_history_manifold_visible_min = float(min(1.0, max(0.0, args.rps_history_manifold_visible_min)))
+    cfg.update.rps_history_manifold_obstruction_min = float(min(1.0, max(0.0, args.rps_history_manifold_obstruction_min)))
+    cfg.update.rps_history_manifold_bg_weight = float(max(0.0, args.rps_history_manifold_bg_weight))
+    cfg.update.rps_history_manifold_geo_weight = float(max(0.0, args.rps_history_manifold_geo_weight))
+    cfg.update.rps_history_manifold_static_weight = float(max(0.0, args.rps_history_manifold_static_weight))
+    cfg.update.rps_history_manifold_blend = float(min(1.0, max(0.0, args.rps_history_manifold_blend)))
+    cfg.update.rps_history_manifold_max_offset = float(max(0.0, args.rps_history_manifold_max_offset))
+    cfg.update.rps_bg_manifold_state_enable = bool(args.rps_bg_manifold_state_enable)
+    cfg.update.rps_bg_manifold_alpha_up = float(max(0.0, args.rps_bg_manifold_alpha_up))
+    cfg.update.rps_bg_manifold_alpha_down = float(max(0.0, args.rps_bg_manifold_alpha_down))
+    cfg.update.rps_bg_manifold_rho_alpha = float(max(0.0, args.rps_bg_manifold_rho_alpha))
+    cfg.update.rps_bg_manifold_weight_gain = float(max(0.0, args.rps_bg_manifold_weight_gain))
+    cfg.update.rps_bg_manifold_rho_ref = float(max(1e-6, args.rps_bg_manifold_rho_ref))
+    cfg.update.rps_bg_manifold_weight_ref = float(max(1e-6, args.rps_bg_manifold_weight_ref))
+    cfg.update.rps_bg_manifold_history_weight = float(max(0.0, args.rps_bg_manifold_history_weight))
+    cfg.update.rps_bg_manifold_obstruction_weight = float(max(0.0, args.rps_bg_manifold_obstruction_weight))
+    cfg.update.rps_bg_manifold_visible_lo = float(min(1.0, max(0.0, args.rps_bg_manifold_visible_lo)))
+    cfg.update.rps_bg_manifold_visible_hi = float(min(1.0, max(0.0, args.rps_bg_manifold_visible_hi)))
+    cfg.update.rps_bg_dense_state_enable = bool(args.rps_bg_dense_state_enable)
+    cfg.update.rps_bg_dense_neighbor_radius = int(max(1, args.rps_bg_dense_neighbor_radius))
+    cfg.update.rps_bg_dense_neighbor_weight = float(max(0.0, args.rps_bg_dense_neighbor_weight))
+    cfg.update.rps_bg_dense_geometry_weight = float(max(0.0, args.rps_bg_dense_geometry_weight))
+    cfg.update.rps_bg_dense_max_weight = float(max(0.0, args.rps_bg_dense_max_weight))
+    cfg.update.rps_bg_dense_support_floor = float(min(1.0, max(0.0, args.rps_bg_dense_support_floor)))
+    cfg.update.rps_bg_dense_decay = float(max(0.0, args.rps_bg_dense_decay))
+    cfg.update.rps_bg_surface_constrained_enable = bool(args.rps_bg_surface_constrained_enable)
+    cfg.update.rps_bg_surface_min_conf = float(min(1.0, max(0.0, args.rps_bg_surface_min_conf)))
+    cfg.update.rps_bg_surface_agree_weight = float(max(0.0, args.rps_bg_surface_agree_weight))
+    cfg.update.rps_bg_surface_tangent_enable = bool(args.rps_bg_surface_tangent_enable)
+    cfg.update.rps_bg_surface_tangent_weight = float(max(0.0, args.rps_bg_surface_tangent_weight))
+    cfg.update.rps_bg_surface_tangent_floor = float(min(1.0, max(0.0, args.rps_bg_surface_tangent_floor)))
+    cfg.update.rps_bg_bridge_enable = bool(args.rps_bg_bridge_enable)
+    cfg.update.rps_bg_bridge_min_visible = float(min(1.0, max(0.0, args.rps_bg_bridge_min_visible)))
+    cfg.update.rps_bg_bridge_min_obstruction = float(min(1.0, max(0.0, args.rps_bg_bridge_min_obstruction)))
+    cfg.update.rps_bg_bridge_min_step = int(max(1, args.rps_bg_bridge_min_step))
+    cfg.update.rps_bg_bridge_max_step = int(max(1, args.rps_bg_bridge_max_step))
+    cfg.update.rps_bg_bridge_gain = float(max(0.0, args.rps_bg_bridge_gain))
+    cfg.update.rps_bg_bridge_phi_blend = float(min(1.0, max(0.0, args.rps_bg_bridge_phi_blend)))
+    cfg.update.rps_bg_bridge_target_dyn_max = float(min(1.0, max(0.0, args.rps_bg_bridge_target_dyn_max)))
+    cfg.update.rps_bg_bridge_target_surface_max = float(min(1.0, max(0.0, args.rps_bg_bridge_target_surface_max)))
+    cfg.update.rps_bg_bridge_ghost_suppress_enable = bool(args.rps_bg_bridge_ghost_suppress_enable)
+    cfg.update.rps_bg_bridge_ghost_suppress_weight = float(max(0.0, args.rps_bg_bridge_ghost_suppress_weight))
+    cfg.update.rps_bg_bridge_relaxed_dyn_max = float(min(1.0, max(0.0, args.rps_bg_bridge_relaxed_dyn_max)))
+    cfg.update.rps_bg_bridge_keep_multi_hits = bool(args.rps_bg_bridge_keep_multi_hits)
+    cfg.update.rps_bg_bridge_max_hits_per_source = int(max(1, args.rps_bg_bridge_max_hits_per_source))
+    cfg.update.rps_bg_bridge_cone_enable = bool(args.rps_bg_bridge_cone_enable)
+    cfg.update.rps_bg_bridge_cone_radius_cells = int(max(0, args.rps_bg_bridge_cone_radius_cells))
+    cfg.update.rps_bg_bridge_cone_gain_scale = float(max(0.0, args.rps_bg_bridge_cone_gain_scale))
+    cfg.update.rps_bg_bridge_patch_radius_cells = int(max(0, args.rps_bg_bridge_patch_radius_cells))
+    cfg.update.rps_bg_bridge_patch_gain_scale = float(max(0.0, args.rps_bg_bridge_patch_gain_scale))
+    cfg.update.rps_bg_bridge_depth_hypothesis_count = int(max(0, args.rps_bg_bridge_depth_hypothesis_count))
+    cfg.update.rps_bg_bridge_depth_step_scale = float(max(0.0, args.rps_bg_bridge_depth_step_scale))
+    cfg.update.rps_bg_bridge_rear_synth_enable = bool(args.rps_bg_bridge_rear_synth_enable)
+    cfg.update.rps_bg_bridge_rear_support_gain = float(max(0.0, args.rps_bg_bridge_rear_support_gain))
+    cfg.update.rps_bg_bridge_rear_rho_gain = float(max(0.0, args.rps_bg_bridge_rear_rho_gain))
+    cfg.update.rps_bg_bridge_rear_phi_blend = float(min(1.0, max(0.0, args.rps_bg_bridge_rear_phi_blend)))
+    cfg.update.rps_bg_bridge_rear_score_floor = float(min(1.0, max(0.0, args.rps_bg_bridge_rear_score_floor)))
+    cfg.update.rps_bg_bridge_rear_active_floor = float(min(1.0, max(0.0, args.rps_bg_bridge_rear_active_floor)))
+    cfg.update.rps_bg_bridge_rear_age_floor = float(max(0.0, args.rps_bg_bridge_rear_age_floor))
+    cfg.update.rps_rear_hybrid_filter_enable = bool(args.rps_rear_hybrid_filter_enable)
+    cfg.update.rps_rear_hybrid_bridge_support_min = float(min(1.0, max(0.0, args.rps_rear_hybrid_bridge_support_min)))
+    cfg.update.rps_rear_hybrid_dyn_max = float(min(1.0, max(0.0, args.rps_rear_hybrid_dyn_max)))
+    cfg.update.rps_rear_hybrid_manifold_min = float(min(1.0, max(0.0, args.rps_rear_hybrid_manifold_min)))
+    cfg.update.rps_rear_density_gate_enable = bool(args.rps_rear_density_gate_enable)
+    cfg.update.rps_rear_density_radius_cells = int(max(1, args.rps_rear_density_radius_cells))
+    cfg.update.rps_rear_density_min_neighbors = int(max(0, args.rps_rear_density_min_neighbors))
+    cfg.update.rps_rear_density_support_min = float(min(1.0, max(0.0, args.rps_rear_density_support_min)))
+    cfg.update.rps_rear_selectivity_enable = bool(args.rps_rear_selectivity_enable)
+    cfg.update.rps_rear_selectivity_support_weight = float(max(0.0, args.rps_rear_selectivity_support_weight))
+    cfg.update.rps_rear_selectivity_history_weight = float(max(0.0, args.rps_rear_selectivity_history_weight))
+    cfg.update.rps_rear_selectivity_static_weight = float(max(0.0, args.rps_rear_selectivity_static_weight))
+    cfg.update.rps_rear_selectivity_geom_weight = float(max(0.0, args.rps_rear_selectivity_geom_weight))
+    cfg.update.rps_rear_selectivity_bridge_weight = float(max(0.0, args.rps_rear_selectivity_bridge_weight))
+    cfg.update.rps_rear_selectivity_density_weight = float(max(0.0, args.rps_rear_selectivity_density_weight))
+    cfg.update.rps_rear_selectivity_rear_score_weight = float(max(0.0, args.rps_rear_selectivity_rear_score_weight))
+    cfg.update.rps_rear_selectivity_front_score_weight = float(max(0.0, args.rps_rear_selectivity_front_score_weight))
+    cfg.update.rps_rear_selectivity_competition_weight = float(max(0.0, args.rps_rear_selectivity_competition_weight))
+    cfg.update.rps_rear_selectivity_competition_alpha = float(max(0.0, args.rps_rear_selectivity_competition_alpha))
+    cfg.update.rps_rear_selectivity_gap_weight = float(max(0.0, args.rps_rear_selectivity_gap_weight))
+    cfg.update.rps_rear_selectivity_sep_weight = float(max(0.0, args.rps_rear_selectivity_sep_weight))
+    cfg.update.rps_rear_selectivity_dyn_weight = float(max(0.0, args.rps_rear_selectivity_dyn_weight))
+    cfg.update.rps_rear_selectivity_ghost_weight = float(max(0.0, args.rps_rear_selectivity_ghost_weight))
+    cfg.update.rps_rear_selectivity_front_weight = float(max(0.0, args.rps_rear_selectivity_front_weight))
+    cfg.update.rps_rear_selectivity_geom_risk_weight = float(max(0.0, args.rps_rear_selectivity_geom_risk_weight))
+    cfg.update.rps_rear_selectivity_history_risk_weight = float(max(0.0, args.rps_rear_selectivity_history_risk_weight))
+    cfg.update.rps_rear_selectivity_density_risk_weight = float(max(0.0, args.rps_rear_selectivity_density_risk_weight))
+    cfg.update.rps_rear_selectivity_bridge_relief_weight = float(max(0.0, args.rps_rear_selectivity_bridge_relief_weight))
+    cfg.update.rps_rear_selectivity_static_relief_weight = float(max(0.0, args.rps_rear_selectivity_static_relief_weight))
+    cfg.update.rps_rear_selectivity_gap_risk_weight = float(max(0.0, args.rps_rear_selectivity_gap_risk_weight))
+    cfg.update.rps_rear_selectivity_score_min = float(min(1.0, max(0.0, args.rps_rear_selectivity_score_min)))
+    cfg.update.rps_rear_selectivity_risk_max = float(max(0.0, args.rps_rear_selectivity_risk_max))
+    cfg.update.rps_rear_selectivity_geom_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_geom_floor)))
+    cfg.update.rps_rear_selectivity_history_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_history_floor)))
+    cfg.update.rps_rear_selectivity_bridge_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_bridge_floor)))
+    cfg.update.rps_rear_selectivity_competition_floor = float(np.clip(args.rps_rear_selectivity_competition_floor, -1.0, 1.0))
+    cfg.update.rps_rear_selectivity_front_score_max = float(min(1.0, max(0.0, args.rps_rear_selectivity_front_score_max)))
+    cfg.update.rps_rear_selectivity_gap_min = float(max(0.0, args.rps_rear_selectivity_gap_min))
+    cfg.update.rps_rear_selectivity_gap_max = float(max(cfg.update.rps_rear_selectivity_gap_min + 1e-6, args.rps_rear_selectivity_gap_max))
+    cfg.update.rps_rear_selectivity_gap_valid_min = float(min(1.0, max(0.0, args.rps_rear_selectivity_gap_valid_min)))
+    cfg.update.rps_rear_selectivity_occlusion_order_weight = float(max(0.0, args.rps_rear_selectivity_occlusion_order_weight))
+    cfg.update.rps_rear_selectivity_occlusion_order_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_occlusion_order_floor)))
+    cfg.update.rps_rear_selectivity_occlusion_order_risk_weight = float(max(0.0, args.rps_rear_selectivity_occlusion_order_risk_weight))
+    cfg.update.rps_rear_selectivity_local_conflict_weight = float(max(0.0, args.rps_rear_selectivity_local_conflict_weight))
+    cfg.update.rps_rear_selectivity_local_conflict_max = float(max(0.0, args.rps_rear_selectivity_local_conflict_max))
+    cfg.update.rps_rear_selectivity_front_residual_weight = float(max(0.0, args.rps_rear_selectivity_front_residual_weight))
+    cfg.update.rps_rear_selectivity_front_residual_max = float(max(0.0, args.rps_rear_selectivity_front_residual_max))
+    cfg.update.rps_rear_selectivity_occluder_protect_weight = float(max(0.0, args.rps_rear_selectivity_occluder_protect_weight))
+    cfg.update.rps_rear_selectivity_occluder_protect_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_occluder_protect_floor)))
+    cfg.update.rps_rear_selectivity_occluder_relief_weight = float(max(0.0, args.rps_rear_selectivity_occluder_relief_weight))
+    cfg.update.rps_rear_selectivity_dynamic_trail_weight = float(max(0.0, args.rps_rear_selectivity_dynamic_trail_weight))
+    cfg.update.rps_rear_selectivity_dynamic_trail_max = float(max(0.0, args.rps_rear_selectivity_dynamic_trail_max))
+    cfg.update.rps_rear_selectivity_dynamic_trail_relief_weight = float(max(0.0, args.rps_rear_selectivity_dynamic_trail_relief_weight))
+    cfg.update.rps_rear_selectivity_history_anchor_weight = float(max(0.0, args.rps_rear_selectivity_history_anchor_weight))
+    cfg.update.rps_rear_selectivity_history_anchor_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_history_anchor_floor)))
+    cfg.update.rps_rear_selectivity_history_anchor_relief_weight = float(max(0.0, args.rps_rear_selectivity_history_anchor_relief_weight))
+    cfg.update.rps_rear_selectivity_surface_anchor_weight = float(max(0.0, args.rps_rear_selectivity_surface_anchor_weight))
+    cfg.update.rps_rear_selectivity_surface_anchor_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_surface_anchor_floor)))
+    cfg.update.rps_rear_selectivity_surface_anchor_risk_weight = float(max(0.0, args.rps_rear_selectivity_surface_anchor_risk_weight))
+    cfg.update.rps_rear_selectivity_surface_distance_ref = float(max(1e-6, args.rps_rear_selectivity_surface_distance_ref))
+    cfg.update.rps_rear_selectivity_dynamic_shell_weight = float(max(0.0, args.rps_rear_selectivity_dynamic_shell_weight))
+    cfg.update.rps_rear_selectivity_dynamic_shell_max = float(max(0.0, args.rps_rear_selectivity_dynamic_shell_max))
+    cfg.update.rps_rear_selectivity_dynamic_shell_gap_ref = float(max(1e-6, args.rps_rear_selectivity_dynamic_shell_gap_ref))
+    cfg.update.rps_rear_selectivity_conflict_radius_cells = int(max(1, args.rps_rear_selectivity_conflict_radius_cells))
+    cfg.update.rps_rear_selectivity_conflict_front_score_min = float(min(1.0, max(0.0, args.rps_rear_selectivity_conflict_front_score_min)))
+    cfg.update.rps_rear_selectivity_conflict_static_score_min = float(min(1.0, max(0.0, args.rps_rear_selectivity_conflict_static_score_min)))
+    cfg.update.rps_rear_selectivity_conflict_dist_scale = float(max(0.1, args.rps_rear_selectivity_conflict_dist_scale))
+    cfg.update.rps_rear_selectivity_conflict_gap_ref = float(max(1e-6, args.rps_rear_selectivity_conflict_gap_ref))
+    cfg.update.rps_rear_selectivity_conflict_ref = float(max(1e-6, args.rps_rear_selectivity_conflict_ref))
+    cfg.update.rps_rear_selectivity_trail_radius_cells = int(max(1, args.rps_rear_selectivity_trail_radius_cells))
+    cfg.update.rps_rear_selectivity_trail_ref = float(max(1e-6, args.rps_rear_selectivity_trail_ref))
+    cfg.update.rps_rear_selectivity_density_radius_cells = int(max(1, args.rps_rear_selectivity_density_radius_cells))
+    cfg.update.rps_rear_selectivity_density_ref = int(max(1, args.rps_rear_selectivity_density_ref))
+    cfg.update.rps_rear_selectivity_topk = int(max(0, args.rps_rear_selectivity_topk))
+    cfg.update.rps_rear_selectivity_rank_risk_weight = float(max(0.0, args.rps_rear_selectivity_rank_risk_weight))
+    cfg.update.rps_rear_selectivity_penetration_weight = float(max(0.0, args.rps_rear_selectivity_penetration_weight))
+    cfg.update.rps_rear_selectivity_penetration_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_penetration_floor)))
+    cfg.update.rps_rear_selectivity_penetration_risk_weight = float(max(0.0, args.rps_rear_selectivity_penetration_risk_weight))
+    cfg.update.rps_rear_selectivity_penetration_free_ref = float(max(1e-6, args.rps_rear_selectivity_penetration_free_ref))
+    cfg.update.rps_rear_selectivity_penetration_max_steps = int(max(2, args.rps_rear_selectivity_penetration_max_steps))
+    cfg.update.rps_rear_selectivity_observation_weight = float(max(0.0, args.rps_rear_selectivity_observation_weight))
+    cfg.update.rps_rear_selectivity_observation_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_observation_floor)))
+    cfg.update.rps_rear_selectivity_observation_risk_weight = float(max(0.0, args.rps_rear_selectivity_observation_risk_weight))
+    cfg.update.rps_rear_selectivity_observation_count_ref = float(max(1e-6, args.rps_rear_selectivity_observation_count_ref))
+    cfg.update.rps_rear_selectivity_observation_min_count = float(max(0.0, args.rps_rear_selectivity_observation_min_count))
+    cfg.update.rps_rear_selectivity_unobserved_veto_enable = bool(args.rps_rear_selectivity_unobserved_veto_enable)
+    cfg.update.rps_rear_selectivity_static_coherence_weight = float(max(0.0, args.rps_rear_selectivity_static_coherence_weight))
+    cfg.update.rps_rear_selectivity_static_coherence_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_static_coherence_floor)))
+    cfg.update.rps_rear_selectivity_static_coherence_relief_weight = float(max(0.0, args.rps_rear_selectivity_static_coherence_relief_weight))
+    cfg.update.rps_rear_selectivity_static_coherence_radius_cells = int(max(1, args.rps_rear_selectivity_static_coherence_radius_cells))
+    cfg.update.rps_rear_selectivity_static_coherence_ref = float(max(1e-6, args.rps_rear_selectivity_static_coherence_ref))
+    cfg.update.rps_rear_selectivity_static_neighbor_min_weight = float(max(0.0, args.rps_rear_selectivity_static_neighbor_min_weight))
+    cfg.update.rps_rear_selectivity_static_neighbor_dyn_max = float(min(1.0, max(0.0, args.rps_rear_selectivity_static_neighbor_dyn_max)))
+    cfg.update.rps_rear_selectivity_thickness_weight = float(max(0.0, args.rps_rear_selectivity_thickness_weight))
+    cfg.update.rps_rear_selectivity_thickness_floor = float(max(0.0, args.rps_rear_selectivity_thickness_floor))
+    cfg.update.rps_rear_selectivity_thickness_risk_weight = float(max(0.0, args.rps_rear_selectivity_thickness_risk_weight))
+    cfg.update.rps_rear_selectivity_thickness_ref = float(max(1e-6, args.rps_rear_selectivity_thickness_ref))
+    cfg.update.rps_rear_selectivity_normal_consistency_weight = float(max(0.0, args.rps_rear_selectivity_normal_consistency_weight))
+    cfg.update.rps_rear_selectivity_normal_consistency_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_normal_consistency_floor)))
+    cfg.update.rps_rear_selectivity_normal_consistency_relief_weight = float(max(0.0, args.rps_rear_selectivity_normal_consistency_relief_weight))
+    cfg.update.rps_rear_selectivity_normal_consistency_radius_cells = int(max(1, args.rps_rear_selectivity_normal_consistency_radius_cells))
+    cfg.update.rps_rear_selectivity_normal_consistency_dyn_max = float(min(1.0, max(0.0, args.rps_rear_selectivity_normal_consistency_dyn_max)))
+    cfg.update.rps_rear_selectivity_ray_convergence_weight = float(max(0.0, args.rps_rear_selectivity_ray_convergence_weight))
+    cfg.update.rps_rear_selectivity_ray_convergence_floor = float(min(1.0, max(0.0, args.rps_rear_selectivity_ray_convergence_floor)))
+    cfg.update.rps_rear_selectivity_ray_convergence_relief_weight = float(max(0.0, args.rps_rear_selectivity_ray_convergence_relief_weight))
+    cfg.update.rps_rear_selectivity_ray_convergence_radius_cells = int(max(1, args.rps_rear_selectivity_ray_convergence_radius_cells))
+    cfg.update.rps_rear_selectivity_ray_convergence_gap_ref = float(max(1e-6, args.rps_rear_selectivity_ray_convergence_gap_ref))
+    cfg.update.rps_rear_selectivity_ray_convergence_normal_cos = float(min(1.0, max(0.0, args.rps_rear_selectivity_ray_convergence_normal_cos)))
+    cfg.update.rps_rear_selectivity_ray_convergence_thickness_ref = float(max(1e-6, args.rps_rear_selectivity_ray_convergence_thickness_ref))
+    cfg.update.rps_rear_selectivity_ray_convergence_ref = float(max(1e-6, args.rps_rear_selectivity_ray_convergence_ref))
+    cfg.update.rps_rear_state_protect_enable = bool(args.rps_rear_state_protect_enable)
+    cfg.update.rps_rear_state_decay_relax = float(max(0.0, args.rps_rear_state_decay_relax))
+    cfg.update.rps_rear_state_active_floor = float(min(1.0, max(0.0, args.rps_rear_state_active_floor)))
+    cfg.update.rps_commit_quality_enable = bool(args.rps_commit_quality_enable)
+    cfg.update.rps_commit_quality_transfer_gain = float(max(0.0, args.rps_commit_quality_transfer_gain))
+    cfg.update.rps_commit_quality_rho_gain = float(max(0.0, args.rps_commit_quality_rho_gain))
+    cfg.update.rps_commit_quality_geom_blend = float(min(1.0, max(0.0, args.rps_commit_quality_geom_blend)))
+    cfg.update.rps_commit_quality_sep_scale = float(max(0.0, args.rps_commit_quality_sep_scale))
+    cfg.update.joint_bg_state_enable = bool(args.joint_bg_state_enable)
+    cfg.update.joint_bg_state_on = float(min(1.0, max(0.0, args.joint_bg_state_on)))
+    cfg.update.joint_bg_state_gain = float(max(0.0, args.joint_bg_state_gain))
+    cfg.update.joint_bg_state_rho_gain = float(max(0.0, args.joint_bg_state_rho_gain))
+    cfg.update.joint_bg_state_front_penalty = float(min(1.0, max(0.0, args.joint_bg_state_front_penalty)))
     cfg.update.wdsg_enable = bool(args.wdsg_enable)
+    cfg.update.wdsg_front_shift_vox = float(max(0.0, args.wdsg_front_shift_vox))
+    cfg.update.wdsg_rear_shift_vox = float(max(0.0, args.wdsg_rear_shift_vox))
+    cfg.update.wdsg_shell_shift_vox = float(max(0.0, args.wdsg_shell_shift_vox))
+    cfg.update.wdsg_front_mix_gain = float(max(0.0, args.wdsg_front_mix_gain))
+    cfg.update.wdsg_rear_mix_gain = float(max(0.0, args.wdsg_rear_mix_gain))
+    cfg.update.wdsg_synth_mode = str(args.wdsg_synth_mode)
+    cfg.update.wdsg_synth_anchor_gain = float(max(0.0, args.wdsg_synth_anchor_gain))
+    cfg.update.wdsg_synth_geo_gain = float(max(0.0, args.wdsg_synth_geo_gain))
+    cfg.update.wdsg_synth_bg_gain = float(max(0.0, args.wdsg_synth_bg_gain))
+    cfg.update.wdsg_synth_counterfactual_gain = float(max(0.0, args.wdsg_synth_counterfactual_gain))
+    cfg.update.wdsg_synth_front_repel_gain = float(max(0.0, args.wdsg_synth_front_repel_gain))
+    cfg.update.wdsg_synth_energy_temp = float(max(1e-3, args.wdsg_synth_energy_temp))
+    cfg.update.wdsg_synth_clip_vox = float(max(0.1, args.wdsg_synth_clip_vox))
+    cfg.update.wdsg_conservative_enable = bool(args.wdsg_conservative_enable)
+    cfg.update.wdsg_conservative_ref_vox = float(max(0.1, args.wdsg_conservative_ref_vox))
+    cfg.update.wdsg_conservative_min_clip_scale = float(max(0.0, min(1.0, args.wdsg_conservative_min_clip_scale)))
+    cfg.update.wdsg_conservative_static_gain = float(max(0.0, args.wdsg_conservative_static_gain))
+    cfg.update.wdsg_conservative_rear_gain = float(max(0.0, args.wdsg_conservative_rear_gain))
+    cfg.update.wdsg_conservative_geo_gain = float(max(0.0, args.wdsg_conservative_geo_gain))
+    cfg.update.wdsg_conservative_front_penalty = float(max(0.0, args.wdsg_conservative_front_penalty))
+    cfg.update.wdsg_local_clip_enable = bool(args.wdsg_local_clip_enable)
+    cfg.update.wdsg_local_clip_min_scale = float(np.clip(args.wdsg_local_clip_min_scale, 0.25, 1.0))
+    cfg.update.wdsg_local_clip_max_scale = float(max(cfg.update.wdsg_local_clip_min_scale, args.wdsg_local_clip_max_scale))
+    cfg.update.wdsg_local_clip_risk_gain = float(max(0.0, args.wdsg_local_clip_risk_gain))
+    cfg.update.wdsg_local_clip_expand_gain = float(max(0.0, args.wdsg_local_clip_expand_gain))
+    cfg.update.wdsg_local_clip_front_gate = float(np.clip(args.wdsg_local_clip_front_gate, 0.0, 0.95))
+    cfg.update.wdsg_local_clip_support_gate = float(np.clip(args.wdsg_local_clip_support_gate, 1e-3, 1.0))
+    cfg.update.wdsg_local_clip_ambiguity_gate = float(np.clip(args.wdsg_local_clip_ambiguity_gate, 0.0, 0.95))
+    cfg.update.wdsg_local_clip_pfv_gain = float(max(0.0, args.wdsg_local_clip_pfv_gain))
+    cfg.update.wdsg_local_clip_bg_gain = float(max(0.0, args.wdsg_local_clip_bg_gain))
     cfg.update.wdsg_route_enable = bool(args.wdsg_route_enable)
     cfg.update.spg_enable = bool(args.spg_enable)
     cfg.update.otv_enable = bool(args.otv_enable)
@@ -990,6 +1572,29 @@ def main():
     t_extract0 = time.perf_counter()
     pred_points, pred_normals = model.extract_surface_points()
     extract_stats = dict(getattr(model.voxel_map, 'last_extract_stats', {}))
+    extract_bank_points = dict(getattr(model.voxel_map, 'last_extract_bank_points', {})) if hasattr(model, 'voxel_map') else {}
+    if bool(getattr(cfg.surface, "geometry_chain_coupling_enable", False)):
+        donor_root = str(getattr(cfg.surface, "geometry_chain_coupling_donor_root", "")).strip()
+        if donor_root:
+            front_points = np.asarray(extract_bank_points.get('front_points', np.zeros((0, 3), dtype=float)), dtype=float)
+            front_normals = np.asarray(extract_bank_points.get('front_normals', np.zeros((0, 3), dtype=float)), dtype=float)
+            coupled_points, coupled_normals, coupled_rear, coupled_rear_normals, coupled_rows, coupling_stats = apply_geometry_chain_coupling(
+                sequence=str(args.sequence),
+                front_points=front_points,
+                front_normals=front_normals if front_normals.shape == front_points.shape else np.zeros_like(front_points),
+                surface_points=pred_points,
+                surface_normals=pred_normals,
+                donor_root=donor_root,
+                mode=str(getattr(cfg.surface, "geometry_chain_coupling_mode", "direct")),
+                project_dist=float(getattr(cfg.surface, "geometry_chain_coupling_project_dist", 0.05)),
+            )
+            if coupling_stats.get("geometry_chain_applied", 0.0) > 0.5:
+                pred_points = coupled_points
+                pred_normals = coupled_normals
+                extract_bank_points['rear_points'] = coupled_rear
+                extract_bank_points['rear_normals'] = coupled_rear_normals
+                extract_bank_points['rear_feature_rows'] = coupled_rows
+            extract_stats.update(coupling_stats)
     extract_total_sec = float(time.perf_counter() - t_extract0)
     gt_points = np.vstack(gt_refs) if gt_refs else np.zeros((0, 3), dtype=float)
     gt_normals = np.vstack(gt_norm_refs) if gt_norm_refs else np.zeros((0, 3), dtype=float)
@@ -1005,6 +1610,11 @@ def main():
 
     t_io0 = time.perf_counter()
     save_point_cloud(out_dir / "surface_points.ply", pred_points, pred_normals)
+    if extract_bank_points:
+        save_point_cloud(out_dir / "rear_surface_points.ply", extract_bank_points.get('rear_points', np.zeros((0, 3), dtype=float)), extract_bank_points.get('rear_normals', np.zeros((0, 3), dtype=float)))
+        save_point_cloud(out_dir / "front_surface_points.ply", extract_bank_points.get('front_points', np.zeros((0, 3), dtype=float)), extract_bank_points.get('front_normals', np.zeros((0, 3), dtype=float)))
+        save_point_cloud(out_dir / "background_surface_points.ply", extract_bank_points.get('background_points', np.zeros((0, 3), dtype=float)), extract_bank_points.get('background_normals', np.zeros((0, 3), dtype=float)))
+        save_feature_rows(out_dir / "rear_surface_features.csv", list(extract_bank_points.get('rear_feature_rows', [])))
     save_point_cloud(out_dir / "reference_points.ply", gt_points, gt_normals)
     mesh_min_points = int(max(0, args.mesh_min_points))
     if args.skip_mesh_export:
@@ -1083,6 +1693,31 @@ def main():
     runtime_model = model.get_runtime_stats()
     wall_total_sec = float(time.perf_counter() - run_wall_t0)
 
+    ptdsf_diag = dict(getattr(model.updater, '_ptdsf_diag', {})) if hasattr(model, 'updater') else {}
+    ptdsf_export_diag = dict(getattr(model.voxel_map, '_ptdsf_export_diag', {})) if hasattr(model, 'voxel_map') else {}
+    rps_commit_diag = dict(getattr(model.updater, '_rps_commit_diag', {})) if hasattr(model, 'updater') else {}
+    rps_competition_diag = dict(getattr(model.voxel_map, '_rps_competition_diag', {})) if hasattr(model, 'voxel_map') else {}
+    rps_admission_diag = dict(getattr(model.voxel_map, '_rps_admission_diag', {})) if hasattr(model, 'voxel_map') else {}
+    bg_manifold_diag = dict(getattr(model.updater, '_bg_manifold_diag', {})) if hasattr(model, 'updater') else {}
+    state_diag = {}
+    if hasattr(model, 'voxel_map'):
+        cells = list(model.voxel_map.cells.values())
+        state_diag = {
+            'rear_w_nonzero': float(sum(1 for c in cells if float(getattr(c, 'phi_rear_w', 0.0)) > 1e-9)),
+            'rear_cand_w_nonzero': float(sum(1 for c in cells if float(getattr(c, 'phi_rear_cand_w', 0.0)) > 1e-9)),
+            'bg_w_nonzero': float(sum(1 for c in cells if float(getattr(c, 'phi_bg_w', 0.0)) > 1e-9)),
+            'bg_cand_w_nonzero': float(sum(1 for c in cells if float(getattr(c, 'phi_bg_cand_w', 0.0)) > 1e-9)),
+            'rps_active_nonzero': float(sum(1 for c in cells if float(getattr(c, 'rps_active', 0.0)) > 1e-9)),
+            'rps_commit_score_nonzero': float(sum(1 for c in cells if float(getattr(c, 'rps_commit_score', 0.0)) > 1e-9)),
+            'rps_commit_score_ge_release': float(sum(1 for c in cells if float(getattr(c, 'rps_commit_score', 0.0)) >= float(cfg.update.rps_commit_release))),
+            'rps_commit_score_ge_on': float(sum(1 for c in cells if float(getattr(c, 'rps_commit_score', 0.0)) >= float(cfg.update.rps_commit_threshold))),
+            'rps_commit_age_ge_thr': float(sum(1 for c in cells if float(getattr(c, 'rps_commit_age', 0.0)) >= float(cfg.update.rps_commit_age_threshold))),
+            'rps_commit_score_sum': float(sum(float(getattr(c, 'rps_commit_score', 0.0)) for c in cells)),
+            'rho_rear_sum': float(sum(float(getattr(c, 'rho_rear', 0.0)) for c in cells)),
+            'rho_rear_cand_sum': float(sum(float(getattr(c, 'rho_rear_cand', 0.0)) for c in cells)),
+            'rho_bg_sum': float(sum(float(getattr(c, 'rho_bg', 0.0)) for c in cells)),
+            'rho_bg_cand_sum': float(sum(float(getattr(c, 'rho_bg_cand', 0.0)) for c in cells)),
+        }
     summary = {
         "sequence": seq_dir.name,
         "frames_used": int(total),
@@ -1252,7 +1887,277 @@ def main():
         "rps_enable": bool(cfg.update.rps_enable),
         "rps_hard_commit_enable": bool(cfg.update.rps_hard_commit_enable),
         "rps_surface_bank_enable": bool(cfg.update.rps_surface_bank_enable),
+        "rps_bank_margin": float(cfg.update.rps_bank_margin),
+        "rps_bank_separation_ref": float(cfg.update.rps_bank_separation_ref),
+        "rps_bank_rear_min_score": float(cfg.update.rps_bank_rear_min_score),
+        "rps_bank_sep_gate": float(cfg.update.rps_bank_sep_gate),
+        "rps_bank_bg_support_gain": float(cfg.update.rps_bank_bg_support_gain),
+        "rps_bank_front_dyn_penalty_gain": float(cfg.update.rps_bank_front_dyn_penalty_gain),
+        "rps_bank_rear_score_bias": float(cfg.update.rps_bank_rear_score_bias),
+        "rps_bank_soft_competition_enable": bool(cfg.update.rps_bank_soft_competition_enable),
+        "rps_bank_soft_competition_gap": float(cfg.update.rps_bank_soft_competition_gap),
+        "rps_bank_soft_sep_relax": float(cfg.update.rps_bank_soft_sep_relax),
+        "rps_bank_soft_rear_min_relax": float(cfg.update.rps_bank_soft_rear_min_relax),
+        "rps_bank_soft_support_min": float(cfg.update.rps_bank_soft_support_min),
+        "rps_bank_soft_local_support_gain": float(cfg.update.rps_bank_soft_local_support_gain),
+        "rps_soft_bank_export_enable": bool(cfg.update.rps_soft_bank_export_enable),
+        "rps_soft_bank_min_score": float(cfg.update.rps_soft_bank_min_score),
+        "rps_soft_bank_gain": float(cfg.update.rps_soft_bank_gain),
+        "rps_soft_bank_commit_relax": float(cfg.update.rps_soft_bank_commit_relax),
+        "rps_candidate_rescue_enable": bool(cfg.update.rps_candidate_rescue_enable),
+        "rps_candidate_support_gain": float(cfg.update.rps_candidate_support_gain),
+        "rps_candidate_bg_gain": float(cfg.update.rps_candidate_bg_gain),
+        "rps_candidate_rho_gain": float(cfg.update.rps_candidate_rho_gain),
+        "rps_candidate_front_relax": float(cfg.update.rps_candidate_front_relax),
+        "rps_commit_activation_enable": bool(cfg.update.rps_commit_activation_enable),
+        "rps_commit_threshold": float(cfg.update.rps_commit_threshold),
+        "rps_commit_release": float(cfg.update.rps_commit_release),
+        "rps_commit_age_threshold": float(cfg.update.rps_commit_age_threshold),
+        "rps_commit_rho_ref": float(cfg.update.rps_commit_rho_ref),
+        "rps_commit_weight_ref": float(cfg.update.rps_commit_weight_ref),
+        "rps_commit_min_cand_rho": float(cfg.update.rps_commit_min_cand_rho),
+        "rps_commit_min_cand_w": float(cfg.update.rps_commit_min_cand_w),
+        "rps_commit_evidence_weight": float(cfg.update.rps_commit_evidence_weight),
+        "rps_commit_geometry_weight": float(cfg.update.rps_commit_geometry_weight),
+        "rps_commit_bg_weight": float(cfg.update.rps_commit_bg_weight),
+        "rps_commit_static_weight": float(cfg.update.rps_commit_static_weight),
+        "rps_commit_front_penalty": float(cfg.update.rps_commit_front_penalty),
+        "rps_admission_support_enable": bool(cfg.update.rps_admission_support_enable),
+        "rps_admission_support_on": float(cfg.update.rps_admission_support_on),
+        "rps_admission_support_gain": float(cfg.update.rps_admission_support_gain),
+        "rps_admission_score_relax": float(cfg.update.rps_admission_score_relax),
+        "rps_admission_active_floor": float(cfg.update.rps_admission_active_floor),
+        "rps_admission_rho_ref": float(cfg.update.rps_admission_rho_ref),
+        "rps_admission_weight_ref": float(cfg.update.rps_admission_weight_ref),
+        "rps_admission_geometry_enable": bool(cfg.update.rps_admission_geometry_enable),
+        "rps_admission_geometry_weight": float(cfg.update.rps_admission_geometry_weight),
+        "rps_admission_geometry_floor": float(cfg.update.rps_admission_geometry_floor),
+        "rps_admission_occlusion_enable": bool(cfg.update.rps_admission_occlusion_enable),
+        "rps_admission_occlusion_weight": float(cfg.update.rps_admission_occlusion_weight),
+        "rps_space_redirect_history_enable": bool(cfg.update.rps_space_redirect_history_enable),
+        "rps_space_redirect_history_weight": float(cfg.update.rps_space_redirect_history_weight),
+        "rps_space_redirect_history_bg_weight": float(cfg.update.rps_space_redirect_history_bg_weight),
+        "rps_space_redirect_history_static_weight": float(cfg.update.rps_space_redirect_history_static_weight),
+        "rps_space_redirect_history_floor": float(cfg.update.rps_space_redirect_history_floor),
+        "rps_space_redirect_ghost_suppress_enable": bool(cfg.update.rps_space_redirect_ghost_suppress_enable),
+        "rps_space_redirect_ghost_suppress_weight": float(cfg.update.rps_space_redirect_ghost_suppress_weight),
+        "rps_space_redirect_visual_anchor_enable": bool(cfg.update.rps_space_redirect_visual_anchor_enable),
+        "rps_space_redirect_visual_anchor_weight": float(cfg.update.rps_space_redirect_visual_anchor_weight),
+        "rps_space_redirect_visual_anchor_min": float(cfg.update.rps_space_redirect_visual_anchor_min),
+        "rps_history_obstructed_gate_enable": bool(cfg.update.rps_history_obstructed_gate_enable),
+        "rps_history_visible_min": float(cfg.update.rps_history_visible_min),
+        "rps_obstruction_min": float(cfg.update.rps_obstruction_min),
+        "rps_non_hole_min": float(cfg.update.rps_non_hole_min),
+        "rps_history_manifold_enable": bool(cfg.update.rps_history_manifold_enable),
+        "rps_history_manifold_visible_min": float(cfg.update.rps_history_manifold_visible_min),
+        "rps_history_manifold_obstruction_min": float(cfg.update.rps_history_manifold_obstruction_min),
+        "rps_history_manifold_bg_weight": float(cfg.update.rps_history_manifold_bg_weight),
+        "rps_history_manifold_geo_weight": float(cfg.update.rps_history_manifold_geo_weight),
+        "rps_history_manifold_static_weight": float(cfg.update.rps_history_manifold_static_weight),
+        "rps_history_manifold_blend": float(cfg.update.rps_history_manifold_blend),
+        "rps_history_manifold_max_offset": float(cfg.update.rps_history_manifold_max_offset),
+        "rps_bg_manifold_state_enable": bool(cfg.update.rps_bg_manifold_state_enable),
+        "rps_bg_manifold_alpha_up": float(cfg.update.rps_bg_manifold_alpha_up),
+        "rps_bg_manifold_alpha_down": float(cfg.update.rps_bg_manifold_alpha_down),
+        "rps_bg_manifold_rho_alpha": float(cfg.update.rps_bg_manifold_rho_alpha),
+        "rps_bg_manifold_weight_gain": float(cfg.update.rps_bg_manifold_weight_gain),
+        "rps_bg_manifold_rho_ref": float(cfg.update.rps_bg_manifold_rho_ref),
+        "rps_bg_manifold_weight_ref": float(cfg.update.rps_bg_manifold_weight_ref),
+        "rps_bg_manifold_history_weight": float(cfg.update.rps_bg_manifold_history_weight),
+        "rps_bg_manifold_obstruction_weight": float(cfg.update.rps_bg_manifold_obstruction_weight),
+        "rps_bg_manifold_visible_lo": float(cfg.update.rps_bg_manifold_visible_lo),
+        "rps_bg_manifold_visible_hi": float(cfg.update.rps_bg_manifold_visible_hi),
+        "rps_bg_dense_state_enable": bool(cfg.update.rps_bg_dense_state_enable),
+        "rps_bg_dense_neighbor_radius": int(cfg.update.rps_bg_dense_neighbor_radius),
+        "rps_bg_dense_neighbor_weight": float(cfg.update.rps_bg_dense_neighbor_weight),
+        "rps_bg_dense_geometry_weight": float(cfg.update.rps_bg_dense_geometry_weight),
+        "rps_bg_dense_max_weight": float(cfg.update.rps_bg_dense_max_weight),
+        "rps_bg_dense_support_floor": float(cfg.update.rps_bg_dense_support_floor),
+        "rps_bg_dense_decay": float(cfg.update.rps_bg_dense_decay),
+        "rps_bg_surface_constrained_enable": bool(cfg.update.rps_bg_surface_constrained_enable),
+        "rps_bg_surface_min_conf": float(cfg.update.rps_bg_surface_min_conf),
+        "rps_bg_surface_agree_weight": float(cfg.update.rps_bg_surface_agree_weight),
+        "rps_bg_surface_tangent_enable": bool(cfg.update.rps_bg_surface_tangent_enable),
+        "rps_bg_surface_tangent_weight": float(cfg.update.rps_bg_surface_tangent_weight),
+        "rps_bg_surface_tangent_floor": float(cfg.update.rps_bg_surface_tangent_floor),
+        "rps_bg_bridge_enable": bool(cfg.update.rps_bg_bridge_enable),
+        "rps_bg_bridge_min_visible": float(cfg.update.rps_bg_bridge_min_visible),
+        "rps_bg_bridge_min_obstruction": float(cfg.update.rps_bg_bridge_min_obstruction),
+        "rps_bg_bridge_min_step": int(cfg.update.rps_bg_bridge_min_step),
+        "rps_bg_bridge_max_step": int(cfg.update.rps_bg_bridge_max_step),
+        "rps_bg_bridge_gain": float(cfg.update.rps_bg_bridge_gain),
+        "rps_bg_bridge_phi_blend": float(cfg.update.rps_bg_bridge_phi_blend),
+        "rps_bg_bridge_target_dyn_max": float(cfg.update.rps_bg_bridge_target_dyn_max),
+        "rps_bg_bridge_target_surface_max": float(cfg.update.rps_bg_bridge_target_surface_max),
+        "rps_bg_bridge_ghost_suppress_enable": bool(cfg.update.rps_bg_bridge_ghost_suppress_enable),
+        "rps_bg_bridge_ghost_suppress_weight": float(cfg.update.rps_bg_bridge_ghost_suppress_weight),
+        "rps_bg_bridge_relaxed_dyn_max": float(cfg.update.rps_bg_bridge_relaxed_dyn_max),
+        "rps_bg_bridge_keep_multi_hits": bool(cfg.update.rps_bg_bridge_keep_multi_hits),
+        "rps_bg_bridge_max_hits_per_source": int(cfg.update.rps_bg_bridge_max_hits_per_source),
+        "rps_bg_bridge_cone_enable": bool(cfg.update.rps_bg_bridge_cone_enable),
+        "rps_bg_bridge_cone_radius_cells": int(cfg.update.rps_bg_bridge_cone_radius_cells),
+        "rps_bg_bridge_cone_gain_scale": float(cfg.update.rps_bg_bridge_cone_gain_scale),
+        "rps_bg_bridge_patch_radius_cells": int(cfg.update.rps_bg_bridge_patch_radius_cells),
+        "rps_bg_bridge_patch_gain_scale": float(cfg.update.rps_bg_bridge_patch_gain_scale),
+        "rps_bg_bridge_depth_hypothesis_count": int(cfg.update.rps_bg_bridge_depth_hypothesis_count),
+        "rps_bg_bridge_depth_step_scale": float(cfg.update.rps_bg_bridge_depth_step_scale),
+        "rps_bg_bridge_rear_synth_enable": bool(cfg.update.rps_bg_bridge_rear_synth_enable),
+        "rps_bg_bridge_rear_support_gain": float(cfg.update.rps_bg_bridge_rear_support_gain),
+        "rps_bg_bridge_rear_rho_gain": float(cfg.update.rps_bg_bridge_rear_rho_gain),
+        "rps_bg_bridge_rear_phi_blend": float(cfg.update.rps_bg_bridge_rear_phi_blend),
+        "rps_bg_bridge_rear_score_floor": float(cfg.update.rps_bg_bridge_rear_score_floor),
+        "rps_bg_bridge_rear_active_floor": float(cfg.update.rps_bg_bridge_rear_active_floor),
+        "rps_bg_bridge_rear_age_floor": float(cfg.update.rps_bg_bridge_rear_age_floor),
+        "rps_rear_hybrid_filter_enable": bool(cfg.update.rps_rear_hybrid_filter_enable),
+        "rps_rear_hybrid_bridge_support_min": float(cfg.update.rps_rear_hybrid_bridge_support_min),
+        "rps_rear_hybrid_dyn_max": float(cfg.update.rps_rear_hybrid_dyn_max),
+        "rps_rear_hybrid_manifold_min": float(cfg.update.rps_rear_hybrid_manifold_min),
+        "rps_rear_density_gate_enable": bool(cfg.update.rps_rear_density_gate_enable),
+        "rps_rear_density_radius_cells": int(cfg.update.rps_rear_density_radius_cells),
+        "rps_rear_density_min_neighbors": int(cfg.update.rps_rear_density_min_neighbors),
+        "rps_rear_density_support_min": float(cfg.update.rps_rear_density_support_min),
+        "rps_rear_selectivity_enable": bool(cfg.update.rps_rear_selectivity_enable),
+        "rps_rear_selectivity_support_weight": float(cfg.update.rps_rear_selectivity_support_weight),
+        "rps_rear_selectivity_history_weight": float(cfg.update.rps_rear_selectivity_history_weight),
+        "rps_rear_selectivity_static_weight": float(cfg.update.rps_rear_selectivity_static_weight),
+        "rps_rear_selectivity_geom_weight": float(cfg.update.rps_rear_selectivity_geom_weight),
+        "rps_rear_selectivity_bridge_weight": float(cfg.update.rps_rear_selectivity_bridge_weight),
+        "rps_rear_selectivity_density_weight": float(cfg.update.rps_rear_selectivity_density_weight),
+        "rps_rear_selectivity_rear_score_weight": float(cfg.update.rps_rear_selectivity_rear_score_weight),
+        "rps_rear_selectivity_front_score_weight": float(cfg.update.rps_rear_selectivity_front_score_weight),
+        "rps_rear_selectivity_competition_weight": float(cfg.update.rps_rear_selectivity_competition_weight),
+        "rps_rear_selectivity_competition_alpha": float(cfg.update.rps_rear_selectivity_competition_alpha),
+        "rps_rear_selectivity_gap_weight": float(cfg.update.rps_rear_selectivity_gap_weight),
+        "rps_rear_selectivity_sep_weight": float(cfg.update.rps_rear_selectivity_sep_weight),
+        "rps_rear_selectivity_dyn_weight": float(cfg.update.rps_rear_selectivity_dyn_weight),
+        "rps_rear_selectivity_ghost_weight": float(cfg.update.rps_rear_selectivity_ghost_weight),
+        "rps_rear_selectivity_front_weight": float(cfg.update.rps_rear_selectivity_front_weight),
+        "rps_rear_selectivity_geom_risk_weight": float(cfg.update.rps_rear_selectivity_geom_risk_weight),
+        "rps_rear_selectivity_history_risk_weight": float(cfg.update.rps_rear_selectivity_history_risk_weight),
+        "rps_rear_selectivity_density_risk_weight": float(cfg.update.rps_rear_selectivity_density_risk_weight),
+        "rps_rear_selectivity_bridge_relief_weight": float(cfg.update.rps_rear_selectivity_bridge_relief_weight),
+        "rps_rear_selectivity_static_relief_weight": float(cfg.update.rps_rear_selectivity_static_relief_weight),
+        "rps_rear_selectivity_gap_risk_weight": float(cfg.update.rps_rear_selectivity_gap_risk_weight),
+        "rps_rear_selectivity_score_min": float(cfg.update.rps_rear_selectivity_score_min),
+        "rps_rear_selectivity_risk_max": float(cfg.update.rps_rear_selectivity_risk_max),
+        "rps_rear_selectivity_geom_floor": float(cfg.update.rps_rear_selectivity_geom_floor),
+        "rps_rear_selectivity_history_floor": float(cfg.update.rps_rear_selectivity_history_floor),
+        "rps_rear_selectivity_bridge_floor": float(cfg.update.rps_rear_selectivity_bridge_floor),
+        "rps_rear_selectivity_competition_floor": float(cfg.update.rps_rear_selectivity_competition_floor),
+        "rps_rear_selectivity_front_score_max": float(cfg.update.rps_rear_selectivity_front_score_max),
+        "rps_rear_selectivity_gap_min": float(cfg.update.rps_rear_selectivity_gap_min),
+        "rps_rear_selectivity_gap_max": float(cfg.update.rps_rear_selectivity_gap_max),
+        "rps_rear_selectivity_gap_valid_min": float(cfg.update.rps_rear_selectivity_gap_valid_min),
+        "rps_rear_selectivity_occlusion_order_weight": float(cfg.update.rps_rear_selectivity_occlusion_order_weight),
+        "rps_rear_selectivity_occlusion_order_floor": float(cfg.update.rps_rear_selectivity_occlusion_order_floor),
+        "rps_rear_selectivity_occlusion_order_risk_weight": float(cfg.update.rps_rear_selectivity_occlusion_order_risk_weight),
+        "rps_rear_selectivity_local_conflict_weight": float(cfg.update.rps_rear_selectivity_local_conflict_weight),
+        "rps_rear_selectivity_local_conflict_max": float(cfg.update.rps_rear_selectivity_local_conflict_max),
+        "rps_rear_selectivity_front_residual_weight": float(cfg.update.rps_rear_selectivity_front_residual_weight),
+        "rps_rear_selectivity_front_residual_max": float(cfg.update.rps_rear_selectivity_front_residual_max),
+        "rps_rear_selectivity_occluder_protect_weight": float(cfg.update.rps_rear_selectivity_occluder_protect_weight),
+        "rps_rear_selectivity_occluder_protect_floor": float(cfg.update.rps_rear_selectivity_occluder_protect_floor),
+        "rps_rear_selectivity_occluder_relief_weight": float(cfg.update.rps_rear_selectivity_occluder_relief_weight),
+        "rps_rear_selectivity_dynamic_trail_weight": float(cfg.update.rps_rear_selectivity_dynamic_trail_weight),
+        "rps_rear_selectivity_dynamic_trail_max": float(cfg.update.rps_rear_selectivity_dynamic_trail_max),
+        "rps_rear_selectivity_dynamic_trail_relief_weight": float(cfg.update.rps_rear_selectivity_dynamic_trail_relief_weight),
+        "rps_rear_selectivity_history_anchor_weight": float(cfg.update.rps_rear_selectivity_history_anchor_weight),
+        "rps_rear_selectivity_history_anchor_floor": float(cfg.update.rps_rear_selectivity_history_anchor_floor),
+        "rps_rear_selectivity_history_anchor_relief_weight": float(cfg.update.rps_rear_selectivity_history_anchor_relief_weight),
+        "rps_rear_selectivity_surface_anchor_weight": float(cfg.update.rps_rear_selectivity_surface_anchor_weight),
+        "rps_rear_selectivity_surface_anchor_floor": float(cfg.update.rps_rear_selectivity_surface_anchor_floor),
+        "rps_rear_selectivity_surface_anchor_risk_weight": float(cfg.update.rps_rear_selectivity_surface_anchor_risk_weight),
+        "rps_rear_selectivity_surface_distance_ref": float(cfg.update.rps_rear_selectivity_surface_distance_ref),
+        "rps_rear_selectivity_dynamic_shell_weight": float(cfg.update.rps_rear_selectivity_dynamic_shell_weight),
+        "rps_rear_selectivity_dynamic_shell_max": float(cfg.update.rps_rear_selectivity_dynamic_shell_max),
+        "rps_rear_selectivity_dynamic_shell_gap_ref": float(cfg.update.rps_rear_selectivity_dynamic_shell_gap_ref),
+        "rps_rear_selectivity_conflict_radius_cells": int(cfg.update.rps_rear_selectivity_conflict_radius_cells),
+        "rps_rear_selectivity_conflict_front_score_min": float(cfg.update.rps_rear_selectivity_conflict_front_score_min),
+        "rps_rear_selectivity_conflict_static_score_min": float(cfg.update.rps_rear_selectivity_conflict_static_score_min),
+        "rps_rear_selectivity_conflict_dist_scale": float(cfg.update.rps_rear_selectivity_conflict_dist_scale),
+        "rps_rear_selectivity_conflict_gap_ref": float(cfg.update.rps_rear_selectivity_conflict_gap_ref),
+        "rps_rear_selectivity_conflict_ref": float(cfg.update.rps_rear_selectivity_conflict_ref),
+        "rps_rear_selectivity_trail_radius_cells": int(cfg.update.rps_rear_selectivity_trail_radius_cells),
+        "rps_rear_selectivity_trail_ref": float(cfg.update.rps_rear_selectivity_trail_ref),
+        "rps_rear_selectivity_density_radius_cells": int(cfg.update.rps_rear_selectivity_density_radius_cells),
+        "rps_rear_selectivity_density_ref": int(cfg.update.rps_rear_selectivity_density_ref),
+        "rps_rear_selectivity_topk": int(cfg.update.rps_rear_selectivity_topk),
+        "rps_rear_selectivity_rank_risk_weight": float(cfg.update.rps_rear_selectivity_rank_risk_weight),
+        "rps_rear_selectivity_penetration_weight": float(cfg.update.rps_rear_selectivity_penetration_weight),
+        "rps_rear_selectivity_penetration_floor": float(cfg.update.rps_rear_selectivity_penetration_floor),
+        "rps_rear_selectivity_penetration_risk_weight": float(cfg.update.rps_rear_selectivity_penetration_risk_weight),
+        "rps_rear_selectivity_penetration_free_ref": float(cfg.update.rps_rear_selectivity_penetration_free_ref),
+        "rps_rear_selectivity_penetration_max_steps": int(cfg.update.rps_rear_selectivity_penetration_max_steps),
+        "rps_rear_selectivity_observation_weight": float(cfg.update.rps_rear_selectivity_observation_weight),
+        "rps_rear_selectivity_observation_floor": float(cfg.update.rps_rear_selectivity_observation_floor),
+        "rps_rear_selectivity_observation_risk_weight": float(cfg.update.rps_rear_selectivity_observation_risk_weight),
+        "rps_rear_selectivity_observation_count_ref": float(cfg.update.rps_rear_selectivity_observation_count_ref),
+        "rps_rear_selectivity_observation_min_count": float(cfg.update.rps_rear_selectivity_observation_min_count),
+        "rps_rear_selectivity_unobserved_veto_enable": bool(cfg.update.rps_rear_selectivity_unobserved_veto_enable),
+        "rps_rear_selectivity_static_coherence_weight": float(cfg.update.rps_rear_selectivity_static_coherence_weight),
+        "rps_rear_selectivity_static_coherence_floor": float(cfg.update.rps_rear_selectivity_static_coherence_floor),
+        "rps_rear_selectivity_static_coherence_relief_weight": float(cfg.update.rps_rear_selectivity_static_coherence_relief_weight),
+        "rps_rear_selectivity_static_coherence_radius_cells": int(cfg.update.rps_rear_selectivity_static_coherence_radius_cells),
+        "rps_rear_selectivity_static_coherence_ref": float(cfg.update.rps_rear_selectivity_static_coherence_ref),
+        "rps_rear_selectivity_static_neighbor_min_weight": float(cfg.update.rps_rear_selectivity_static_neighbor_min_weight),
+        "rps_rear_selectivity_static_neighbor_dyn_max": float(cfg.update.rps_rear_selectivity_static_neighbor_dyn_max),
+        "rps_rear_selectivity_thickness_weight": float(cfg.update.rps_rear_selectivity_thickness_weight),
+        "rps_rear_selectivity_thickness_floor": float(cfg.update.rps_rear_selectivity_thickness_floor),
+        "rps_rear_selectivity_thickness_risk_weight": float(cfg.update.rps_rear_selectivity_thickness_risk_weight),
+        "rps_rear_selectivity_thickness_ref": float(cfg.update.rps_rear_selectivity_thickness_ref),
+        "rps_rear_selectivity_normal_consistency_weight": float(cfg.update.rps_rear_selectivity_normal_consistency_weight),
+        "rps_rear_selectivity_normal_consistency_floor": float(cfg.update.rps_rear_selectivity_normal_consistency_floor),
+        "rps_rear_selectivity_normal_consistency_relief_weight": float(cfg.update.rps_rear_selectivity_normal_consistency_relief_weight),
+        "rps_rear_selectivity_normal_consistency_radius_cells": int(cfg.update.rps_rear_selectivity_normal_consistency_radius_cells),
+        "rps_rear_selectivity_normal_consistency_dyn_max": float(cfg.update.rps_rear_selectivity_normal_consistency_dyn_max),
+        "rps_rear_selectivity_ray_convergence_weight": float(cfg.update.rps_rear_selectivity_ray_convergence_weight),
+        "rps_rear_selectivity_ray_convergence_floor": float(cfg.update.rps_rear_selectivity_ray_convergence_floor),
+        "rps_rear_selectivity_ray_convergence_relief_weight": float(cfg.update.rps_rear_selectivity_ray_convergence_relief_weight),
+        "rps_rear_selectivity_ray_convergence_radius_cells": int(cfg.update.rps_rear_selectivity_ray_convergence_radius_cells),
+        "rps_rear_selectivity_ray_convergence_gap_ref": float(cfg.update.rps_rear_selectivity_ray_convergence_gap_ref),
+        "rps_rear_selectivity_ray_convergence_normal_cos": float(cfg.update.rps_rear_selectivity_ray_convergence_normal_cos),
+        "rps_rear_selectivity_ray_convergence_thickness_ref": float(cfg.update.rps_rear_selectivity_ray_convergence_thickness_ref),
+        "rps_rear_selectivity_ray_convergence_ref": float(cfg.update.rps_rear_selectivity_ray_convergence_ref),
+        "rps_rear_state_protect_enable": bool(cfg.update.rps_rear_state_protect_enable),
+        "rps_rear_state_decay_relax": float(cfg.update.rps_rear_state_decay_relax),
+        "rps_rear_state_active_floor": float(cfg.update.rps_rear_state_active_floor),
+        "rps_commit_front_penalty": float(cfg.update.rps_commit_front_penalty),
+        "rps_commit_quality_enable": bool(cfg.update.rps_commit_quality_enable),
+        "rps_commit_quality_transfer_gain": float(cfg.update.rps_commit_quality_transfer_gain),
+        "rps_commit_quality_rho_gain": float(cfg.update.rps_commit_quality_rho_gain),
+        "rps_commit_quality_geom_blend": float(cfg.update.rps_commit_quality_geom_blend),
+        "rps_commit_quality_sep_scale": float(cfg.update.rps_commit_quality_sep_scale),
+        "joint_bg_state_enable": bool(cfg.update.joint_bg_state_enable),
+        "joint_bg_state_on": float(cfg.update.joint_bg_state_on),
+        "joint_bg_state_gain": float(cfg.update.joint_bg_state_gain),
+        "joint_bg_state_rho_gain": float(cfg.update.joint_bg_state_rho_gain),
+        "joint_bg_state_front_penalty": float(cfg.update.joint_bg_state_front_penalty),
         "wdsg_enable": bool(cfg.update.wdsg_enable),
+        "wdsg_synth_mode": str(cfg.update.wdsg_synth_mode),
+        "wdsg_synth_anchor_gain": float(cfg.update.wdsg_synth_anchor_gain),
+        "wdsg_synth_geo_gain": float(cfg.update.wdsg_synth_geo_gain),
+        "wdsg_synth_bg_gain": float(cfg.update.wdsg_synth_bg_gain),
+        "wdsg_synth_counterfactual_gain": float(cfg.update.wdsg_synth_counterfactual_gain),
+        "wdsg_synth_front_repel_gain": float(cfg.update.wdsg_synth_front_repel_gain),
+        "wdsg_synth_energy_temp": float(cfg.update.wdsg_synth_energy_temp),
+        "wdsg_synth_clip_vox": float(cfg.update.wdsg_synth_clip_vox),
+        "wdsg_conservative_enable": bool(cfg.update.wdsg_conservative_enable),
+        "wdsg_conservative_ref_vox": float(cfg.update.wdsg_conservative_ref_vox),
+        "wdsg_conservative_min_clip_scale": float(cfg.update.wdsg_conservative_min_clip_scale),
+        "wdsg_conservative_static_gain": float(cfg.update.wdsg_conservative_static_gain),
+        "wdsg_conservative_rear_gain": float(cfg.update.wdsg_conservative_rear_gain),
+        "wdsg_conservative_geo_gain": float(cfg.update.wdsg_conservative_geo_gain),
+        "wdsg_conservative_front_penalty": float(cfg.update.wdsg_conservative_front_penalty),
+        "wdsg_local_clip_enable": bool(cfg.update.wdsg_local_clip_enable),
+        "wdsg_local_clip_min_scale": float(cfg.update.wdsg_local_clip_min_scale),
+        "wdsg_local_clip_max_scale": float(cfg.update.wdsg_local_clip_max_scale),
+        "wdsg_local_clip_risk_gain": float(cfg.update.wdsg_local_clip_risk_gain),
+        "wdsg_local_clip_expand_gain": float(cfg.update.wdsg_local_clip_expand_gain),
+        "wdsg_local_clip_front_gate": float(cfg.update.wdsg_local_clip_front_gate),
+        "wdsg_local_clip_support_gate": float(cfg.update.wdsg_local_clip_support_gate),
+        "wdsg_local_clip_ambiguity_gate": float(cfg.update.wdsg_local_clip_ambiguity_gate),
+        "wdsg_local_clip_pfv_gain": float(cfg.update.wdsg_local_clip_pfv_gain),
+        "wdsg_local_clip_bg_gain": float(cfg.update.wdsg_local_clip_bg_gain),
         "wdsg_route_enable": bool(cfg.update.wdsg_route_enable),
         "spg_enable": bool(cfg.update.spg_enable),
         "otv_enable": bool(cfg.update.otv_enable),
@@ -1452,7 +2357,17 @@ def main():
         "stress_occlusion_axis": str(args.stress_occlusion_axis),
         "active_voxels": int(len(model.voxel_map)),
         "surface_points": int(pred_points.shape[0]),
+        "rear_surface_points": int(np.asarray(extract_bank_points.get('rear_points', np.zeros((0, 3), dtype=float))).shape[0]) if extract_bank_points else 0,
+        "front_surface_points": int(np.asarray(extract_bank_points.get('front_points', np.zeros((0, 3), dtype=float))).shape[0]) if extract_bank_points else 0,
+        "background_surface_points": int(np.asarray(extract_bank_points.get('background_points', np.zeros((0, 3), dtype=float))).shape[0]) if extract_bank_points else 0,
         "reference_points": int(gt_points.shape[0]),
+        "ptdsf_diag": ptdsf_diag,
+        "ptdsf_export_diag": ptdsf_export_diag,
+        "rps_commit_diag": rps_commit_diag,
+        "rps_competition_diag": rps_competition_diag,
+        "rps_admission_diag": rps_admission_diag,
+        "bg_manifold_diag": bg_manifold_diag,
+        "rear_bg_state_diag": state_diag,
         "assoc_ratio_mean": float(np.mean(assoc_ratios)) if assoc_ratios else 0.0,
         "touched_voxels_mean": float(np.mean(touched_voxels)) if touched_voxels else 0.0,
         "dynamic_score_mean": float(np.mean(dyn_scores)) if dyn_scores else 0.0,
@@ -1490,6 +2405,52 @@ def main():
         "trimap_delayed_bank_points": float(extract_stats.get('trimap_delayed_bank_points', 0.0)),
         "trimap_delayed_bank_conf_mean": float(extract_stats.get('trimap_delayed_bank_conf_mean', 0.0)),
         "trimap_delayed_bank_residency_mean": float(extract_stats.get('trimap_delayed_bank_residency_mean', 0.0)),
+        "rear_selectivity_pre_count": float(extract_stats.get('rear_selectivity_pre_count', 0.0)),
+        "rear_selectivity_kept_count": float(extract_stats.get('rear_selectivity_kept_count', 0.0)),
+        "rear_selectivity_drop_count": float(extract_stats.get('rear_selectivity_drop_count', 0.0)),
+        "rear_selectivity_topk_drop_count": float(extract_stats.get('rear_selectivity_topk_drop_count', 0.0)),
+        "rear_selectivity_score_sum": float(extract_stats.get('rear_selectivity_score_sum', 0.0)),
+        "rear_selectivity_risk_sum": float(extract_stats.get('rear_selectivity_risk_sum', 0.0)),
+        "rear_selectivity_pre_front_score_sum": float(extract_stats.get('rear_selectivity_pre_front_score_sum', 0.0)),
+        "rear_selectivity_pre_front_residual_sum": float(extract_stats.get('rear_selectivity_pre_front_residual_sum', 0.0)),
+        "rear_selectivity_pre_occlusion_order_sum": float(extract_stats.get('rear_selectivity_pre_occlusion_order_sum', 0.0)),
+        "rear_selectivity_pre_local_conflict_sum": float(extract_stats.get('rear_selectivity_pre_local_conflict_sum', 0.0)),
+        "rear_selectivity_pre_dynamic_trail_sum": float(extract_stats.get('rear_selectivity_pre_dynamic_trail_sum', 0.0)),
+        "rear_selectivity_pre_dyn_risk_sum": float(extract_stats.get('rear_selectivity_pre_dyn_risk_sum', 0.0)),
+        "rear_selectivity_pre_history_anchor_sum": float(extract_stats.get('rear_selectivity_pre_history_anchor_sum', 0.0)),
+        "rear_selectivity_pre_surface_anchor_sum": float(extract_stats.get('rear_selectivity_pre_surface_anchor_sum', 0.0)),
+        "rear_selectivity_pre_surface_distance_sum": float(extract_stats.get('rear_selectivity_pre_surface_distance_sum', 0.0)),
+        "rear_selectivity_pre_dynamic_shell_sum": float(extract_stats.get('rear_selectivity_pre_dynamic_shell_sum', 0.0)),
+        "rear_selectivity_front_score_sum": float(extract_stats.get('rear_selectivity_front_score_sum', 0.0)),
+        "rear_selectivity_rear_score_sum": float(extract_stats.get('rear_selectivity_rear_score_sum', 0.0)),
+        "rear_selectivity_gap_sum": float(extract_stats.get('rear_selectivity_gap_sum', 0.0)),
+        "rear_selectivity_competition_sum": float(extract_stats.get('rear_selectivity_competition_sum', 0.0)),
+        "rear_selectivity_occlusion_order_sum": float(extract_stats.get('rear_selectivity_occlusion_order_sum', 0.0)),
+        "rear_selectivity_occluder_protect_sum": float(extract_stats.get('rear_selectivity_occluder_protect_sum', 0.0)),
+        "rear_selectivity_local_conflict_sum": float(extract_stats.get('rear_selectivity_local_conflict_sum', 0.0)),
+        "rear_selectivity_front_residual_sum": float(extract_stats.get('rear_selectivity_front_residual_sum', 0.0)),
+        "rear_selectivity_dynamic_trail_sum": float(extract_stats.get('rear_selectivity_dynamic_trail_sum', 0.0)),
+        "rear_selectivity_dyn_risk_sum": float(extract_stats.get('rear_selectivity_dyn_risk_sum', 0.0)),
+        "rear_selectivity_history_anchor_sum": float(extract_stats.get('rear_selectivity_history_anchor_sum', 0.0)),
+        "rear_selectivity_surface_anchor_sum": float(extract_stats.get('rear_selectivity_surface_anchor_sum', 0.0)),
+        "rear_selectivity_surface_distance_sum": float(extract_stats.get('rear_selectivity_surface_distance_sum', 0.0)),
+        "rear_selectivity_dynamic_shell_sum": float(extract_stats.get('rear_selectivity_dynamic_shell_sum', 0.0)),
+        "rear_selectivity_pre_penetration_sum": float(extract_stats.get('rear_selectivity_pre_penetration_sum', 0.0)),
+        "rear_selectivity_pre_penetration_free_span_sum": float(extract_stats.get('rear_selectivity_pre_penetration_free_span_sum', 0.0)),
+        "rear_selectivity_pre_observation_count_sum": float(extract_stats.get('rear_selectivity_pre_observation_count_sum', 0.0)),
+        "rear_selectivity_pre_observation_support_sum": float(extract_stats.get('rear_selectivity_pre_observation_support_sum', 0.0)),
+        "rear_selectivity_pre_static_coherence_sum": float(extract_stats.get('rear_selectivity_pre_static_coherence_sum', 0.0)),
+        "rear_selectivity_pre_topology_thickness_sum": float(extract_stats.get('rear_selectivity_pre_topology_thickness_sum', 0.0)),
+        "rear_selectivity_pre_normal_consistency_sum": float(extract_stats.get('rear_selectivity_pre_normal_consistency_sum', 0.0)),
+        "rear_selectivity_pre_ray_convergence_sum": float(extract_stats.get('rear_selectivity_pre_ray_convergence_sum', 0.0)),
+        "rear_selectivity_penetration_sum": float(extract_stats.get('rear_selectivity_penetration_sum', 0.0)),
+        "rear_selectivity_penetration_free_span_sum": float(extract_stats.get('rear_selectivity_penetration_free_span_sum', 0.0)),
+        "rear_selectivity_observation_count_sum": float(extract_stats.get('rear_selectivity_observation_count_sum', 0.0)),
+        "rear_selectivity_observation_support_sum": float(extract_stats.get('rear_selectivity_observation_support_sum', 0.0)),
+        "rear_selectivity_static_coherence_sum": float(extract_stats.get('rear_selectivity_static_coherence_sum', 0.0)),
+        "rear_selectivity_topology_thickness_sum": float(extract_stats.get('rear_selectivity_topology_thickness_sum', 0.0)),
+        "rear_selectivity_normal_consistency_sum": float(extract_stats.get('rear_selectivity_normal_consistency_sum', 0.0)),
+        "rear_selectivity_ray_convergence_sum": float(extract_stats.get('rear_selectivity_ray_convergence_sum', 0.0)),
         "runtime": {
             "wall_total_sec": float(wall_total_sec),
             "mapping_step_total_sec": float(step_total_sec),

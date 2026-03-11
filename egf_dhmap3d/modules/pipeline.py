@@ -623,6 +623,7 @@ class EGFDHMap3D:
             use_zero_crossing=bool(self.cfg.surface.use_zero_crossing),
             zero_crossing_max_offset=float(self.cfg.surface.zero_crossing_max_offset),
             zero_crossing_phi_gate=float(self.cfg.surface.zero_crossing_phi_gate),
+            point_bias_along_normal_m=float(getattr(self.cfg.surface, 'point_bias_along_normal_m', 0.0)),
             use_phi_geo_channel=bool(self.cfg.surface.use_phi_geo_channel),
             consistency_enable=bool(self.cfg.surface.consistency_enable),
             consistency_radius=int(self.cfg.surface.consistency_radius),

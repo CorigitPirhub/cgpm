@@ -1,12 +1,26 @@
 # EGF-DHMap 3D Benchmark Report
 
+## 0. Canonical Note (2026-03-08)
+当前对外正式数字统一以以下文件为准：
+- `output/summary_tables/paper_main_table_local_mapping.csv`
+- `output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- `output/summary_tables/dual_protocol_multiseed_significance.csv`
+
+当前 `5-seed canonical` 口径：
+- TUM dynamic mean：EGF `Acc = 4.1655 cm`, `Comp-R = 100.0%`, `F-score = 0.7903`, `Chamfer = 0.05317`, `ghost_ratio = 0.2566`
+- Bonn dynamic mean：EGF `Acc = 6.1481 cm`, `Comp-R = 77.21%`, `F-score = 0.6463`, `Chamfer = 0.10116`, `ghost_ratio = 0.08613`
+
+说明：
+- 本报告后文保留大量历史单序列结果、ablation 与机理分析；
+- 这些历史数字可用于诊断与叙事补充，但**不自动等同于当前正式 canonical 主结论**。
+
 ## 1. Abstract
 本报告将 EGF-DHMap 3D 作为一种 **Time-Adaptive Dynamic Mapping** 方法进行评估：不依赖激进清理（`dyn_forget_gain=0`, `raycast_clear_gain=0`），而依靠证据场 `rho` 的时间累积实现动静分离。  
 在 TUM `walking_xyz` 与 Bonn `balloon2` 上，EGF 展现出稳定的动态抑制能力；同时通过时间维消融补充了“机理数据化”证据：随着时间推进，几何 F-score 持续上升，且静态区域 `rho` 长期显著高于动态区域 `rho`。  
 消融结果进一步表明：证据场与梯度场分别对动态鲁棒性与几何质量起关键作用。  
 针对“静态场景弱于 TSDF”的短板，新增 **SNEF (Static Narrow-Band Evidence Fusion)**：仅在静态分支启用窄截断带与时间持久性约束，动态分支参数保持不变。在 `freiburg1_xyz` 上将 EGF 提升至 `F-score=0.9410`, `Chamfer=0.0373`，同时 3 条 `walking` 的 `ghost_ratio` 增量均 `< +0.004`（约束为 `+0.03`）。
 
-**Bonn 关键结果：EGF 在 `rgbd_bonn_balloon2` 上 `F-score=0.9452`，相对 TSDF (`0.5612`) 提升 `68.4%`（约 69%）。**
+**历史单序列示例（非 canonical 主表）：EGF 在 `rgbd_bonn_balloon2` 的某次单序列运行中 `F-score=0.9452`；该数字仅作历史示例，不作为当前正式主结论。**
 
 ## 2. Experimental Setup
 
