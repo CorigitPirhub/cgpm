@@ -1298,6 +1298,31 @@
   - `Comp-R` 与 `Ghost` 已满足最后一轮门槛；
   - 但 `Acc` 仍卡在 `4.27 cm` 左右，未能压到 `4.20 cm` 以下；
   - 所以当前只能形成 `S2_FINAL_CLOSING_REPORT_DRAFT.md` 的草稿版本，**不能正式宣布 S2 fully pass，也不能进入 S3**。
+- 本轮进一步完成了 `127/128` 全局刚性/相似校正实验，产出：
+  - `processes/s2/S2_GLOBAL_RIGIDITY_ALIGNMENT_DESIGN.md`
+  - `processes/s2/S2_GLOBAL_RIGIDITY_ALIGNMENT_COMPARE.csv`
+  - `processes/s2/S2_FINAL_CLOSING_REPORT.md`
+- 结果明确为负：
+  - `127_global_rigidity_alignment`：Bonn `Acc = 4.345 cm`、`Comp-R = 71.88%`、`Ghost = 2`，平均旋转角仅 `0.219 deg`；
+  - `128_global_similarity_alignment`：Bonn `Acc = 4.417 cm`、`Comp-R = 71.67%`、`Ghost = 6`，平均旋转角 `0.260 deg`、尺度约 `0.997618`；
+  - 这说明当前确实存在可测的全局微小偏差，但其量级太小，无法解释剩余的 `0.07 cm` Acc 缺口；进一步的全局刚性校正反而破坏了原有平衡。
+- 因此本轮最终结论必须更新为：
+  - `127/128` 证明：最后的误差已不再是简单的“地图整体歪了”问题；
+  - 当前 Acc 瓶颈更像是 GT-free 增量点与基线表面之间的系统性局部配准偏差，而非单一全局刚体偏差；
+  - `S2_FINAL_CLOSING_REPORT.md` 已生成，但其结论是：**S2 核心技术路径已完整验证，但仍不能正式批准结项；绝对禁止进入 S3。**
+- 本轮最终又进一步完成了 `129_local_registration_bias_modeling`，产出：
+  - `processes/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING.md`
+  - `processes/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING_COMPARE.csv`
+  - `processes/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING_ANALYSIS.md`
+  - 并同步刷新了 `processes/s2/S2_FINAL_CLOSING_REPORT.md`
+- `129` 的结果为：
+  - Bonn `Acc = 4.280 cm`、`Comp-R = 72.29%`、`Ghost = 4`；
+  - 局部残差从 `12.824 cm` 压到 `5.911 cm`；
+  - 这说明局部偏移场本身存在，但其对全局 Acc 的传导极弱，已经无法继续推动 GT-free 主线跨过 `4.200 cm` 的门槛。
+- 因此当前最终结项判断保持不变：
+  - 当前最佳 GT-free 结果仍是 `126`（`Acc = 4.272 cm`, `Comp-R = 72.94%`, `Ghost = 8`）；
+  - `129` 进一步证明：继续沿当前 S2 主线做局部配准补丁，收益已接近天花板；
+  - **S2 不通过，禁止进入 S3。**
 
 当前距离 `S2` 通过仍差：
 1. 当前所有候选在 `TUM walking all3 + Bonn all3` family-mean 口径下仍未触及 `Comp-R >= 98%`；其中较高动态抑制分支 `67/68` 仅有 `Bonn Comp-R = 70.37% / 70.33%`；
