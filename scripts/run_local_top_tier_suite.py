@@ -157,7 +157,7 @@ def main() -> None:
     parser.add_argument("--python_bin", type=str, default=sys.executable)
     parser.add_argument("--dataset_root_tum", type=str, default="data/tum")
     parser.add_argument("--dataset_root_bonn", type=str, default="data/bonn")
-    parser.add_argument("--out_root", type=str, default="output/post_cleanup/local_top_tier")
+    parser.add_argument("--out_root", type=str, default="output/tmp/local_top_tier")
     parser.add_argument("--protocol", type=str, default="oracle", choices=["oracle", "slam"])
     parser.add_argument("--static_sequences", type=str, default="rgbd_dataset_freiburg1_xyz")
     parser.add_argument(

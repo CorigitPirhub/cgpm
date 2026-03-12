@@ -20,7 +20,7 @@ def is_placeholder_source(src: str) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build independent table for external baselines.")
-    parser.add_argument("--root", type=str, default="output/post_cleanup/p3_tum_expanded/slam")
+    parser.add_argument("--root", type=str, default="output/tmp/p3_tum_expanded/slam")
     parser.add_argument("--sequences", type=str, default="rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static")
     parser.add_argument("--methods", type=str, default="dynaslam,midfusion,neural_implicit")
     parser.add_argument("--out_csv", type=str, default="output/summary_tables/external_baselines_independent.csv")

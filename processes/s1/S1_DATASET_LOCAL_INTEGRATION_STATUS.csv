@@ -1,8 +1,0 @@
-slot,path,exists,type
-tum_dev,data/tum/rgbd_dataset_freiburg3_walking_xyz,True,dir
-tum_lockbox_1,data/tum/rgbd_dataset_freiburg3_walking_static,True,dir
-tum_lockbox_2,data/tum/rgbd_dataset_freiburg3_walking_halfsphere,True,dir
-bonn_dev,data/bonn/rgbd_bonn_balloon2,True,dir
-bonn_lockbox_1,data/bonn/rgbd_bonn_balloon,True,dir
-bonn_lockbox_2,data/bonn/rgbd_bonn_crowd2,True,dir
-static_sanity,data/tum/rgbd_dataset_freiburg1_xyz,True,dir

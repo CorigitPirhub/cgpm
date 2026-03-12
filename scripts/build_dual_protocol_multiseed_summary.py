@@ -359,12 +359,12 @@ def main() -> None:
     parser.add_argument(
         "--oracle_tables_root",
         type=str,
-        default="output/post_cleanup/p4_multiseed_tum_final_v2/oracle/tables",
+        default="output/tmp/p4_multiseed_tum_final_v2/oracle/tables",
     )
     parser.add_argument(
         "--slam_tables_root",
         type=str,
-        default="output/post_cleanup/p5_multiseed_bonn_all3/slam/tables",
+        default="output/tmp/p5_multiseed_bonn_all3/slam/tables",
     )
     parser.add_argument("--oracle_tag", type=str, default="tum_oracle_multiseed")
     parser.add_argument("--slam_tag", type=str, default="bonn_slam_multiseed")

@@ -1,4 +1,0 @@
-baseline_family,local_entry,source_state,protocol_aligned,smoke_status,notes
-TSDF,scripts/run_tsdf_baseline.py + scripts/run_benchmark.py,native_local,yes,runnable,Local native baseline already integrated in benchmark framework.
-DynaSLAM family,third_party/DynaSLAM + scripts/external/run_dynaslam_tum_runner.py + scripts/adapters/run_dynaslam_adapter.py,native_local,yes,runnable,Confirmed local TUM smoke/dev/lockbox runs succeeded via local runner and adapter.
-RoDyn-SLAM family,third_party/rodyn-slam + scripts/external/run_rodyn_slam_runner.py + scripts/adapters/run_rodyn_slam_adapter.py,upstream_local_patched,yes,runnable,Upstream repo is runnable in cgpm after local compatibility patches and core-dataset protocol checks have been completed.

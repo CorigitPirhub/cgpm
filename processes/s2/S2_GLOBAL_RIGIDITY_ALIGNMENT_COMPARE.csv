@@ -1,4 +1,0 @@
-variant,bonn_acc_cm,bonn_comp_r_5cm,bonn_ghost_reduction_vs_tsdf,bonn_rear_points_sum,bonn_rear_true_background_sum,bonn_rear_ghost_sum,bonn_rear_hole_or_noise_sum,mean_rotation_deg,mean_scale
-126_local_geometry_convergence,4.271844433068141,72.94444444444444,17.912375503540595,511.0,243.0,8.0,260.0,nan,nan
-127_global_rigidity_alignment,4.345038367199193,71.87777777777778,15.365193611645887,567.0,253.0,2.0,312.0,0.21875646900392678,1.0
-128_global_similarity_alignment,4.417448130353574,71.66666666666666,24.36035100724101,412.0,236.0,6.0,170.0,0.2604598579355179,0.997617981677156

@@ -19,7 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from egf_dhmap3d.core.config import EGF3DConfig
-from egf_dhmap3d.P10_method.geometry_chain import apply_geometry_chain_coupling
+from experiments.p10.geometry_chain import apply_geometry_chain_coupling
 from egf_dhmap3d.data.tum_rgbd import TUMRGBDStream
 from egf_dhmap3d.eval.metrics import compute_reconstruction_metrics, compute_trajectory_metrics
 from egf_dhmap3d.modules.pipeline import EGFDHMap3D

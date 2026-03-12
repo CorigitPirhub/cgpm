@@ -6,26 +6,26 @@ import numpy as np
 
 from .config import EGF3DConfig
 from .types import VoxelCell3D
-from egf_dhmap3d.P10_method.cgcc import cgcc_conf as p10_cgcc_conf
-from egf_dhmap3d.P10_method.cmct import cmct_conf as p10_cmct_conf
-from egf_dhmap3d.P10_method.csr_xmap import counterfactual_static_readout as p10_counterfactual_static_readout
-from egf_dhmap3d.P10_method.csr_xmap import dynamic_exclusion_readout as p10_dynamic_exclusion_readout
-from egf_dhmap3d.P10_method.obl import obl_conf as p10_obl_conf
-from egf_dhmap3d.P10_method.otv import otv_conf as p10_otv_conf
-from egf_dhmap3d.P10_method.otv import otv_surface_conf as p10_otv_surface_conf
-from egf_dhmap3d.P10_method.pfv import cross_map_fg_conf as p10_cross_map_fg_conf
-from egf_dhmap3d.P10_method.pfv import pfv_cluster_conf as p10_pfv_cluster_conf
-from egf_dhmap3d.P10_method.pfv import pfv_conf as p10_pfv_conf
-from egf_dhmap3d.P10_method.pfv import pfv_exclusive_conf as p10_pfv_exclusive_conf
-from egf_dhmap3d.P10_method.ptdsf import persistent_surface_readout as p10_persistent_surface_readout
-from egf_dhmap3d.P10_method.ptdsf import ptdsf_state_stats as p10_ptdsf_state_stats
-from egf_dhmap3d.P10_method.rps_admission import decay_protect_factors as p10_decay_protect_factors
-from egf_dhmap3d.P10_method.rps_admission import rear_state_support as p10_rear_state_support
-from egf_dhmap3d.P10_method.bg_manifold import manifold_state_components as p10_manifold_state_components
-from egf_dhmap3d.P10_method.rps_selectivity import filter_rear_records as p10_filter_rear_records
-from egf_dhmap3d.P10_method.rps_selectivity import rear_selectivity_components as p10_rear_selectivity_components
-from egf_dhmap3d.P10_method.xmem import xmem_clear_conf as p10_xmem_clear_conf
-from egf_dhmap3d.P10_method.xmem import xmem_conf as p10_xmem_conf
+from experiments.p10.cgcc import cgcc_conf as p10_cgcc_conf
+from experiments.p10.cmct import cmct_conf as p10_cmct_conf
+from experiments.p10.csr_xmap import counterfactual_static_readout as p10_counterfactual_static_readout
+from experiments.p10.csr_xmap import dynamic_exclusion_readout as p10_dynamic_exclusion_readout
+from experiments.p10.obl import obl_conf as p10_obl_conf
+from experiments.p10.otv import otv_conf as p10_otv_conf
+from experiments.p10.otv import otv_surface_conf as p10_otv_surface_conf
+from experiments.p10.pfv import cross_map_fg_conf as p10_cross_map_fg_conf
+from experiments.p10.pfv import pfv_cluster_conf as p10_pfv_cluster_conf
+from experiments.p10.pfv import pfv_conf as p10_pfv_conf
+from experiments.p10.pfv import pfv_exclusive_conf as p10_pfv_exclusive_conf
+from experiments.p10.ptdsf import persistent_surface_readout as p10_persistent_surface_readout
+from experiments.p10.ptdsf import ptdsf_state_stats as p10_ptdsf_state_stats
+from experiments.p10.rps_admission import decay_protect_factors as p10_decay_protect_factors
+from experiments.p10.rps_admission import rear_state_support as p10_rear_state_support
+from experiments.p10.bg_manifold import manifold_state_components as p10_manifold_state_components
+from experiments.p10.rps_selectivity import filter_rear_records as p10_filter_rear_records
+from experiments.p10.rps_selectivity import rear_selectivity_components as p10_rear_selectivity_components
+from experiments.p10.xmem import xmem_clear_conf as p10_xmem_clear_conf
+from experiments.p10.xmem import xmem_conf as p10_xmem_conf
 
 VoxelIndex = Tuple[int, int, int]
 

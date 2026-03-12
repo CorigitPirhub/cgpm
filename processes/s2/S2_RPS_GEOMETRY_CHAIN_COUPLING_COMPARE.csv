@@ -1,6 +1,0 @@
-variant,tum_acc_cm,tum_comp_r_5cm,bonn_acc_cm,bonn_comp_r_5cm,bonn_ghost_reduction_vs_tsdf,bonn_rear_points_sum,bonn_rear_true_background_sum,bonn_rear_ghost_sum,bonn_rear_hole_or_noise_sum,upstream_rear_points_sum,donor_rear_points_sum,donor_cluster_selected_sum,donor_cluster_retained_sum,donor_patch_points_sum,projected_points_sum,tb_noise_correlation,decision
-99_manhattan_plane_completion_raw,0.935798295196066,93.12222222222222,4.345629355333982,70.07777777777778,28.277506974935523,90.0,39.0,20.0,31.0,nan,nan,nan,nan,nan,nan,-0.22501758018520482,control
-104_depth_bias_minus1cm_raw,0.935798295196066,93.12222222222222,4.237806081736836,70.85555555555555,13.45102676500444,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,nan,control
-108_geometry_chain_coupled_direct,0.935798295196066,93.12222222222222,4.232638465480493,70.85555555555555,14.579900098416497,90.0,39.0,20.0,31.0,0.0,90.0,0.0,0.0,0.0,0.0,-0.22501758018520482,iterate
-109_geometry_chain_coupled_projected,0.935798295196066,93.12222222222222,4.232541863683049,70.84444444444445,14.131177831603225,90.0,39.0,19.0,32.0,0.0,90.0,0.0,0.0,0.0,21.0,-0.1147078669352809,iterate
-110_geometry_chain_coupled_conservative,0.935798295196066,93.12222222222222,4.236610844637432,70.83333333333333,13.303303128881481,37.0,10.0,5.0,22.0,0.0,90.0,0.0,37.0,0.0,0.0,-0.7857142857142858,abandon

@@ -13,12 +13,12 @@ from egf_dhmap3d.data.tum_rgbd import TUMFrame3D
 from egf_dhmap3d.modules.associator import Associator3D
 from egf_dhmap3d.modules.predictor import Predictor3D
 from egf_dhmap3d.modules.updater import Updater3D
-from egf_dhmap3d.P10_method.pfv import map_static_support as p10_map_static_support
-from egf_dhmap3d.P10_method.pfv import route_measurements_with_pfv as p10_route_measurements_with_pfv
-from egf_dhmap3d.P10_method.tri_map import promote_delayed_background_map as p10_promote_delayed_background_map
-from egf_dhmap3d.P10_method.tri_map import route_measurements_with_delayed_bg as p10_route_measurements_with_delayed_bg
-from egf_dhmap3d.P10_method.tri_map import hole_only_delayed_rescue as p10_hole_only_delayed_rescue
-from egf_dhmap3d.P10_method.tri_map import residency_gated_delayed_export as p10_residency_gated_delayed_export
+from experiments.p10.pfv import map_static_support as p10_map_static_support
+from experiments.p10.pfv import route_measurements_with_pfv as p10_route_measurements_with_pfv
+from experiments.p10.tri_map import promote_delayed_background_map as p10_promote_delayed_background_map
+from experiments.p10.tri_map import route_measurements_with_delayed_bg as p10_route_measurements_with_delayed_bg
+from experiments.p10.tri_map import hole_only_delayed_rescue as p10_hole_only_delayed_rescue
+from experiments.p10.tri_map import residency_gated_delayed_export as p10_residency_gated_delayed_export
 
 
 class EGFDHMap3D:

@@ -250,7 +250,7 @@ def build_curves(summary_rows: Sequence[Dict[str, object]], out_png: Path) -> No
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_root", type=str, default="data/synth_stress")
-    parser.add_argument("--out_root", type=str, default="output/post_cleanup/p3_stress_synth")
+    parser.add_argument("--out_root", type=str, default="output/tmp/p3_stress_synth")
     parser.add_argument("--frames", type=int, default=36)
     parser.add_argument("--width", type=int, default=640)
     parser.add_argument("--height", type=int, default=480)

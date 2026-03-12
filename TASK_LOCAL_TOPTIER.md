@@ -9,6 +9,10 @@
 > 
 > 本文件不再承担“实验流水账”职责，而承担“从当前状态出发，迈向高概率中稿顶刊/顶会”的总控任务书职责。
 
+> 阶段结果总览统一放在 `output/<stage>/OVERVIEW.md`；每个尝试在对应阶段目录下保留一个结果汇总 `.csv` 与一个结论/未来计划 `.md`。
+>
+> 自本版起，后续所有新增、迁移、归档文件都必须按 `PROJECT_STRUCTURE_GUIDE.md` 组织；不再接受脱离该规范的临时落盘方式。
+
 ---
 
 ## 0. 文档用途与执行原则
@@ -39,6 +43,17 @@
 5. **宁冗勿缺**
    - 对顶刊/顶会投稿而言，缺任何一个关键模块、关键基线、关键表格、关键 failure analysis，都可能导致系统性拒稿。
 
+6. **文件组织必须遵守 `PROJECT_STRUCTURE_GUIDE.md`**
+   - 主线稳定代码放在 `egf_dhmap3d/` 与 `scripts/`。
+   - 实验脚本与实验性方法放在 `experiments/<stage>/`。
+   - 每个尝试在 `output/<stage>/` 下保留两个文件：一个结果汇总 `.csv`，一个结论/未来计划 `.md`。
+   - 阶段总览放在 `output/<stage>/OVERVIEW.md`，中间产物放在 `output/tmp/`。
+
+7. **主线实验必须可从原始数据独立重建**
+   - 进入阶段结论、主基线比较或主线判断的实验，必须能从原始数据目录出发独立重建。
+   - 不得把依赖隐式中间产物、历史 donor/control 目录或手工残留缓存的链路，直接当作当前主线结论来源。
+   - 依赖上游产物的脚本只能作为诊断/分析工具，除非整条流水线已被显式定义并可一键从原始数据完整重建。
+
 ---
 
 ## 1. 当前项目现状（重写任务书的起点）
@@ -57,15 +72,14 @@
 - [x] 实验链路完整：
   - `scripts/run_benchmark.py`
   - `scripts/run_egf_3d_tum.py`
-  - `scripts/run_p10_precision_profile.py`
+  - `experiments/p10/run_p10_precision_profile.py`
   - `scripts/update_summary_tables.py`
 - [x] 主文档体系完整：
   - `README.md`
   - `BENCHMARK_REPORT.md`
-  - `processes/p10/P10_RESEARCH_ASSESSMENT.md`
-  - `processes/p10/P10_METHOD_PROPOSALS.md`
-  - `processes/governance/PROJECT_AUDIT_CHECKLIST.md`
-  - `processes/governance/SUBMISSION_FEASIBILITY_ROADMAP.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `PROJECT_STRUCTURE_GUIDE.md`
+  - `TASK_LOCAL_TOPTIER.md`
 - [x] 当前项目已拥有清晰的 research bottleneck 定位：
   - 当前最大阻塞项仍是 `P10`
   - 主矛盾仍是 `Acc / ghost / dynamic robustness` 的统一优化
@@ -132,7 +146,7 @@
 
 ### 2.1 最终目标不是“可投稿”，而是“高概率中稿顶刊/顶会”
 
-本任务书采用比 `processes/governance/SUBMISSION_FEASIBILITY_ROADMAP.md` 更激进的标准。
+本任务书采用比阶段结果归档更激进的标准。
 
 最终目标定义为：
 
@@ -374,9 +388,9 @@
 - 已归档历史任务书与局部试验链：
   - `archives/taskbooks/TASK_LOCAL_TOPTIER_ARCHIVE_2026-03-08.md`
   - `archives/experiment_chains/EXPERIMENT_ARCHIVE_INDEX_2026-03-08.md`
-- 已形成当前状态一页式基线页：`processes/governance/CURRENT_STATE_BASELINE.md`
-- 已补充阶段重评估页：`processes/governance/S0_S1_S2_STAGE_REASSESSMENT_2026-03-09.md`
-- 已形成主线/支线裁剪表：`processes/governance/MAINLINE_BRANCH_PRUNING_TABLE.md`
+- 已形成当前状态一页式基线页：`output/<stage>/OVERVIEW.md`
+- 已补充阶段重评估页：`output/<stage>/OVERVIEW.md`
+- 已形成主线/支线裁剪表：`output/<stage>/OVERVIEW.md`
 
 ### 阶段 S0 结论
 
@@ -618,40 +632,40 @@
 ### 阶段 S1 完成记录（2026-03-08）
 
 - 已完成主命题收敛，形成如下产物：
-  - `processes/s1/S1_MAIN_THESIS_ABSTRACT.md`
-  - `processes/s1/S1_METHOD_OVERVIEW.md`
-  - `processes/s1/S1_METHOD_STRUCTURE_DIAGRAM.md`
-  - `processes/s1/S1_MAINLINE_APPENDIX_BOUNDARY.md`
-- 已固定开发/锁箱协议卡：`processes/s1/S1_P10_DEV_LOCKBOX_PROTOCOL_CARD.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+- 已固定开发/锁箱协议卡：`output/<stage>/OVERVIEW.md`
 - 已完成核心数据集本地接入状态表：
-  - `processes/s1/S1_DATASET_LOCAL_INTEGRATION_STATUS.csv`
-  - `processes/s1/S1_DATASET_LOCAL_INTEGRATION_STATUS.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
 - 已完成更新版 `RB-Core` 本地接入状态表：
-  - `processes/s1/S1_RB_CORE_LOCAL_INTEGRATION_STATUS.csv`
-  - `processes/s1/S1_RB_CORE_LOCAL_INTEGRATION_STATUS.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
 - 已完成 `RoDyn-SLAM` 本地接入与 core-dataset protocol check：
   - `scripts/external/run_rodyn_slam_runner.py`
   - `scripts/adapters/run_rodyn_slam_adapter.py`
   - `scripts/external/rodyn_no_dynamo_entry.py`
-  - `scripts/run_s1_rodyn_core_protocol.py`
-  - `processes/s1/S1_RODYN_CORE_PROTOCOL_CHECK.csv`
-  - `processes/s1/S1_RODYN_CORE_PROTOCOL_CHECK.md`
+  - `experiments/s1/run_s1_rodyn_core_protocol.py`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
 - 已完成更新版 `RB-Core` 开发门槛 / 锁箱 gate：
-  - `processes/s1/S1_RB_CORE_COMPARE_TUM_SMOKE.csv`
-  - `processes/s1/S1_RB_CORE_COMPARE_TUM_SMOKE.md`
-  - `processes/s1/S1_RB_CORE_LOCKBOX_DIRECTION_RECHECK.csv`
-  - `processes/s1/S1_RB_CORE_LOCKBOX_DIRECTION_RECHECK_TABLE.md`
-  - `processes/s1/S1_RB_CORE_LOCKBOX_DIRECTION_RECHECK.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
 - 已冻结 recent baseline 决策、外部基线完成度与 `RB-S1+`：
-  - `processes/s1/S1_RECENT_BASELINE_REPLACEMENT_DECISION.md`
-  - `processes/s1/S1_EXTERNAL_BASELINE_COMPLETION_STATUS.md`
-  - `processes/s1/S1_RBS1PLUS_FREEZE.md`
-  - `processes/s1/S1_EXPERIMENT_CHAIN_SUFFICIENCY.md`
-  - `processes/s1/S1_CORE_DATASET_COMPARE_SKELETON.csv`
-  - `processes/s1/S1_CORE_DATASET_COMPARE_SKELETON.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
 - 已完成第一轮候选筛选与唯一 active candidate 冻结：
-  - `processes/s1/S1_RESULTS_ANALYSIS.md`
-  - `processes/s1/S1_ACTIVE_CANDIDATE_FREEZE.md`
+  - `output/<stage>/OVERVIEW.md`
+  - `output/<stage>/OVERVIEW.md`
 - 已完成本轮为 `RoDyn-SLAM` 本地接入所需的兼容修复：
   - `third_party/rodyn-slam/rodynslam.py`
   - `third_party/rodyn-slam/datasets/dataset.py`
@@ -737,611 +751,110 @@
 - [ ] `S2` 的唯一 active configuration 已冻结
 - [ ] **未满足前，绝对禁止进入 `S3`**
 
-### 阶段 S2 完成记录（2026-03-09）
+### 阶段 S2 完成记录（2026-03-11 refresh）
 
-- 已完成 delayed-specific target 定义页：
-  - `processes/s2/S2_DELAYED_WRITE_TARGET_DEFINITION.md`
-- 已完成第一轮 + 第二轮 controlled ablation：
-  - `processes/s2/S2_CONTROLLED_ABLATION_COMPARE.csv`
-  - `processes/s2/S2_CONTROLLED_ABLATION_COMPARE.md`
-- 已完成结果分析与淘汰判断：
-  - `processes/s2/S2_RESULTS_ANALYSIS.md`
-- 已完成 current-code canonical 锁定：
-  - `processes/s2/S2_ACTIVE_CONFIGURATION_FREEZE.md`
-  - `processes/s2/S2_CURRENT_CODE_CANONICAL_LOCK.md`
-  - `processes/s2/S2_CURRENT_CODE_DRIFT_COMPARE.md`
-- 已完成 Bonn-side family-specific calibration 的 archive / current-code 双层整理：
-  - `processes/s2/S2_BONN_FAMILY_CALIBRATION_COMPARE.md`
-- 已完成 geometry-conservative clipping 第三轮验证（historical archive）：
-  - `processes/s2/S2_CONTROLLED_ABLATION_COMPARE.csv`（`11/12` 行）
-- 已完成 Bonn local clipping refinement 的 current-code re-baseline：
-  - `processes/s2/S2_BONN_LOCALCLIP_REFINEMENT_COMPARE.csv`
-  - `processes/s2/S2_BONN_LOCALCLIP_REFINEMENT_COMPARE.md`
-  - `processes/s2/S2_BONN_LOCALCLIP_REFINEMENT_ANALYSIS.md`
-- 已完成 current-code drift 定位所需的 `05_anchor_noroute` 对照重跑：
-  - `output/post_cleanup/s2_stage/05_anchor_noroute_recheck600`
-- 已完成 `historical 05 -> 14` 失活链条排查与修复尝试报告：
-  - `processes/s2/S2_RESTORE_05_TO_14_CHAIN_REPORT.md`
-- 已完成 downstream `sync/export` 主线攻击与两轮候选淘汰：
-  - `processes/s2/S2_DOWNSTREAM_EXPORT_CHAIN_COMPARE.csv`
-  - `processes/s2/S2_DOWNSTREAM_EXPORT_CHAIN_COMPARE.md`
-  - `processes/s2/S2_DOWNSTREAM_SOFTBANK_COMPARE.csv`
-  - `processes/s2/S2_DOWNSTREAM_SOFTBANK_COMPARE.md`
-  - `processes/s2/S2_DOWNSTREAM_CHAIN_ATTACK_REPORT.md`
-- 已完成第三轮 `rear/bg state formation before export` 恢复实验：
-  - `processes/s2/S2_REAR_BG_STATE_FORMATION_COMPARE.csv`
-  - `processes/s2/S2_REAR_BG_STATE_FORMATION_COMPARE.md`
-  - `processes/s2/S2_REAR_BG_STATE_FORMATION_ANALYSIS.md`
-- 已完成 `rps_commit_score / rps_active / phi_rear / rho_rear` 激活链路实验：
-  - `processes/s2/S2_RPS_COMMIT_ACTIVATION_DESIGN.md`
-  - `processes/s2/S2_RPS_COMMIT_ACTIVATION_COMPARE.csv`
-  - `processes/s2/S2_RPS_COMMIT_ACTIVATION_COMPARE.md`
-  - `processes/s2/S2_RPS_COMMIT_ACTIVATION_ANALYSIS.md`
-- 已完成 committed rear-bank quality enhancement 受控实验：
-  - `processes/s2/S2_RPS_COMMITTED_BANK_QUALITY_DESIGN.md`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_QUALITY_COMPARE.csv`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_QUALITY_COMPARE.md`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_QUALITY_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/30_rps_commit_geom_bg_soft_bank_recheck`
-- 已完成 Bonn competition-boundary 诊断与 competition-only 受控实验：
-  - `processes/s2/S2_RPS_COMMITTED_BANK_COMPETITION_COMPARE.csv`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_COMPETITION_COMPARE.md`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_COMPETITION_DIAGNOSIS.md`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_COMPETITION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/30_rps_commit_geom_bg_soft_bank_compete_all3`
-  - `output/post_cleanup/s2_stage/34_bonn_compete_bgscore`
-  - `output/post_cleanup/s2_stage/35_bonn_compete_softgap`
-  - `output/post_cleanup/s2_stage/36_bonn_compete_softgap_support`
-- 已完成 committed rear-bank admission / state persistence 受控实验：
-  - `processes/s2/S2_RPS_COMMITTED_BANK_ADMISSION_COMPARE.csv`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_ADMISSION_COMPARE.md`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_ADMISSION_DIAGNOSIS.md`
-  - `processes/s2/S2_RPS_COMMITTED_BANK_ADMISSION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/30_rps_commit_geom_bg_soft_bank_admission_all3`
-  - `output/post_cleanup/s2_stage/37_bonn_admission_gate_relax`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect`
-  - `output/post_cleanup/s2_stage/39_bonn_admission_gate_plus_protect`
-- 已完成 rear-state geometry quality / spatial distribution 受控实验：
-  - `processes/s2/S2_RPS_REAR_GEOMETRY_QUALITY_COMPARE.csv`
-  - `processes/s2/S2_RPS_REAR_GEOMETRY_QUALITY_COMPARE.md`
-  - `processes/s2/S2_RPS_REAR_GEOMETRY_QUALITY_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_REAR_GEOMETRY_QUALITY_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_geom_quality_control`
-  - `output/post_cleanup/s2_stage/40_bonn_geometry_aligned_admission`
-  - `output/post_cleanup/s2_stage/41_bonn_geometry_occlusion_admission`
-  - `output/post_cleanup/s2_stage/42_bonn_geometry_density_gate`
-- 已完成 rear-point space redirect 受控实验：
-  - `processes/s2/S2_RPS_SPACE_REDIRECT_COMPARE.csv`
-  - `processes/s2/S2_RPS_SPACE_REDIRECT_COMPARE.md`
-  - `processes/s2/S2_RPS_SPACE_REDIRECT_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_SPACE_REDIRECT_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_space_redirect_control`
-  - `output/post_cleanup/s2_stage/43_history_guided_background_location`
-  - `output/post_cleanup/s2_stage/44_history_plus_ghost_suppress`
-  - `output/post_cleanup/s2_stage/45_visual_evidence_anchor_strict`
-- 已完成 strict history-visible / currently-obstructed 受控实验：
-  - `processes/s2/S2_RPS_HISTORY_VISIBLE_OBSTRUCTED_COMPARE.csv`
-  - `processes/s2/S2_RPS_HISTORY_VISIBLE_OBSTRUCTED_COMPARE.md`
-  - `processes/s2/S2_RPS_HISTORY_VISIBLE_OBSTRUCTED_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_HISTORY_VISIBLE_OBSTRUCTED_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_hvo_control`
-  - `output/post_cleanup/s2_stage/46_history_background_only_admission`
-  - `output/post_cleanup/s2_stage/47_history_visible_obstructed_manifold`
-- 已完成 stable background manifold state 受控实验：
-  - `processes/s2/S2_RPS_BACKGROUND_MANIFOLD_STATE_COMPARE.csv`
-  - `processes/s2/S2_RPS_BACKGROUND_MANIFOLD_STATE_COMPARE.md`
-  - `processes/s2/S2_RPS_BACKGROUND_MANIFOLD_STATE_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_BACKGROUND_MANIFOLD_STATE_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_bg_manifold_control`
-  - `output/post_cleanup/s2_stage/48_stable_background_memory_state`
-  - `output/post_cleanup/s2_stage/49_relaxed_manifold_guided_generation`
-- 已完成 dense manifold propagation / completion 受控实验：
-  - `processes/s2/S2_RPS_DENSE_MANIFOLD_COMPARE.csv`
-  - `processes/s2/S2_RPS_DENSE_MANIFOLD_COMPARE.md`
-  - `processes/s2/S2_RPS_DENSE_MANIFOLD_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_DENSE_MANIFOLD_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_dense_manifold_control`
-  - `output/post_cleanup/s2_stage/50_dense_background_propagation`
-  - `output/post_cleanup/s2_stage/51_geometry_guided_manifold_completion`
-  - `output/post_cleanup/s2_stage/52_dual_scale_manifold_fusion`
-- 已完成 surface-constrained manifold expansion 受控实验：
-  - `processes/s2/S2_RPS_SURFACE_CONSTRAINED_COMPARE.csv`
-  - `processes/s2/S2_RPS_SURFACE_CONSTRAINED_COMPARE.md`
-  - `processes/s2/S2_RPS_SURFACE_CONSTRAINED_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_SURFACE_CONSTRAINED_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_surface_constrained_control`
-  - `output/post_cleanup/s2_stage/53_surface_adjacent_propagation`
-  - `output/post_cleanup/s2_stage/54_normal_guided_manifold_extension`
-  - `output/post_cleanup/s2_stage/55_surface_constrained_ray_projection`
-- 已完成 occlusion-aware gap bridging 受控实验：
-  - `processes/s2/S2_RPS_OCCLUSION_BRIDGE_COMPARE.csv`
-  - `processes/s2/S2_RPS_OCCLUSION_BRIDGE_COMPARE.md`
-  - `processes/s2/S2_RPS_OCCLUSION_BRIDGE_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_OCCLUSION_BRIDGE_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_occlusion_bridge_control`
-  - `output/post_cleanup/s2_stage/56_temporal_occlusion_tunneling`
-  - `output/post_cleanup/s2_stage/57_historical_surface_rear_projection`
-  - `output/post_cleanup/s2_stage/58_ghost_aware_surface_inpainting`
-- 已完成 high-coverage bridge recovery 受控实验：
-  - `processes/s2/S2_RPS_HIGH_COVERAGE_BRIDGE_COMPARE.csv`
-  - `processes/s2/S2_RPS_HIGH_COVERAGE_BRIDGE_COMPARE.md`
-  - `processes/s2/S2_RPS_HIGH_COVERAGE_BRIDGE_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_HIGH_COVERAGE_BRIDGE_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/38_bonn_state_protect_high_coverage_bridge_control`
-  - `output/post_cleanup/s2_stage/59_relaxed_occlusion_tunneling`
-  - `output/post_cleanup/s2_stage/60_cone_based_rear_projection`
-  - `output/post_cleanup/s2_stage/61_hybrid_confidence_gating`
-- 已完成 multi-candidate surface generation 受控实验：
-  - `processes/s2/S2_RPS_MULTI_CANDIDATE_GENERATION_COMPARE.csv`
-  - `processes/s2/S2_RPS_MULTI_CANDIDATE_GENERATION_COMPARE.md`
-  - `processes/s2/S2_RPS_MULTI_CANDIDATE_GENERATION_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_MULTI_CANDIDATE_GENERATION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/62_dense_patch_projection`
-  - `output/post_cleanup/s2_stage/63_multi_hypothesis_depth_sampling`
-  - `output/post_cleanup/s2_stage/64_patch_depth_hybrid_generation`
-- 已完成 ghost-capped selectivity 受控实验：
-  - `processes/s2/S2_RPS_GHOST_CAPPED_SELECTIVITY_COMPARE.csv`
-  - `processes/s2/S2_RPS_GHOST_CAPPED_SELECTIVITY_COMPARE.md`
-  - `processes/s2/S2_RPS_GHOST_CAPPED_SELECTIVITY_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_GHOST_CAPPED_SELECTIVITY_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/65_ghost_risk_prediction_filter`
-  - `output/post_cleanup/s2_stage/66_geometry_constrained_admission`
-  - `output/post_cleanup/s2_stage/67_topk_selective_generation`
-- 已完成 discriminative feature fusion 受控实验：
-  - `processes/s2/S2_RPS_DISCRIMINATIVE_FUSION_COMPARE.csv`
-  - `processes/s2/S2_RPS_DISCRIMINATIVE_FUSION_COMPARE.md`
-  - `processes/s2/S2_RPS_DISCRIMINATIVE_FUSION_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_DISCRIMINATIVE_FUSION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/67_topk_selective_generation_df_control`
-  - `output/post_cleanup/s2_stage/68_rear_front_score_competition`
-  - `output/post_cleanup/s2_stage/69_depth_gap_validation`
-  - `output/post_cleanup/s2_stage/70_fused_discriminator_topk`
-- 已完成 occlusion-ordered conflict resolution 受控实验：
-  - `processes/s2/S2_RPS_SEMANTIC_CLASSIFICATION_COMPARE.csv`
-  - `processes/s2/S2_RPS_SEMANTIC_CLASSIFICATION_COMPARE.md`
-  - `processes/s2/S2_RPS_SEMANTIC_CLASSIFICATION_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_SEMANTIC_CLASSIFICATION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/71_occlusion_order_consistency_semantic`
-  - `output/post_cleanup/s2_stage/72_local_geometric_conflict_resolution_semantic`
-  - `output/post_cleanup/s2_stage/73_front_residual_aware_suppression_semantic`
-- 已完成 static-persistence anchored recall 受控实验：
-  - `processes/s2/S2_RPS_STATIC_ANCHORED_COMPARE.csv`
-  - `processes/s2/S2_RPS_STATIC_ANCHORED_COMPARE.md`
-  - `processes/s2/S2_RPS_STATIC_ANCHORED_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_STATIC_ANCHORED_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/72_local_geometric_conflict_resolution_static_anchor_control`
-  - `output/post_cleanup/s2_stage/74_static_history_weight_boosting`
-  - `output/post_cleanup/s2_stage/75_dynamic_shell_masking`
-  - `output/post_cleanup/s2_stage/76_surface_persistent_anchoring`
-- 已完成 hybrid optimization 受控实验：
-  - `processes/s2/S2_RPS_HYBRID_OPTIMIZATION_COMPARE.csv`
-  - `processes/s2/S2_RPS_HYBRID_OPTIMIZATION_COMPARE.md`
-  - `processes/s2/S2_RPS_HYBRID_OPTIMIZATION_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_HYBRID_OPTIMIZATION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/72_local_geometric_conflict_resolution_hybrid_control`
-  - `output/post_cleanup/s2_stage/77_hybrid_boost_conflict`
-  - `output/post_cleanup/s2_stage/78_conservative_anchoring`
-  - `output/post_cleanup/s2_stage/79_feature_weighted_topk`
-- 已完成 ray-consistency 受控实验：
-  - `processes/s2/S2_RPS_RAY_CONSISTENCY_COMPARE.csv`
-  - `processes/s2/S2_RPS_RAY_CONSISTENCY_COMPARE.md`
-  - `processes/s2/S2_RPS_RAY_CONSISTENCY_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_RAY_CONSISTENCY_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/72_local_geometric_conflict_resolution_ray_control`
-  - `output/post_cleanup/s2_stage/80_ray_penetration_consistency`
-  - `output/post_cleanup/s2_stage/81_unobserved_space_veto`
-  - `output/post_cleanup/s2_stage/82_static_neighborhood_coherence`
-- 已完成 topology-constraint 受控实验：
-  - `processes/s2/S2_RPS_TOPOLOGY_CONSTRAINT_COMPARE.csv`
-  - `processes/s2/S2_RPS_TOPOLOGY_CONSTRAINT_COMPARE.md`
-  - `processes/s2/S2_RPS_TOPOLOGY_CONSTRAINT_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_TOPOLOGY_CONSTRAINT_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/80_ray_penetration_topology_control`
-  - `output/post_cleanup/s2_stage/83_minimum_thickness_topology_filter`
-  - `output/post_cleanup/s2_stage/84_front_back_normal_consistency`
-  - `output/post_cleanup/s2_stage/85_occlusion_ray_convergence_constraint`
-- 已完成 plane-attribution 受控实验：
-  - `processes/s2/S2_RPS_PLANE_ATTRIBUTION_COMPARE.csv`
-  - `processes/s2/S2_RPS_PLANE_ATTRIBUTION_COMPARE.md`
-  - `processes/s2/S2_RPS_PLANE_ATTRIBUTION_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_PLANE_ATTRIBUTION_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/86_rear_plane_clustering_snapping`
-  - `output/post_cleanup/s2_stage/87_front_mask_guided_back_projection`
-  - `output/post_cleanup/s2_stage/88_occlusion_depth_hypothesis_validation`
-- 已完成 pairing-evidence 受控实验：
-  - `processes/s2/S2_RPS_PAIRING_EVIDENCE_COMPARE.csv`
-  - `processes/s2/S2_RPS_PAIRING_EVIDENCE_COMPARE.md`
-  - `processes/s2/S2_RPS_PAIRING_EVIDENCE_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_PAIRING_EVIDENCE_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/89_front_back_surface_pairing_guard`
-  - `output/post_cleanup/s2_stage/90_background_plane_evidence_accumulation`
-  - `output/post_cleanup/s2_stage/91_occlusion_depth_hypothesis_tb_protection`
-- 已完成 HSSA 受控实验：
-  - `processes/s2/S2_RPS_HSSA_COMPARE.csv`
-  - `processes/s2/S2_RPS_HSSA_COMPARE.md`
-  - `processes/s2/S2_RPS_HSSA_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_HSSA_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/92_multi_view_ray_support_aggregation`
-  - `output/post_cleanup/s2_stage/93_spatial_neighborhood_density_clustering`
-  - `output/post_cleanup/s2_stage/94_historical_tsdf_consistency_reactivation`
-- 已完成 balloon-cluster 受控实验：
-  - `processes/s2/S2_RPS_BALLOON_CLUSTER_COMPARE.csv`
-  - `processes/s2/S2_RPS_BALLOON_CLUSTER_COMPARE.md`
-  - `processes/s2/S2_RPS_BALLOON_CLUSTER_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_BALLOON_CLUSTER_ANALYSIS.md`
-  - `processes/s2/S2_RPS_DEEP_EXPLORE_COMPARE.csv`
-  - `processes/s2/S2_RPS_DEEP_EXPLORE_COMPARE.md`
-  - `processes/s2/S2_RPS_DEEP_EXPLORE_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_DEEP_EXPLORE_ANALYSIS.md`
-  - `processes/s2/S2_RPS_DEEP_EXPLORE_LITERATURE.md`
-  - `output/post_cleanup/s2_stage/95_geodesic_balloon_consistency`
-  - `output/post_cleanup/s2_stage/96_support_cluster_model_fitting`
-  - `output/post_cleanup/s2_stage/97_global_map_anchoring`
-  - `output/post_cleanup/s2_stage/98_geodesic_support_diffusion`
-  - `output/post_cleanup/s2_stage/99_manhattan_plane_completion`
-  - `output/post_cleanup/s2_stage/100_cluster_view_inpainting`
-- 已完成 Acc-tightening 受控实验：
-  - `processes/s2/S2_RPS_ACC_TIGHTENING_COMPARE.csv`
-  - `processes/s2/S2_RPS_ACC_TIGHTENING_COMPARE.md`
-  - `processes/s2/S2_RPS_ACC_TIGHTENING_DISTRIBUTION.md`
-  - `processes/s2/S2_RPS_ACC_TIGHTENING_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/101_manhattan_plane_projection_hard_snapping`
-  - `output/post_cleanup/s2_stage/102_scale_drift_correction`
-  - `output/post_cleanup/s2_stage/103_local_cluster_refinement`
-- 已完成 upstream-geometry 受控实验：
-  - `processes/s2/S2_RPS_UPSTREAM_GEOMETRY_COMPARE.csv`
-  - `processes/s2/S2_RPS_UPSTREAM_GEOMETRY_COMPARE.md`
-  - `processes/s2/S2_RPS_UPSTREAM_GEOMETRY_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/104_depth_bias_minus1cm`
-  - `output/post_cleanup/s2_stage/105_depth_bias_plus1cm`
-- 已完成 geometry-chain coupling 受控实验：
-  - `processes/s2/S2_RPS_GEOMETRY_CHAIN_COUPLING_COMPARE.csv`
-  - `processes/s2/S2_RPS_GEOMETRY_CHAIN_COUPLING_COMPARE.md`
-  - `processes/s2/S2_RPS_GEOMETRY_CHAIN_COUPLING_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/108_geometry_chain_coupled_direct`
-  - `output/post_cleanup/s2_stage/109_geometry_chain_coupled_projected`
-  - `output/post_cleanup/s2_stage/110_geometry_chain_coupled_conservative`
-- 已完成 Native Mainline Integration：
-  - `processes/s2/S2_RPS_NATIVE_MAINLINE_INTEGRATION_COMPARE.csv`
-  - `processes/s2/S2_RPS_NATIVE_MAINLINE_INTEGRATION_REPORT.md`
-  - `processes/s2/S2_NATIVE_MAINLINE_GAP_ANALYSIS.md`
-  - `output/post_cleanup/s2_stage/111_native_geometry_chain_direct`
-  - `output/post_cleanup/s2_stage/112_native_geometry_chain_projected`
-- 已完成 lockbox 方向复验记录（partial）：
-  - `processes/s2/S2_LOCKBOX_RECHECK.md`
-- 已完成 `TUM dev quick` 的 partial `RB-Core` 对比说明：
-  - `processes/s2/S2_RB_CORE_COMPARE_TUM_DEV.md`
-- 已完成本轮 `S2` 方法实现与脚本：
-  - `scripts/run_s2_write_time_synthesis.py`
-  - `scripts/run_s2_bonn_localclip_refine.py`
-  - `scripts/run_s2_downstream_export_chain.py`
-  - `scripts/run_s2_downstream_softbank.py`
-  - `scripts/run_s2_rear_bg_state_recovery.py`
-  - `scripts/run_s2_rps_commit_activation.py`
-  - `scripts/run_s2_rps_commit_bank_quality.py`
-  - `scripts/run_s2_rps_commit_competition.py`
-  - `scripts/run_s2_rps_commit_admission.py`
-  - `scripts/run_s2_rps_rear_geometry_quality.py`
-  - `scripts/run_s2_rps_space_redirect.py`
-  - `scripts/run_s2_rps_history_visible_obstructed.py`
-  - `scripts/run_s2_rps_background_manifold_state.py`
-  - `scripts/run_s2_rps_dense_manifold.py`
-  - `scripts/run_s2_rps_surface_constrained.py`
-  - `scripts/run_s2_rps_occlusion_bridge.py`
-  - `scripts/run_s2_rps_high_coverage_bridge.py`
-  - `scripts/run_s2_rps_multi_candidate_generation.py`
-  - `scripts/run_s2_rps_ghost_capped_selectivity.py`
-  - `scripts/run_s2_rps_discriminative_fusion.py`
-  - `scripts/run_s2_rps_occlusion_conflict.py`
-  - `scripts/run_s2_rps_static_anchored.py`
-  - `scripts/run_s2_rps_hybrid_optimization.py`
-  - `scripts/run_s2_rps_ray_consistency.py`
-  - `scripts/run_s2_rps_topology_constraint.py`
-  - `scripts/run_s2_rps_plane_attribution.py`
-  - `scripts/run_s2_rps_pairing_evidence.py`
-  - `scripts/run_s2_rps_hssa.py`
-  - `scripts/run_s2_rps_balloon_cluster.py`
-  - `scripts/run_s2_rps_deep_explore.py`
-  - `scripts/run_s2_rps_acc_tightening.py`
-  - `scripts/run_s2_rps_upstream_geometry.py`
-  - `scripts/run_s2_rps_geometry_chain_coupling.py`
-  - `scripts/run_s2_rps_native_mainline_integration.py`
-  - `egf_dhmap3d/P10_method/bg_manifold.py`
-  - `egf_dhmap3d/P10_method/geometry_chain.py`
-  - `egf_dhmap3d/P10_method/rps_plane_attribution.py`
-  - `egf_dhmap3d/P10_method/rps_selectivity.py`
-  - `egf_dhmap3d/P10_method/ptdsf.py`
-  - `egf_dhmap3d/P10_method/rps_export_competition.py`
-  - `egf_dhmap3d/P10_method/rps_admission.py`
-  - `egf_dhmap3d/P10_method/rps.py`
-  - `egf_dhmap3d/P10_method/rps_commit.py`
-  - `egf_dhmap3d/core/config.py`
-  - `scripts/run_egf_3d_tum.py`
-  - `scripts/run_benchmark.py`
+- 已完成 `S2` 关键链路的路径与运行修复：
+  - `output/s2/S2_PIPELINE_REPAIR_REPORT.md`
+  - `PROCESS.md`
+- 已恢复当前可运行 native baseline：
+  - `experiments/s2/run_s2_native_geometry_chain.py`
+  - `output/s2/S2_NATIVE_BASELINE_111.csv`
+  - `output/s2/S2_NATIVE_BASELINE_111.md`
+- 已重新生成当前有效的 `S2` 对比结果：
+  - `output/s2/S2_OCCUPANCY_ENTROPY_COMPARE.csv`
+  - `output/s2/S2_VISIBILITY_DEFICIT_COMPARE.csv`
+  - `output/s2/S2_HYBRID_INTEGRATION_COMPARE.csv`
+  - `output/s2/S2_LOCAL_GEOMETRY_CONVERGENCE_COMPARE.csv`
+  - `output/s2/S2_GLOBAL_RIGIDITY_ALIGNMENT_COMPARE.csv`
+  - `output/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING_COMPARE.csv`
+- 已确认一批历史 `RPS` 链在 clean rerun 下失效，仅保留为诊断材料：
+  - `output/s2/S2_RPS_RAY_CONSISTENCY_COMPARE.csv`
+  - `output/s2/S2_RPS_HSSA_COMPARE.csv`
+  - `output/s2/S2_RPS_BALLOON_CLUSTER_COMPARE.csv`
+  - `output/s2/S2_RPS_DEEP_EXPLORE_COMPARE.csv`
+  - `experiments/s2/deprecated/README.md`
 
 ### 阶段 S2 结论
-统一解释“dynamic suppression 为何仍是优势方向、但 current-code canonical 又表现不佳”的说明页：`processes/s2/S2_DYNAMIC_SUPPRESSION_STATUS_EXPLANATION.md`
 
+统一解释当前 `S2` 主线状态与链路裁剪的汇总页：`output/s2/S2_PIPELINE_REPAIR_REPORT.md`
 
-结论：**本轮已完成 `current-code re-baseline + canonical refresh + drift localization`，但 `S2` 仍未通过，且本阶段当前绝对不能进入 `S3`。**
+结论：**`S2` 已完成 current-code repair 与关键链路复跑，但仍未通过，且绝对不能进入 `S3`。**
 
-本轮最重要结论：
-- 已确认 historical `S2` dev quick 文档漏写了关键协议项：`max_points_per_frame=600`；
-- 在修正协议后，current-code control `14` 的 canonical 结果为：
-  - `TUM Acc ≈ 0.9355 cm`, `TUM Comp-R ≈ 68.53%`
-  - `Bonn Acc ≈ 2.8864 cm`, `Bonn Comp-R ≈ 83.57%`
-  - `Bonn ghost_reduction_vs_tsdf ≈ -8.00%`
-- `15/16` 对 `14` 没有任何有效增益，因此当前**不应继续沿 `16` 做 Bonn-only 微调**；
-- 额外对照重跑与 `ptdsf_diag` 说明：current-code `14` 与 `05` 在 target synthesis 层仍有显著差异，但这些差异在 downstream `write -> sync -> export` 链条被抹平，因此 historical `05 -> 14` 收益链条尚未恢复；
-- 本轮继续围绕 downstream 链设计了 `17-22` 两轮 export family 候选，但全部 zero-delta / abandon，且 `rear_selected / bg_selected / soft_bank_on` 全为 `0`；
-- 在第三轮 `23/24/25` 中，`25_rear_bg_coupled_formation` 首次把 `bg_w / bg_cand_w` 拉成全量非零，并把 `TUM Comp-R` 从 `68.53%` 提到 `91.90%`，说明 `rear/bg state formation before export` 确实是有效方向；
-- 本轮 `28/29/30` 进一步完成了 `rps_commit_score / rps_active / phi_rear / rho_rear` 激活链路实验，其中 `30_rps_commit_geom_bg_soft_bank` 首次实现 `rear_selected > 0`；
-- 本轮继续以 `30_rps_commit_geom_bg_soft_bank` 为唯一工作起点，完成了 `31/32/33` 三个 committed rear-bank quality enhancement 候选；
-- `30` 的 current-code recheck 与既有冻结数值完全一致，说明上一轮新增开关没有引入口径漂移；
-- 随后本轮又按 `TUM walking all3 + Bonn all3` 的同一低帧协议，完成了 `34/35/36` 三个 Bonn competition-only 变体；
-- extract-only 诊断显示：当前 Bonn 真正进入 extract competition 的 rear 候选总数只有 `7`，且这 `7` 个样本已经 `7/7` 全部胜出；
-- 因此“当前瓶颈在最终 front-vs-rear competition boundary”这一工作假设已被证伪；
-- 本轮进一步按同一 family-mean 口径完成了 `37/38/39` 三个 admission / state persistence 变体，并确认当前控制组的最窄流失点是 extract admission 的 `score_gate`；
-- 控制组 `30` 在 Bonn all3 上表现为：`committed_cells_sum = 179`，但 `extract_hard_commit_on_sum = 7`，其中 `extract_fail_score_sum = 172`；
-- `37/38/39` 说明 admission 主线是有效的：
-  - `37` 把 `bonn_extract_rear_selected_sum` 从 `7` 提到 `193`，`ghost_reduction_vs_tsdf` 提到 `15.00%`；
-  - `38` 把 `bonn_extract_rear_selected_sum` 提到 `108`，并取得 admission-phase 最佳 `ghost_reduction_vs_tsdf = 15.47%`；
-  - `39` 虽把 `bonn_extract_rear_selected_sum` 提到 `202`，但 `ghost_reduction_vs_tsdf` 反而弱于 `38`；
-- 本轮继续围绕 `38` 做 rear-state geometry quality / spatial distribution 诊断与三组几何质量候选 `40/41/42`：
-  - `38` 的 rear points 空间分布显示：`108` 个 rear points 中只有 `1` 个落在 true background，`10` 个落在 ghost region，`97` 个落在 hole/noise 区域；
-  - `40/41/42` 虽然把 true-background rear points 从 `1` 提到 `2/3/2`，但同时也把 ghost-region rear points提高到 `16/18/18`，因此 Bonn `ghost_reduction_vs_tsdf` 反而从 `15.47%` 退回 `15.22%`；
-- 本轮进一步围绕 `38` 做 space-redirect 三组候选 `43/44/45`：
-  - `43/45` 把 true-background rear points 从 `1` 提到 `5`，但 ghost-region rear points同步从 `10` 膨胀到 `26`，Bonn `ghost_reduction_vs_tsdf` 反而回落到 `14.86%`；
-  - `44` 试图用 ghost-aware suppression 抑制误入，但仍只做到 `true_background = 4` / `ghost = 25`，Bonn `ghost_reduction_vs_tsdf = 15.22%`，仍低于 `38`；
-- 本轮进一步按“历史可见且当前被遮挡”硬约束做了 `46/47` 两个变体：
-  - `46_history_background_only_admission` 与 `47_history_visible_obstructed_manifold` 都把 rear points 直接压到 `0`；
-  - Bonn `ghost_reduction_vs_tsdf` 同时退回到 `13.29%`，说明严格 HVO gate 在当前低帧协议下会过度裁剪 rear generation；
-- 本轮进一步引入 stable background manifold state，做了 `48/49` 两个变体：
-  - `48_stable_background_memory_state` 把 rear points从 `108` 压到 `29`，但也把 `ghost` 从 `10` 压到 `3`、`hole/noise` 从 `97` 压到 `25`；
-  - `49_relaxed_manifold_guided_generation` 把 rear points 恢复到 `39`，但 `true_background` 仍然只有 `1`，Bonn `ghost_reduction_vs_tsdf` 仍只有 `13.50%`；
-- 本轮进一步沿“背景支持场稠密化与传播”做了 `50/51/52` 三个变体：
-  - `50_dense_background_propagation` 把 rear points 恢复到 `67`，并把 `ghost` 降到 `7`，但 `true_background` 仍停在 `1`，Bonn `ghost_reduction_vs_tsdf = 13.75%`；
-  - `51_geometry_guided_manifold_completion` 把 `true_background` 从 `1` 提到 `2`，rear points 恢复到 `88`，但 `ghost` 同时回升到 `12`，Bonn `ghost_reduction_vs_tsdf = 14.41%`；
-  - `52_dual_scale_manifold_fusion` 把 rear points 恢复到 `112`，但 `true_background` 仍只有 `1`，`ghost` 升到 `13`，Bonn `ghost_reduction_vs_tsdf = 14.71%`；
-- 本轮进一步沿“历史背景表面显式约束传播”做了 `53/54/55` 三个变体：
-  - `53_surface_adjacent_propagation` 把 `true_background` 从 `1` 提到 `3`，rear points 保持 `94`，但 `ghost` 升到 `13`，Bonn `ghost_reduction_vs_tsdf = 15.17%`；
-  - `54_normal_guided_manifold_extension` 也把 `true_background` 提到 `3`，并把 `ghost` 控制在 `12`，但 Bonn `ghost_reduction_vs_tsdf = 14.77%`；
-  - `55_surface_constrained_ray_projection` 保持 `rear_points = 101`，但 `true_background = 3` / `ghost = 14`，Bonn `ghost_reduction_vs_tsdf = 14.51%`；
-- 本轮进一步沿“遮挡缝隙桥接”做了 `56/57/58` 三个变体：
-  - `56_temporal_occlusion_tunneling` 把 `ghost` 压到 `9`，并把 `true_background` 提到 `2`，但 rear 总量只剩 `57`，Bonn `ghost_reduction_vs_tsdf = 15.02%`；
-  - `57_historical_surface_rear_projection` 把 `true_background` 提到 `3`，同时把 `ghost` 控制在 `9`，但 rear 总量仍只有 `58`，Bonn `ghost_reduction_vs_tsdf = 15.02%`；
-  - `58_ghost_aware_surface_inpainting` 把 `ghost` 控制在 `9`，但 `true_background` 只到 `2`，Bonn `ghost_reduction_vs_tsdf = 14.87%`；
-- 本轮进一步按“桥接覆盖量恢复”做了 `59/60/61` 三个变体：
-  - `59_relaxed_occlusion_tunneling` 把 rear 总量恢复到 `65`，并把 `ghost` 保持在 `9`，但 `true_background` 仍只有 `2`，Bonn `ghost_reduction_vs_tsdf = 15.02%`；
-  - `60_cone_based_rear_projection` 在当前协议下与 `59` 等价：`rear = 65` / `true_background = 2` / `ghost = 9`；
-  - `61_hybrid_confidence_gating` 也只达到 `rear = 65` / `true_background = 2` / `ghost = 9`，未能恢复到 `80+` 覆盖量；
-- 本轮进一步按“multi-candidate surface generation”做了 `62/63/64` 三个变体：
-  - `62_dense_patch_projection` 把 rear 总量直接推到 `378`、`true_background` 提到 `7`，但 `ghost` 也膨胀到 `53`，Bonn `ghost_reduction_vs_tsdf` 反而回落到 `15.02%`；
-  - `63_multi_hypothesis_depth_sampling` 把 `ghost` 控制在 `23`，但 `true_background` 只到 `3`，Bonn `ghost_reduction_vs_tsdf = 15.17%`，仍未超过 `38`；
-  - `64_patch_depth_hybrid_generation` 把 rear 总量推到 `442`、`true_background` 提到 `8`，并把 Bonn `ghost_reduction_vs_tsdf` 推到 `16.48%`，但 `ghost` 同步膨胀到 `60`、`Comp-R` 仍停在 `70.80%`；
-- 本轮进一步按“ghost-capped selectivity”做了 `65/66/67` 三个变体：
-  - `65_ghost_risk_prediction_filter` 没有切掉任何 rear points，结果与 `64` 等价：`rear = 442` / `true_background = 8` / `ghost = 60` / Bonn `ghost_reduction_vs_tsdf = 16.48%`；
-  - `66_geometry_constrained_admission` 反而把 rear 总量推到 `555`、`true_background` 提到 `15`，但 `ghost` 同步膨胀到 `84`，Bonn `ghost_reduction_vs_tsdf` 回落到 `15.72%`；
-  - `67_topk_selective_generation` 把 rear 总量压到 `231`，并把 Bonn `ghost_reduction_vs_tsdf` 推到 `22.16%`，但 `true_background` 只剩 `3`、`ghost` 仍高达 `38`，没有满足 `ghost <= 15` 和 `TB >= 6` 的双约束；
-- 本轮进一步按“discriminative feature fusion”做了 `68/69/70` 三个变体：
-  - `68_rear_front_score_competition` 在引入 `rear_score - alpha * front_score` 竞争特征后，把 Bonn `ghost_reduction_vs_tsdf` 进一步推到 `23.52%`，并把 `ghost` 从 `41` 压到 `32`，但 `true_background` 同时从 `3` 掉到 `2`；
-  - `69_depth_gap_validation` 与 `70_fused_discriminator_topk` 都退化为 `rear = 0` 的零点解，虽然数值上 Bonn `ghost_reduction_vs_tsdf = 35.21%`，但没有可用几何覆盖，因此不具备方法价值；
-- 本轮进一步按“semantic-aware ghost classification”做了 `71/72/73` 三个变体：
-  - `71_occlusion_order_consistency` 把 `true_background` 从 `2` 回升到 `4`，但 `ghost` 仍有 `31`，且 Bonn `ghost_reduction_vs_tsdf` 回落到 `22.49%`；
-  - `72_local_geometric_conflict_resolution` 在保持 Bonn `ghost_reduction_vs_tsdf = 27.27%` 的同时，把 `ghost` 压到 `24`，并把 `true_background` 从 `2` 回升到 `4`，是当前 semantic-aware 分支的最佳工作基数；
-  - `73_front_residual_aware_suppression` 把覆盖拉到 `rear = 257`，但 `ghost` 回升到 `34`、`true_background` 仍只有 `4`；
-- 因此当前主瓶颈已进一步修正为：`higher-order semantic/dynamic-context features can improve the current branch from roughly (TB=2, Ghost=24-32) to roughly (TB=4, Ghost=24) while keeping ghost_reduction well above 22%, but they still do not produce enough separability to hit Ghost<=15 and TB>=8 simultaneously`。
-- 本轮进一步按“static-persistence anchored recall”做了 `74/75/76` 三个变体：
-  - `74_static_history_weight_boosting` 把 `true_background` 从 `3` 提到 `4`，并维持 Bonn `Comp-R = 70.43%`，但 `ghost` 上升到 `33`，且 Bonn `ghost_reduction_vs_tsdf = 21.91%` 没有守住 `22%`；
-  - `75_dynamic_shell_masking` 把 `ghost` 压到 `28`，但 `true_background` 仍只有 `3`，且 Bonn `Comp-R` 退回到 `68.82%`；
-  - `76_surface_persistent_anchoring` 也只做到 `true_background = 3` / `ghost = 29`，Bonn `Comp-R = 68.81%`；
-- 本轮进一步按“hybrid optimization”做了 `77/78/79` 三个变体，并先修复了静态锚定统计链路：
-  - `egf_dhmap3d/core/voxel_hash.py` 已补上 `history_anchor / surface_anchor / surface_distance / dynamic_shell` 的 `last_extract_stats` 写回；复跑后 `history_anchor_mean` 已恢复为非零，Bonn `72/77/78/79` 分别为 `0.246 / 0.247 / 0.246 / 0.250`，`surface_anchor_mean` 均为 `1.000`，确认本轮特征统计 Bug 已修复；
-  - `77_hybrid_boost_conflict` 把 `true_background` 从 `3` 提到 `4`，并把 `ghost` 从 `30` 降到 `29`，但 Bonn `ghost_reduction_vs_tsdf` 从 `22.10%` 回落到 `21.83%`，没有守住 `22%` 红线；
-  - `78_conservative_anchoring` 把 rear 总量推到 `252`，但 `true_background` 仍只有 `3`、`ghost` 反弹到 `32`，Bonn `ghost_reduction_vs_tsdf = 21.37%`；
-  - `79_feature_weighted_topk` 守住了 Bonn `ghost_reduction_vs_tsdf = 22.24%`，并把 `ghost` 压到 `29`，但 `true_background` 仍停在 `3`，没有优于 `72` 的召回分布；
-- 本轮进一步按“ray consistency / observation veto / static coherence”做了 `80/81/82` 三个变体：
-  - 新特征已摆脱全零：控制组 `72` 的 Bonn `penetration_mean = 0.099`、`observation_support_mean = 0.183`、`static_coherence_mean = 0.823`；并且 TB/Noise 均值已出现分离，例如控制组 `penetration(TB/Noise) = 0.156 / 0.105`，`observation(TB/Noise) = 0.246 / 0.183`；
-  - `80_ray_penetration_consistency` 把 `ghost` 压到 `15`，并维持 Bonn `ghost_reduction_vs_tsdf = 22.66%`，但 `true_background` 仍只有 `4`，`noise_ratio` 仍高达 `0.840`；
-  - `81_unobserved_space_veto` 把 Bonn `ghost_reduction_vs_tsdf` 维持在 `22.18%`，并把 `ghost` 压到 `25`，但 `true_background` 仍只有 `4`，`noise_ratio = 0.874`；
-  - `82_static_neighborhood_coherence` 把 `ghost` 压到 `18`，并维持 Bonn `ghost_reduction_vs_tsdf = 22.70%`，但 `true_background` 仍只有 `4`，且 `static_coherence_mean` 再次饱和到 `1.000`；
-- 本轮进一步按“front-back topology constraint”做了 `83/84/85` 三个变体：
-  - `83_minimum_thickness_topology_filter` 通过最小厚度约束把 Bonn `hole_or_noise_sum` 从 `214` 压到 `106`、`ghost` 压到 `16`，并保持 `ghost_reduction_vs_tsdf = 22.49%`，但 `true_background` 仍停在 `4`；
-  - `84_front_back_normal_consistency` 通过法向连贯性把 `hole_or_noise_sum` 压到 `105`，但 `ghost_reduction_vs_tsdf` 回落到 `21.86%`，且 `true_background` 仍只有 `4`；
-  - `85_occlusion_ray_convergence_constraint` 通过相邻 rear 候选的拓扑收敛约束把 `hole_or_noise_sum` 压到 `99`、`ghost` 压到 `22`，并保持 `ghost_reduction_vs_tsdf = 22.30%`，但 `true_background` 仍没有突破 `4`；
-  - 拓扑统计已形成有效分离：以 `85` 为例，`thickness kept/dropped = 0.383 / 0.055 m`，`normal kept/dropped = 0.940 / 0.694`，`ray_convergence kept/dropped = 0.729 / 0.424`，说明结构级约束明显优于此前的 cell-local 标量特征；
-- 本轮进一步按“front-back plane attribution”做了 `86/87/88` 三个变体：
-  - `86_rear_plane_clustering_snapping`、`87_front_mask_guided_back_projection`、`88_occlusion_depth_hypothesis_validation` 全部触发了灾难性过清洗：`true_background` 直接跌到 `0`，Bonn `Comp-R` 跌到 `67-69%`，说明“先假设是噪声再做平面吸附”会误杀仅存的 TB；
-- 本轮进一步按“pairing evidence”做了 `89/90/91` 三个变体：
-  - `89_front_back_surface_pairing_guard` 在保护 `115` 个点、吸附 `96` 个点后，只得到 `TB=4 / Ghost=20 / Noise=95 / Bonn ghost_reduction_vs_tsdf = 22.61% / Comp-R = 70.17%`，避免了 `TB=0`，但没有任何 TB 回升；
-  - `90_background_plane_evidence_accumulation` 在保护 `115` 个点、吸附 `69` 个点后，把 `Noise` 降到 `91`、`Comp-R` 微升到 `70.24%`，但 `ghost_reduction_vs_tsdf` 回落到 `21.58%`，未守住动态抑制红线；
-  - `91_occlusion_depth_hypothesis_tb_protection` 在保护 `115` 个点、只吸附 `8` 个点的保守条件下守住了 `TB=4 / Ghost=19 / Noise=96 / Bonn ghost_reduction_vs_tsdf = 23.52% / Comp-R = 70.17%`，证明“有证据保留”能避免再次过清洗，但仍没有形成 `Noise -> TB` 转化；
-- 本轮进一步按“HSSA / hidden-surface support aggregation”做了 `92/93/94` 三个变体：
-  - `92_multi_view_ray_support_aggregation` 证明多视角支持聚合本身是有效信号：在不破坏 Ghost/Comp-R 的前提下，把 `TB` 从 `4` 提到 `5`，并把 `support_score(TB/Noise)` 差值从 `0.064` 拉到 `0.072`，但 `tb_noise_correlation` 仍为 `0.991`；
-  - `93_spatial_neighborhood_density_clustering` 首次把 `TB` 从 `4` 直接推到 `13`，同时守住 `ghost_reduction_vs_tsdf = 23.59%` 与 `Ghost = 19`；说明“平坦支持簇 + 非破坏式 patch 扩点”确实能把隐藏表面支持聚合成真实背景假设；
-  - `94_historical_tsdf_consistency_reactivation` 在更保守的历史一致性约束下也把 `TB` 提到 `8`，并守住 `ghost_reduction_vs_tsdf = 22.45%` 与 `Ghost = 19`，证明历史稳定性可以作为 patch 召回的有效先验；
-  - 但 `92/93/94` 的共同失败点也很明确：`tb_noise_correlation` 仍停在 `0.991` 左右，说明支持增益几乎全部集中在单个序列，family 层面的 `TB-Noise` 解耦尚未形成；
-- 本轮进一步按“balloon support-cluster formation”做了 `95/96/97` 三个变体：
-  - `95_geodesic_balloon_consistency` 证明仅依靠测地平滑阈值不足以推动分布变化：由于没有任何簇通过 retain 门槛，结果与 `93` 等价；
-  - `96_support_cluster_model_fitting` 首次真正打破相关性死锁：通过 `plane-band` 模型保留 crowd2 中的低方差支持簇，把 `TB` 保持在 `12`、把 `Noise` 压到 `23`、把 `Ghost` 压到 `6`，并把 `tb_noise_correlation` 从 `0.991` 拉到 `-0.756`，同时 Bonn `ghost_reduction_vs_tsdf` 提升到 `31.04%`；
-  - `97_global_map_anchoring` 在更严格的锚定半径下进一步把 `Noise` 压到 `22`、`Ghost` 压到 `5`，并把 `tb_noise_correlation` 进一步压到 `-0.786`，但 `TB` 回落到 `10`；
-  - `95/96/97` 共同说明：相关性死锁确实不是不可打破，问题关键不是“能否恢复 TB”，而是“能否把 crowd2 的伪支撑簇收缩到稳定表面模型上”；cluster-level fitting / anchoring 已经解决了这一点；
-- 本轮进一步按“deep explore / purified cluster completion”做了 `98/99/100` 三个变体：
-  - `98_geodesic_support_diffusion` 基于 `97` 的 purified cluster，在 cluster plane 上做受限几何传播与 donor-band completion，把 Bonn `Comp-R` 从 `68.90%` 拉回到 `70.08%`，同时保持 `tb_noise_correlation = -0.327`、`ghost_reduction_vs_tsdf = 28.00%` 与 `TB = 40`；
-  - `99_manhattan_plane_completion` 用结构化平面补全替代简单膨胀，也把 Bonn `Comp-R` 拉回到 `70.08%`，并保持 `tb_noise_correlation = -0.225`、`ghost_reduction_vs_tsdf = 28.28%` 与 `TB = 39`；这是当前 deep-explore 支链里 `Comp-R / Ghost` 折中最好的配置；
-  - `100_cluster_view_inpainting` 用 cluster-conditioned view patch completion 同样把 Bonn `Comp-R` 拉回到 `70.08%`，但 `ghost` 回升到 `24`、相关性仅 `-0.115`，说明 2D 视角补洞更容易把边界噪声一并带回；
-  - `98/99/100` 共同说明：文献启发的“purified cluster completion”确实能在不破坏判别力的前提下恢复完整性，且优于简单的无约束扩张，因为它们都严格依赖 `97` 已验证的高置信 cluster plane，而不是重新从全量 Noise 搜索；
-- 本轮进一步按“Acc tightening”做了 `101/102/103` 三个变体：
-  - `101_manhattan_plane_projection_hard_snapping` 确实把 `mean_distance_to_plane` 从 `0.2208` 压到 `0.2143`，但 Bonn `Acc` 仍停在 `4.347 cm`，且 `TB/Ghost/Noise` 分布反而轻微恶化到 `35/23/32`；
-  - `102_scale_drift_correction` 显著恶化：Bonn `Acc` 拉高到 `5.269 cm`、`Comp-R` 跌到 `68.50%`，同时 `mean_distance_to_plane_after` 暴涨到 `0.5763`，说明当前并没有可用的几何尺度漂移校正信号；
-  - `103_local_cluster_refinement` 仅把 `mean_distance_to_plane` 从 `0.2166` 微降到 `0.2164`，Bonn `Acc` 仍为 `4.346 cm`，说明局部 cluster tightening 几乎不触及当前误差主因；
-  - `101/102/103` 共同说明：当前 `Acc` 的瓶颈已经不再是简单的平面厚度噪声，硬投影与局部紧化都不能把 `4.31 cm` 往 `3.10 cm` 推进，反而暴露出更像是 `front-side bias / geometry distortion` 的系统误差；
-- 本轮进一步按“upstream geometry bias validation”做了 `104/105` 两个真实上游变体：
-  - `104_depth_bias_minus1cm` 在真实上游重跑中把 Bonn `Acc` 从参考 `99` 的 `4.346 cm` 拉到 `4.238 cm`，同时把同口径平面距离从 `0.0980` 压到 `0.0746`；说明引入负向 `depth_bias` 后，表面确实朝正确方向移动，存在可测的前侧偏置响应；
-  - `105_depth_bias_plus1cm` 也把 Bonn `Acc` 拉到 `4.238 cm`，但平面距离回到 `0.0983`，说明当前系统对 `±1 cm` depth bias 都有响应，但符号信息主要体现在平面误差而非 Acc 本身，暂不足以证明单一方向的强偏置；
-  - `104/105` 的共同问题同样关键：真实 upstream rerun 没有保住 downstream rear branch（`TB = 0`），因此当前可执行 upstream 前驱与 `99` 的 downstream completion 链仍然断裂；这意味着即使找到了上游偏置响应，也还不能直接升级为可继续主配置；
-- 本轮进一步按“geometry chain coupling”做了 `108/109/110` 三个显式集成变体：
-  - `108_geometry_chain_coupled_direct` 将 `104` 的 corrected front/surface geometry 与 `99` 的 rear completion donor 直接拼接，恢复了 `TB = 39`，并把 Bonn `Acc` 从原始 `99` 的 `4.346 cm` 压到 `4.233 cm`，同时把 `Comp-R` 提到 `70.86%`；
-  - `109_geometry_chain_coupled_projected` 在 direct coupling 基础上，将 donor rear points 重投影到 `104` 的 plane frame，得到本轮最佳几何结果：Bonn `Acc = 4.233 cm`、`Comp-R = 70.84%`、`TB = 39`；
-  - `110_geometry_chain_coupled_conservative` 只接入 `97` 的 retained cluster，虽然保住了更强的负相关，但 `TB` 只有 `10`，说明只保留 purified cluster 不足以替代 `99` 的 full completion donor；
-  - `108/109/110` 共同说明：结构断裂的根因不是“校正后 cluster 阈值失效”，而是“真实 upstream rerun 根本没有执行 downstream rear completion stage”；一旦把 `104` 的 corrected geometry 显式喂给 `99` 的 rear donor/completion，链路立即恢复且能继承上游几何收益；
-- 本轮进一步按“Native Mainline Integration”做了 `111/112` 两个原生集成变体：
-  - `111_native_geometry_chain_direct` 在标准 `run_benchmark.py -> run_egf_3d_tum.py` 管道中，原生复现了 `108`：Bonn `Acc = 4.233 cm`，与 `108` 的偏差仅 `7.7e-14 cm`；
-  - `112_native_geometry_chain_projected` 在最新原生重跑中得到 Bonn `Acc = 4.235 cm`，与 `109` 的偏差为 `0.00295 cm`，仍满足 `Acc` 偏差 `< 0.01 cm` 的重置标准，但 `TB` 与 `Comp-R` 略弱于 `111`；
-  - 这说明耦合逻辑已不再依赖体外 runner，而是已经被标准执行链原生继承；同时按最新原生重跑口径，`111_native_geometry_chain_direct` 是更稳定的 native baseline；
-- 同时，本轮输出了 `processes/s2/S2_NATIVE_MAINLINE_GAP_ANALYSIS.md`，明确指出：
-  - `Acc` 的剩余 `1.13 cm` 缺口并不是后验厚度噪声，而是上游几何形成畸变与有限 depth bias 的组合；
-  - `Comp-R` 的剩余 `27%` 缺口主要集中在 `crowd2` 这类高遮挡动态场景，当前 rear completion 仍无法触达无 support-cluster 的弱证据区域；
-- 因此当前主瓶颈已进一步修正为：`there is measurable upstream depth-bias sensitivity, but the executable upstream precursor still cannot preserve the downstream rear completion branch; the bottleneck is now the coupling gap between raw geometry formation and the purified-cluster completion chain`。
-- 因此当前主瓶颈已进一步修正为：`support clusters can now be verified and filtered at the cluster level strongly enough to decouple TB and Noise at the family scale, but this comes with a completeness drop (Bonn Comp-R ~68-69%); the next bottleneck is recovering completeness after cluster purification without reintroducing noise`。
-- 同时，本轮 deep-explore 已经证明这条 completeness gap 是可被补回的：局部目标 `Comp-R >= 70% + negative correlation + ghost_reduction >= 22% + TB >= 6` 已被 `98/99/100` 同时满足；因此当前剩余问题不再是“能否局部修复”，而是“如何把这条 subchain 升级为全局 S2 通过配置”，包括进一步降低 `Acc` 与把 family-mean `Comp-R` 拉向任务书硬门槛。
- - 但本轮 `Acc tightening` 又进一步证明：当前 `Acc` 缺口不能靠“后验几何紧化”直接补齐；若继续 `S2`，下一步必须从坐标后处理切回到更上游的几何形成链，而不是继续在当前点云上做硬投影。
-- 本轮进一步完成了 `111_native_geometry_chain_direct` 的系统级误差分解，输出：
-  - `processes/s2/S2_ERROR_DECOMPOSITION_COMPARE.csv`
-  - `processes/s2/S2_GEOMETRY_ERROR_DECOMPOSITION_REPORT.md`
-  - `processes/s2/S2_COMP_R_GAP_ANALYSIS.md`
-- `Acc` 误差分解结论已经收敛：
-  - `TUM walking all3` 在 oracle pose 下达到 `Acc = 0.936 cm`，且 `Temporal Drift ≈ 0 cm`；说明当前几何链在无漂移条件下已经可用，`Acc` 主缺口不来自纯传感器噪声底；
-  - `Bonn all3` 的诊断量级分解为：`Temporal Drift = 5.205 cm`、`Surface Thickness = 1.860 cm`、`Sensor Noise Floor = 1.577 cm`、`Calibration Bias = 0.010 cm`；
-  - 归一化后，Bonn `Acc` 的主贡献者已经明确是 `Temporal Drift (~60.2%)`，其次才是 `Surface Thickness (~21.5%)` 与 `Sensor Noise (~18.2%)`；
-  - `104 -> 111` 的 completion 对 Bonn `Acc` 的净影响仅 `-0.005 cm`，方向还是轻微改善；因此当前 `Acc` 绝不是被 downstream completion 拖坏的。
-- `Comp-R` 缺口也已被定量锁定：
-  - `Bonn all3` 当前缺失参考点约 `2623`，而 rear completion 总点数只有 `90`，覆盖比仅 `3.43%`；
-  - `104 -> 111` 的 `Comp-R` 增益约 `0.000 pts`，说明当前 rear completion 对 global completeness 基本无贡献；
-  - 在最差序列 `rgbd_bonn_crowd2` 中，缺失点有 `72.4%` 只得到 `<=2` 次稳定观测，`29.2%` 呈现遮挡主导模式，而 `missing_never_in_view_ratio = 0%`；这说明主问题不是“完全盲区”，而是“弱证据累积失败 + 动态遮挡截断”。
-- 因此当前 `S2` 的下一轮攻坚方向已经被缩窄为两条：
-  1. `Pose / Temporal Drift`：先做位姿与动态边界关联误差分解与约束校正；
-  2. `Weak-Evidence Accumulation`：让 one/two-view 弱观测也能被累积成可提交背景，而不是继续扩大局部 rear completion。
-- 本轮进一步按“Methodology Innovation: Temporal Drift & Weak-Evidence”做了 `113/114/115` 三个创新原型，产出：
-  - `processes/s2/S2_METHODOLOGY_INNOVATION_BRIEF.md`
-  - `processes/s2/S2_INNOVATION_ATTACK_COMPARE.csv`
-  - `processes/s2/S2_INNOVATION_ATTACK_ANALYSIS.md`
-- 三个原型的关键结论已经明确：
-  - `113_naive_plane_union`（朴素降阈值）能把 Bonn `Comp-R` 从 `70.86%` 拉到 `76.19%`，但 `Acc` 恶化到 `4.413 cm`，且新增点 `TB/Ghost/Noise = 23/255/3043`，说明单纯放宽 plane-aligned admission 会严重放大动态边界伪支持；
-  - `114_papg_plane_union`（Plane-Anchored Pose Graph + weak union）把 Bonn `Acc` 拉回到 `4.304 cm`，同时把 `Comp-R` 推到 `77.06%`，新增点 `TB/Ghost/Noise = 35/224/3091`；这证明 `PAPG` 对弱证据补全有真实几何收益；
-  - `115_papg_consensus_activation`（`>=2` 帧共识激活）把 Bonn `Acc` 进一步压到 `4.225 cm`，且新增 `ghost = 26` 已落入安全范围，但 `Comp-R` 只到 `70.96%`；这说明“强共识”足以修 geometry，但不足以补 completeness。
-- 因此当前 `S2` 的创新结论并不是“方案无效”，而是：
-  - `Plane-Anchored Pose Graph` 已经被验证为有效创新方向；
-  - 真正的剩余缺口在于：当前 weak-evidence 仍然是 `union / consensus` 级原型，尚未升级为完整的 `occupancy probability + entropy` 不确定性模型；
-  - 下一轮不能回退到阈值微调，而必须继续推进 uncertainty-aware weak-evidence fusion，用来把 `114` 的 coverage 收益保住，同时把新增 `ghost` 压回安全区。
-- 本轮进一步完成了 `116_occupancy_entropy_gap_activation` 的概率融合验证，产出：
-  - `processes/s2/S2_OCCUPANCY_ENTROPY_INNOVATION_BRIEF.md`
-  - `processes/s2/S2_OCCUPANCY_ENTROPY_COMPARE.csv`
-  - `processes/s2/S2_OCCUPANCY_ENTROPY_ANALYSIS.md`
-- `116` 的关键结果为：
-  - Bonn `Acc = 4.120 cm`，优于当前 native baseline `111` 的 `4.233 cm`；
-  - Bonn `Comp-R = 76.14%`，显著高于 `111` 的 `70.86%`；
-  - `bonn_rear_true_background_sum = 515`，`bonn_rear_ghost_sum = 23`，`bonn_rear_hole_or_noise_sum = 0`；
-  - `mean_occupancy_entropy = 0.674`，`gap_activation_ratio = 1.000`，`weak_evidence_coverage_ratio = 0.264`；
-  - 这说明：只要激活被限制在真缺口邻域，`occupancy probability + entropy` 的弱证据融合机制确实可以同时保住 `Acc / Comp-R / Ghost`。
-- 但本轮必须明确记录一个关键限制：
-  - `116` 当前使用的是 **developer-side oracle gap mask**（由 `111` 与 reference 差集得到的 missing-reference neighborhood）；
-  - 因此它证明的是“机制成立”，不是“已可直接晋升主线配置”；
-  - 在找到 GT-free gap proxy 之前，`116` 仍然不能被视为 S2 fully-pass 配置。
-- 本轮进一步完成了 `GT-Free Gap Proxy` 替代实验，产出：
-  - `processes/s2/S2_GT_FREE_GAP_PROXY_DESIGN.md`
-  - `processes/s2/S2_GT_FREE_GAP_PROXY_COMPARE.csv`
-  - `processes/s2/S2_GT_FREE_GAP_PROXY_ANALYSIS.md`
-- 结论已经明确：
-  - `117_frustum_unobserved_proxy`：Bonn `Acc = 4.136 cm`、`Comp-R = 71.24%`、`Ghost = 152`、`proxy_recall = 0.083`；
-  - `118_plane_extrapolation_closure`：Bonn `Acc = 4.199 cm`、`Comp-R = 72.17%`、`Ghost = 92`、`proxy_recall = 0.261`、`proxy_precision = 0.128`；这是当前最接近可用的 GT-free 方案；
-  - `119_entropy_guided_proxy`：Bonn `Acc = 4.152 cm`、`Comp-R = 71.17%`、`Ghost = 107`、`proxy_recall = 0.058`；
-  - 三个 GT-free proxy 都未达到 `Comp-R >= 75%`、`Ghost <= 50`、`proxy_recall >= 0.6` 的要求，因此当前**还没有找到可替代 Oracle 的可行方案**。
-- 本轮进一步尝试了 `120/121` 两个多模态联合 proxy，产出：
-  - `processes/s2/S2_JOINT_GAP_PROXY_DESIGN.md`
-  - `processes/s2/S2_JOINT_GAP_PROXY_COMPARE.csv`
-  - `processes/s2/S2_JOINT_GAP_PROXY_ANALYSIS.md`
-- 结果同样明确为负：
-  - `120_joint_proxy_geometric_fusion`：Bonn `Acc = 4.184 cm`、`Comp-R = 71.12%`、`Ghost = 167`、`proxy_recall = 0.043`；
-  - `121_joint_proxy_score_weighted`：Bonn `Acc = 4.209 cm`、`Comp-R = 71.61%`、`Ghost = 41`、`proxy_recall = 0.132`；
-  - 与最佳单点 `118` 相比，`120/121` 都没有在 `Recall / Ghost / Comp-R` 三者中形成净正；说明当前 `Visibility / Plane / Entropy` 三信号虽然概念互补，但在现有估计质量下，简单联合并不能逼近 `116` 的 Oracle 效果。
-- 这说明当前真正的难点已经进一步缩窄为：
-  - `occupancy + entropy` 机制本身已经成立（由 `116` 证明）；
-  - 失败点并不在激活公式，而在 `gap localization` 仍然过弱；
-  - `120/121` 又进一步说明：问题不仅是“有没有联合公式”，而是输入信号本身还不够强；下一轮若继续 `S2`，必须先提升 GT-free visibility deficit / plane-hole localization 的质量，再谈融合。
-- 本轮进一步完成了 `122/123` 两个 GT-free visibility deficit 信号，产出：
-  - `processes/s2/S2_VISIBILITY_DEFICIT_DESIGN.md`
-  - `processes/s2/S2_VISIBILITY_DEFICIT_COMPARE.csv`
-  - `processes/s2/S2_VISIBILITY_DEFICIT_ANALYSIS.md`
-- 关键结果已经明确：
-  - `122_evidential_visibility_deficit`：Bonn `Acc = 4.391 cm`、`Comp-R = 74.10%`、`Ghost = 3`、`proxy_recall = 0.519`、`proxy_precision = 0.309`；
-  - `123_ray_deficit_accumulation`：Bonn `Acc = 4.398 cm`、`Comp-R = 74.06%`、`Ghost = 9`、`proxy_recall = 0.469`、`proxy_precision = 0.282`；
-  - 两者都明显优于 `118` 的 `proxy_recall = 0.261`，并且 `Ghost` 远低于 `118` 的 `92`；
-  - 这说明当前已经**成功构建了更强但 GT-free 的 visibility deficit 信号**。
-- 但同时也必须如实记录：
-  - `122/123` 虽然让 `visibility deficit` 信号过线，但系统级 `Acc` 仍在 `4.39 cm` 左右，显著弱于 `116` 的 `4.120 cm`；
-  - 因此它们证明的是“Gap Localization 输入已具备主线资格”，而不是“系统已经完成 S2 通关”；
-  - 下一轮若继续 `S2`，重点不再是“能否找到 GT-free gap”，而是“如何把 122/123 的强召回信号与 116 的低 Ghost 激活机制稳定耦合”，在不重新引入噪声的前提下压低 `Acc`。
-- 本轮进一步完成了 `124/125` 两个混合集成变体，产出：
-  - `processes/s2/S2_HYBRID_INTEGRATION_COMPARE.csv`
-  - `processes/s2/S2_HYBRID_INTEGRATION_REPORT.md`
-  - `processes/s2/S2_HYBRID_INTEGRATION_ANALYSIS.md`
-- 关键结果如下：
-  - `124_hybrid_evidential_activation_strict`：Bonn `Acc = 4.238 cm`、`Comp-R = 71.64%`、`Ghost = 5`；
-  - `125_hybrid_papg_constrained`：Bonn `Acc = 4.273 cm`、`Comp-R = 72.87%`、`Ghost = 3`；
-  - 两者都显著改善了 `122` 的几何质量与 ghost 控制，但仍未满足本轮硬门槛 `Acc <= 4.200 cm` 与 `Comp-R >= 73.5%` 的双赢要求。
-- 因此本轮最终判断是：
-  - `PAPG + Visibility Deficit + Occupancy Activation` 这条 GT-free 技术路径已经被**原则性打通**；
-  - 但其当前形态仍未达到“可交付状态”，因为 `Acc` 还差最后一段收敛；
-  - 若继续 `S2`，后续工作不应再扩展新 family，而应集中到“如何消除高召回 Proxy 引入的系统性几何偏差”。 
-- 本轮进一步完成了 `126_local_geometry_convergence` 的局部几何收敛实验，产出：
-  - `processes/s2/S2_LOCAL_GEOMETRY_CONVERGENCE_DESIGN.md`
-  - `processes/s2/S2_LOCAL_GEOMETRY_CONVERGENCE_COMPARE.csv`
-  - `processes/s2/S2_FINAL_CLOSING_REPORT_DRAFT.md`
-- `126` 的关键结果为：
-  - Bonn `Acc = 4.272 cm`；
-  - Bonn `Comp-R = 72.94%`；
-  - `Ghost = 8`；
-  - 局部锚点残差从 `7.129 cm` 压到 `5.827 cm`；
-  - 这说明“位置去偏 / 局部几何收敛”方向是有效的，但改进量仍不足以跨过 `Acc <= 4.200 cm` 的最终门槛。
-- 因此当前 S2 结项判断必须保持严格：
-  - `Comp-R` 与 `Ghost` 已满足最后一轮门槛；
-  - 但 `Acc` 仍卡在 `4.27 cm` 左右，未能压到 `4.20 cm` 以下；
-  - 所以当前只能形成 `S2_FINAL_CLOSING_REPORT_DRAFT.md` 的草稿版本，**不能正式宣布 S2 fully pass，也不能进入 S3**。
-- 本轮进一步完成了 `127/128` 全局刚性/相似校正实验，产出：
-  - `processes/s2/S2_GLOBAL_RIGIDITY_ALIGNMENT_DESIGN.md`
-  - `processes/s2/S2_GLOBAL_RIGIDITY_ALIGNMENT_COMPARE.csv`
-  - `processes/s2/S2_FINAL_CLOSING_REPORT.md`
-- 结果明确为负：
-  - `127_global_rigidity_alignment`：Bonn `Acc = 4.345 cm`、`Comp-R = 71.88%`、`Ghost = 2`，平均旋转角仅 `0.219 deg`；
-  - `128_global_similarity_alignment`：Bonn `Acc = 4.417 cm`、`Comp-R = 71.67%`、`Ghost = 6`，平均旋转角 `0.260 deg`、尺度约 `0.997618`；
-  - 这说明当前确实存在可测的全局微小偏差，但其量级太小，无法解释剩余的 `0.07 cm` Acc 缺口；进一步的全局刚性校正反而破坏了原有平衡。
-- 因此本轮最终结论必须更新为：
-  - `127/128` 证明：最后的误差已不再是简单的“地图整体歪了”问题；
-  - 当前 Acc 瓶颈更像是 GT-free 增量点与基线表面之间的系统性局部配准偏差，而非单一全局刚体偏差；
-  - `S2_FINAL_CLOSING_REPORT.md` 已生成，但其结论是：**S2 核心技术路径已完整验证，但仍不能正式批准结项；绝对禁止进入 S3。**
-- 本轮最终又进一步完成了 `129_local_registration_bias_modeling`，产出：
-  - `processes/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING.md`
-  - `processes/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING_COMPARE.csv`
-  - `processes/s2/S2_LOCAL_REGISTRATION_BIAS_MODELING_ANALYSIS.md`
-  - 并同步刷新了 `processes/s2/S2_FINAL_CLOSING_REPORT.md`
-- `129` 的结果为：
-  - Bonn `Acc = 4.280 cm`、`Comp-R = 72.29%`、`Ghost = 4`；
-  - 局部残差从 `12.824 cm` 压到 `5.911 cm`；
-  - 这说明局部偏移场本身存在，但其对全局 Acc 的传导极弱，已经无法继续推动 GT-free 主线跨过 `4.200 cm` 的门槛。
-- 因此当前最终结项判断保持不变：
-  - 当前最佳 GT-free 结果仍是 `126`（`Acc = 4.272 cm`, `Comp-R = 72.94%`, `Ghost = 8`）；
-  - `129` 进一步证明：继续沿当前 S2 主线做局部配准补丁，收益已接近天花板；
-  - **S2 不通过，禁止进入 S3。**
+本阶段历史叙述正式压缩为三层结构：
 
-当前距离 `S2` 通过仍差：
-1. 当前所有候选在 `TUM walking all3 + Bonn all3` family-mean 口径下仍未触及 `Comp-R >= 98%`；其中较高动态抑制分支 `67/68` 仅有 `Bonn Comp-R = 70.37% / 70.33%`；
-2. Bonn 动态抑制门槛已经被 `67/68` 跨过：`ghost_reduction_vs_tsdf = 22.43% / 23.52%`，因此当前主问题不再是“能否破 22%”，而是“如何在保持 `22%+` 的同时把 `ghost` 压回 `<=15` 并恢复 TB”；
-3. `39` 证明“更多 admission”不自动等于“更好的最终几何质量”，`40-45` 证明软重定向仍强耦合动态区，`46/47` 证明硬 HVO 约束会直接剪没 rear points，`48/49` 证明稳定背景流形状态过稀，`50-55` 证明稠密化/表面约束传播仍不能形成足够的 true-background 覆盖，`56-61` 证明保守桥接虽然能压 Ghost，但 rear 覆盖量只能恢复到 `65` 左右，`62-64` 证明单纯 multi-candidate 扩张会把 `ghost` 放大到 `23-60`，`65-67` 证明导出端粗筛选仍无法守住 TB，`68-70` 证明简单的 `rear/front/gap` 判别会走向过裁剪，`71-73` 证明语义/动态上下文只能把分布改善到 `TB=4 / Ghost=24`，`74-79` 证明静态历史锚定与局部冲突组合仍不足，`80-82` 证明物理特征能开始分离 TB/Noise，`83-85` 进一步证明结构级拓扑约束确实能把 `hole_or_noise_sum` 压到 `99-106`、把 `ghost` 压到 `16-22`，`86-91` 证明“避免过清洗”还不等于“恢复 TB”，`92-94` 证明支持聚合已经能在局部序列上把 `TB` 从 `4` 推到 `8-13`，`95-97` 证明簇级验证已经足以把 `tb_noise_correlation` 从 `0.991` 直接压到 `-0.756 / -0.786`，`98-100` 进一步证明：在 `97` 的 purified cluster plane 上做受控 completion，可以把 Bonn `Comp-R` 重新拉回 `70.08%` 且保持负相关，`101-103` 又进一步证明：当前 `Acc` 缺口并不能靠后验几何紧化补齐，`104/105` 则第一次证明：真实 upstream depth bias 的确会让 Bonn `Acc` 与平面误差同步响应，而 `108-110` 最终又证明：`104` 与 `99` 之间的结构断裂并不是不可修复，只需显式把 corrected geometry 喂给 downstream completion chain，就能恢复 `TB` 并继承上游几何收益；因此当前 S2 的剩余问题已从“能否耦合”切换成“如何把这条已修复的 one-way chain 内化回可执行主线”；
-4. `RB-Core` 同口径 compare 与 lockbox 仍只有 partial closure；
-5. 因此当前**不能诚实地把 `S2` 记为 fully pass**。
+#### 一、当前有效
 
-下一轮若继续 `S2`，唯一合理主线是：
-- 固定 current-code canonical：`frames=5 / stride=3 / seed=7 / max_points_per_frame=600`；
-- 固定当前 native baseline：`111_native_geometry_chain_direct`；
-- 把 `114_papg_plane_union` 作为“coverage-leaning innovation baseline”，把 `115_papg_consensus_activation` 作为“geometry-safe baseline”；
-- 把 `116_occupancy_entropy_gap_activation` 作为**方法机制验证上界**：后续一切 weak-evidence 研究必须以不引入 oracle gap mask 的前提，逼近 `116` 的 `Acc / Comp-R / Ghost` 组合；
-- 下一轮不再允许回退到“简单降阈值 / 扩大 union”路线；`113` 已经证明朴素 admission 只会放大 dynamic-boundary ghost；
-- 下一轮必须围绕两条方法论主线推进：
-  1. `Plane-Anchored Pose Graph` 继续深化：把平面约束从当前离线原型推进到更稳定的 pose / map 联合校正；
-  2. `Uncertainty-aware Weak-Evidence Fusion` 正式实现：把当前 `116` 的 oracle gap-only activation 替换为 GT-free gap proxy，目标是在保住 `Comp-R` 的同时继续把 `ghost` 维持在 `<=35`；
-- 在此之前，严禁继续把资源投入到后验点云紧化、简单 plane snapping 或导出端 Top-K 微调，因为 `101-103` 与 `113` 都已证明这不是当前主矛盾。
-- 已被证伪的 competition-only family（`34/35/36`）不得继续扩展。
+当前只有以下链条可作为 `S2` 的有效主线与同口径比较对象：
+
+- `111_native_geometry_chain_direct`
+  - 当前可运行 native baseline
+  - 当前复跑结果：Bonn `Acc = 4.452 cm`, `Comp-R = 66.87%`, `Ghost = 21`
+  - 结果：`output/s2/S2_NATIVE_BASELINE_111.csv`
+- `116_occupancy_entropy_gap_activation`
+  - 当前可运行 oracle 机制上界
+  - 当前复跑结果：Bonn `Acc = 4.308 cm`, `Comp-R = 73.57%`, `Ghost = 25`
+  - 结果：`output/s2/S2_OCCUPANCY_ENTROPY_COMPARE.csv`
+- `122_evidential_visibility_deficit`
+  - 当前 GT-free visibility deficit 主信号
+  - 当前复跑结果：Bonn `Acc = 4.706 cm`, `Comp-R = 70.83%`, `Ghost = 6`, `proxy_recall = 0.490`
+  - 结果：`output/s2/S2_VISIBILITY_DEFICIT_COMPARE.csv`
+- `123_ray_deficit_accumulation`
+  - 当前 GT-free visibility deficit 轻量对照信号
+  - 当前复跑结果：Bonn `Acc = 4.538 cm`, `Comp-R = 71.20%`, `Ghost = 10`, `proxy_recall = 0.502`
+  - 结果：`output/s2/S2_VISIBILITY_DEFICIT_COMPARE.csv`
+- `125_hybrid_papg_constrained`
+  - 当前 GT-free 系统折中最优参考
+  - 当前复跑结果：Bonn `Acc = 4.450 cm`, `Comp-R = 70.26%`, `Ghost = 12`
+  - 结果：`output/s2/S2_HYBRID_INTEGRATION_COMPARE.csv`
+
+#### 二、历史诊断
+
+以下链条仍保留诊断价值，但只用于 failure analysis，不再作为当前主结论：
+
+- `114_papg_plane_union`
+  - 仍保留为 coverage-leaning 中间验证节点
+  - 当前复跑结果：Bonn `Acc = 4.512 cm`, `Comp-R = 73.96%`, `Ghost = 189`
+- `115_papg_consensus_activation`
+  - 仍保留为 geometry-safe 中间验证节点
+  - 当前复跑结果：Bonn `Acc = 4.450 cm`, `Comp-R = 66.91%`, `Ghost = 9`
+- `80/93/97/99`
+  - 在 clean rerun 下已整体退化为 `Acc = inf`, `Comp-R = 0`, `TB = 0`
+  - 仅保留为历史 RPS 断链诊断材料
+  - 结果：
+    - `output/s2/S2_RPS_RAY_CONSISTENCY_COMPARE.csv`
+    - `output/s2/S2_RPS_HSSA_COMPARE.csv`
+    - `output/s2/S2_RPS_BALLOON_CLUSTER_COMPARE.csv`
+    - `output/s2/S2_RPS_DEEP_EXPLORE_COMPARE.csv`
+    - `experiments/s2/deprecated/README.md`
+
+#### 三、已废弃
+
+以下变体不再作为当前 `S2` 主线候选：
+
+- `113`：朴素 union 路线，已被证伪为只会扩大动态边界噪声；
+- `117/118/119/120/121`：旧 GT-free proxy 与联合 proxy 路线，已被 `122/123` 取代；
+- `124`：严格过滤虽能压 `Ghost`，但 `Comp-R` 明显回退；
+- `126/127/128/129`：局部收敛、全局刚体、局部偏移场等后验补丁均未能恢复到当前重跑目标线，也未优于当前有效主线：
+  - `126_local_geometry_convergence`：Bonn `Acc = 4.469 cm`、`Comp-R = 69.27%`、`Ghost = 6`、局部残差 `7.159 cm -> 6.148 cm`；
+  - `127_global_rigidity_alignment`：Bonn `Acc = 4.536 cm`、`Comp-R = 69.14%`、`Ghost = 1`、平均旋转角 `0.182 deg`；
+  - `128_global_similarity_alignment`：Bonn `Acc = 4.473 cm`、`Comp-R = 69.30%`、`Ghost = 4`、平均旋转角 `0.200 deg`、尺度 `1.001547`；
+  - `129_local_registration_bias_modeling`：Bonn `Acc = 4.449 cm`、`Comp-R = 69.17%`、`Ghost = 8`、局部残差 `13.275 cm -> 6.226 cm`。
+
+当前 `S2` 的真实状态已经收敛为：
+
+1. `111` 已恢复为当前可运行 native baseline；
+2. `116` 仍证明 occupancy+entropy 机制本身成立；
+3. `122/123` 仍证明 GT-free visibility deficit 信号已经可用；
+4. `125` 仍是当前 GT-free 主线的最好系统折中；
+5. `80/93/97/99` 等旧 RPS 深链已不再是当前主线的一部分；
+6. 因此 `S2` 当前的唯一合理推进方向，只剩：
+   - `111 -> 125`：恢复 GT-free 主线的 `Acc / Comp-R / Ghost` 折中；
+   - `125 -> 116`：缩小 GT-free 主线与 oracle 上界之间的剩余系统差距。
+
+需明确记录：
+- 历史 `S2` 探索未能形成稳定闭环；
+- 当前 `S2` 必须基于 `125` 及其上游 `111/116/122/123` 重新构建核心技术突破路径；
+- `80/93/97/99` 仅保留为诊断链，不再作为当前主线修复对象。
 
 ---
 

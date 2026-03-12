@@ -1,5 +1,0 @@
-variant,bonn_acc_cm,bonn_comp_r_5cm,bonn_ghost_reduction_vs_tsdf,bonn_rear_points_sum,bonn_rear_true_background_sum,bonn_rear_ghost_sum,bonn_rear_hole_or_noise_sum,local_residual_before_cm,local_residual_after_cm
-124_hybrid_evidential_activation_strict,4.2379453396866795,71.64444444444445,15.307442111456263,120.0,62.0,5.0,53.0,nan,nan
-125_hybrid_papg_constrained,4.273208317161675,72.86666666666667,18.145080692889437,409.0,195.0,3.0,211.0,nan,nan
-116_occupancy_entropy_gap_activation,4.120241407274002,76.14444444444445,16.887573334027003,538.0,515.0,23.0,0.0,nan,nan
-126_local_geometry_convergence,4.271844433068141,72.94444444444444,17.912375503540595,511.0,243.0,8.0,260.0,7.128613782315526,5.826877971813259

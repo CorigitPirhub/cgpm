@@ -1,5 +1,5 @@
-assets/
-data/
-output/
-third_party/
+assets/*
+data/*
+output/*
+third_party/*
 **/__pycache__/

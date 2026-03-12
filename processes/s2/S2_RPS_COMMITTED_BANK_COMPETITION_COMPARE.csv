@@ -1,5 +1,0 @@
-variant,tum_acc_cm,tum_comp_r_5cm,bonn_acc_cm,bonn_comp_r_5cm,bonn_ghost_reduction_vs_tsdf,bonn_rear_selected_sync_sum,bonn_extract_rear_selected_sum,bonn_extract_considered_sum,bonn_extract_close_gap_sum,hit_2of4_partial,pass_comp,decision
-30_rps_commit_geom_bg_soft_bank,0.935798295196066,93.12222222222222,4.2388795749442565,70.86666666666666,13.245242513521386,35.0,7.0,7.0,0.0,1.0,False,control
-34_bonn_compete_bgscore,0.935798295196066,93.12222222222222,4.238879574944235,70.86666666666666,13.245242513521386,35.0,7.0,7.0,0.0,1.0,False,abandon
-35_bonn_compete_softgap,0.935798295196066,93.12222222222222,4.238879574944247,70.86666666666666,13.245242513521386,35.0,7.0,7.0,0.0,1.0,False,abandon
-36_bonn_compete_softgap_support,0.935798295196066,93.12222222222222,4.238879574944323,70.86666666666666,13.245242513521386,35.0,7.0,7.0,0.0,1.0,False,abandon

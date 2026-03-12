@@ -1,64 +1,43 @@
 # EGF-DHMap: Evidence-Gradient Field Dynamic Mapping
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
-![Mapping](https://img.shields.io/badge/Mapping-3D-success)
-![Dynamic](https://img.shields.io/badge/Dynamic-Scene%20Robustness-orange)
-![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-lightgrey)
+EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型。
 
-EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
-- 使用证据场 `rho` 的时序累积进行动静分离（Time-Adaptive）；
-- 使用梯度场约束保持几何一致性；
-- 在不启用激进清理（`dyn_forget_gain=0`）时仍具备较强 Ghost 抑制能力。
+## 文档入口
 
-合并文档入口：`MERGED_DOCS.md`（包含 README、设计、实现、基准与数据说明）。
+- `BENCHMARK_REPORT.md`：基准结果主报告与复现实验说明
+- `SURVEY.md`：梯度场新方案调研总报告
+- `DESIGN_A.md` / `DESIGN_B.md` / `DESIGN_C.md`：三套数学原型与实验计划书
+- `output/<stage>/OVERVIEW.md`：阶段结果总览
+- `PROJECT_STRUCTURE_GUIDE.md`：项目结构与后续开发规范
+- `TASK_LOCAL_TOPTIER.md`：当前总控任务书
 
-当前治理页：`processes/governance/CURRENT_STATE_BASELINE.md`（一页式现状基线），`processes/governance/MAINLINE_BRANCH_PRUNING_TABLE.md`（主线/支线裁剪表）。
-阶段重评估页：`processes/governance/S0_S1_S2_STAGE_REASSESSMENT_2026-03-09.md`。
-当前阶段状态：`S0/S1 已完成，S2 未通过且绝对不能进入 S3`。
-当前阶段状态：`S0/S1 已完成，S2 未通过且绝对不能进入 S3`。
-动态抑制状态统一说明：`processes/s2/S2_DYNAMIC_SUPPRESSION_STATUS_EXPLANATION.md`。
+当前阶段状态：`S0/S1 已完成，S2 未通过且绝对不能进入 S3`
 
-> 当前仓库已完成结构精简：早期 2D/CGPM legacy 代码目录已移除，仅保留 3D 主线实现与复现实验脚本。
+## 当前目录结构
 
-## 核心结果（置顶）
+```text
+egf_dhmap3d/          # 主线 3D 建图实现
+scripts/              # 主线入口与稳定工具
+experiments/          # 阶段实验脚本
+output/               # 规范化输出目录
+archives/             # 历史归档（默认清空）
+assets/               # 静态资源（默认清空）
+SURVEY.md             # 调研总报告
+DESIGN_A.md           # 方案 A 设计书
+DESIGN_B.md           # 方案 B 设计书
+DESIGN_C.md           # 方案 C 设计书
+PROJECT_STRUCTURE_GUIDE.md
+```
 
-### 当前正式口径（2026-03-07）
-当前对外数字统一以以下文件为准：
-- `output/summary_tables/paper_main_table_local_mapping.csv`
-- `output/summary_tables/local_mapping_main_metrics_toptier.csv`
-- `output/summary_tables/dual_protocol_multiseed_significance.csv`
+## 目录说明
 
-按当前 `5-seed` canonical 口径：
-- TUM `oracle` dynamic（3 条 walking 均值）：
-  - EGF `F-score = 0.7903`，`Chamfer = 0.05317`，`ghost_ratio = 0.2566`
-  - TSDF `F-score = 0.4137`，`Chamfer = 0.13146`，`ghost_ratio = 0.8657`
-  - 顶刊主口径：EGF `Acc = 4.1655 cm`，`Comp-R(5cm) = 100.0%`
-- Bonn `slam` dynamic（`balloon/balloon2/crowd2` 均值）：
-  - EGF `F-score = 0.6463`，`Chamfer = 0.10116`，`ghost_ratio = 0.08613`
-  - TSDF `F-score = 0.06973`，`Chamfer = 0.25664`，`ghost_ratio = 0.21227`
-  - 顶刊主口径：EGF `Acc = 6.1481 cm`，`Comp-R(5cm) = 77.21%`
-- 显著性（EGF vs TSDF）：
-  - TUM `oracle`：`p_fscore = 4.81e-10`，`p_chamfer = 1.96e-08`，`p_ghost = 1.72e-24`
-  - Bonn `slam`：`p_fscore = 1.06e-18`，`p_chamfer = 8.21e-12`，`p_ghost = 5.35e-05`
-
-### 单序列 Bonn 示例（非 canonical 主表）
-在 `rgbd_bonn_balloon2` 的单序列示例运行中：
-- EGF: `F-score = 0.9452`
-- TSDF: `F-score = 0.5612`
-- 该结果仍可作为可视化示例，但正式对外主结论以多 seed canonical 表为准。
-
-![Bonn Comparison](assets/bonn_comparison.png)
-
-### TUM 论文级对比图
-![Final Comparison](assets/final_comparison_paper_ready.png)
-
-### Static 场景修复（freiburg1_xyz）
-- 问题：EGF 在纯静态场景精度低于 TSDF。
-- 方法（SNEF）：`Static Narrow-Band Evidence Fusion`，仅在静态分支启用窄截断带和时间持久性门控（不改动态分支）。
-- 当前结果：EGF `F-score = 0.9410`，`Chamfer = 0.0373`，满足目标 `F>=0.93, Chamfer<=0.040`；TSDF 对应为 `F-score = 0.9474`，`Chamfer = 0.0355`。
-- 动态约束：3 条 walking 的 `ghost_ratio` 在当前约束表中均未退化，且分别下降 `-0.04377 / -0.06393 / -0.05222`。
-- 结果目录：`output/post_cleanup/static_target_v1/oracle/`
-- 约束汇总：`output/summary_tables/static_target_constraint_check.csv`
+- `egf_dhmap3d/core/`, `egf_dhmap3d/modules/`, `egf_dhmap3d/data/`: 主线稳定逻辑
+- `scripts/`: 保留 `run_benchmark.py`, `run_benchmark_bonn.py`, `run_egf_3d_tum.py` 等主线入口
+- `experiments/s1/`, `experiments/s2/`, `experiments/p10/` 等：阶段实验脚本
+- `output/<stage>/`: 阶段目录；每个尝试保留一份结果汇总 `.csv` 与一份结论/后续计划 `.md`
+- `output/tmp/`: 详细实验结果、中间文件、临时文件
+- `output/<special>/`: 重要基线或需要单独保留的大结果目录
+- 根目录 `DESIGN_*.md` / `SURVEY.md`: 理论设计与调研文档，不属于实验结果输出
 
 ## Quick Start
 
@@ -67,47 +46,47 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_local_top_tier_suite.py \
   --dataset_root_tum data/tum \
   --dataset_root_bonn data/bonn \
-  --out_root output/post_cleanup/local_top_tier \
+  --out_root output/tmp/local_top_tier \
   --force
 ```
-默认会顺序执行：主 benchmark、多 seed 显著性、消融、时间维分析、Bonn 泛化，并把关键表汇总到 `output/post_cleanup/local_top_tier/tables/`。
+默认会顺序执行：主 benchmark、多 seed 显著性、消融、时间维分析、Bonn 泛化，并把关键表汇总到 `output/tmp/local_top_tier/tables/`。
 
 ### 0.1) P0 协议锁定与可复验（oracle/slam + 双次复验）
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_p0_protocol_lock.py \
+/home/zzy/anaconda3/envs/cgpm/bin/python experiments/p0/run_p0_protocol_lock.py \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/p0_protocol_lock \
+  --out_root output/tmp/p0_protocol_lock \
   --summary_root output/summary_tables \
   --frames 20 --stride 5 --max_points_per_frame 1500 \
   --seed 7 --force
 ```
-完成后查看：`output/post_cleanup/p0_protocol_lock/p0_report.json`。
+完成后查看：`output/tmp/p0_protocol_lock/p0_report.json`。
 
 ### 0.2) P1 静态-动态平衡验收（自动停在达标配置）
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_p1_balance.py \
-  --use_existing_dir output/post_cleanup/p1_unified_v8_strictsame_refresh2 \
-  --out_root output/post_cleanup/p1_balance_lock \
+/home/zzy/anaconda3/envs/cgpm/bin/python experiments/p1/run_p1_balance.py \
+  --use_existing_dir output/tmp/p1_unified_v8_strictsame_refresh2 \
+  --out_root output/tmp/p1_balance_lock \
   --summary_root output/summary_tables \
   --target_static_fscore 0.90 \
   --target_walking_fscore 0.70 \
   --target_walking_ghost_tail_ratio 0.30
 ```
-完成后查看：`output/post_cleanup/p1_balance_lock/p1_report.json`。
+完成后查看：`output/tmp/p1_balance_lock/p1_report.json`。
 
 ### 0.3) P2 机制验收（消融 + 时间机理）
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_p2_mechanism.py \
+/home/zzy/anaconda3/envs/cgpm/bin/python experiments/p2/run_p2_mechanism.py \
   --ablation_csv output/summary_tables/ablation_summary.csv \
   --temporal_csv output/summary_tables/temporal_ablation_summary.csv \
-  --out_root output/post_cleanup/p2_mechanism_lock \
+  --out_root output/tmp/p2_mechanism_lock \
   --summary_root output/summary_tables
 ```
-完成后查看：`output/post_cleanup/p2_mechanism_lock/p2_report.json`。
+完成后查看：`output/tmp/p2_mechanism_lock/p2_report.json`。
 
 ### 1) 一行命令跑 TUM 基准（EGF vs TSDF）
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py --dataset_kind tum --dataset_root data/tum --out_root output/post_cleanup/benchmark_tum --frames 80 --stride 3 --max_points_per_frame 3000 --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 --methods egf,tsdf,simple_removal --force
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py --dataset_kind tum --dataset_root data/tum --out_root output/tmp/benchmark_tum --frames 80 --stride 3 --max_points_per_frame 3000 --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 --methods egf,tsdf,simple_removal --force
 ```
 
 ### 1.1) SNEF 静态追平实验（含动态不退化约束）
@@ -115,7 +94,7 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind tum \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/static_target_v1 \
+  --out_root output/tmp/static_target_v1 \
   --protocol oracle \
   --static_sequences rgbd_dataset_freiburg1_xyz \
   --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
@@ -131,12 +110,12 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 
 ### 2) 一行命令跑时间维机理实验
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_temporal_ablation.py --dataset_root data/tum --sequence rgbd_dataset_freiburg3_walking_xyz --frames_list 15,30,45,60,90,120 --stride 3 --max_points_per_frame 3000 --voxel_size 0.02 --eval_thresh 0.05 --bg_thresh 0.10 --out_root output/post_cleanup/temporal_ablation --curve_png assets/temporal_convergence_curve.png --rho_png assets/temporal_rho_evolution.png --force
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_temporal_ablation.py --dataset_root data/tum --sequence rgbd_dataset_freiburg3_walking_xyz --frames_list 15,30,45,60,90,120 --stride 3 --max_points_per_frame 3000 --voxel_size 0.02 --eval_thresh 0.05 --bg_thresh 0.10 --out_root output/tmp/temporal_ablation --curve_png assets/temporal_convergence_curve.png --rho_png assets/temporal_rho_evolution.png --force
 ```
 
 ### 3) 一行命令跑 Bonn 泛化实验
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark_bonn.py --dataset_root data/bonn --sequence rgbd_bonn_balloon2 --frames 80 --stride 3 --max_points_per_frame 3000 --voxel_size 0.02 --eval_thresh 0.05 --bg_thresh 0.10 --out_root output/post_cleanup/benchmark_bonn --compare_png assets/bonn_comparison.png --force
+/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark_bonn.py --dataset_root data/bonn --sequence rgbd_bonn_balloon2 --frames 80 --stride 3 --max_points_per_frame 3000 --voxel_size 0.02 --eval_thresh 0.05 --bg_thresh 0.10 --out_root output/tmp/benchmark_bonn --compare_png assets/bonn_comparison.png --force
 ```
 
 ### 4) 一键刷新 `output/summary_tables`
@@ -153,7 +132,7 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
   --methods egf,tsdf,simple_removal,dynaslam,midfusion,neural_implicit \
   --seeds 1,2,3 \
   --protocol slam \
-  --out_root output/post_cleanup/benchmark_multiseed \
+  --out_root output/tmp/benchmark_multiseed \
   --dynaslam_pred_points_template \"{project_root}/external_preds/dynaslam/{sequence}/seed_{seed}/surface_points.ply\" \
   --midfusion_pred_points_template \"{project_root}/external_preds/midfusion/{sequence}/seed_{seed}/surface_points.ply\" \
   --neural_pred_points_template \"{project_root}/external_preds/neural/{sequence}/seed_{seed}/surface_points.ply\"
@@ -171,7 +150,7 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
   --frames 60 --stride 4 --max_points_per_frame 2200 \
   --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 \
   --protocol slam --seed 7 \
-  --out_root output/post_cleanup/p3_tum_expanded
+  --out_root output/tmp/p3_tum_expanded
 ```
 
 ### 7) P3: Bonn 扩展（3 动态序列）
@@ -182,14 +161,14 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
   --download \
   --frames 80 --stride 3 --max_points_per_frame 3000 \
   --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.10 \
-  --out_root output/post_cleanup/p3_bonn_expanded
+  --out_root output/tmp/p3_bonn_expanded
 ```
 
 ### 8) P3: 合成压力测试（动态比例/速度/遮挡）
 ```bash
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_stress_synth.py \
   --dataset_root data/synth_stress \
-  --out_root output/post_cleanup/p3_stress_synth \
+  --out_root output/tmp/p3_stress_synth \
   --frames 36 --stride 1 --max_points_per_frame 2200 \
   --voxel_size 0.03 --eval_thresh 0.05 --seed 7 --force
 ```
@@ -211,9 +190,9 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
   --egf_surface_max_age_frames 12 --egf_surface_max_dscore 0.75 \
   --egf_surface_max_free_ratio 0.7 --egf_surface_prune_free_min 1.0 \
   --egf_surface_prune_residual_min 0.2 --egf_surface_max_clear_hits 6 \
-  --out_root output/post_cleanup/p0_true_slam_v3_final --force
+  --out_root output/tmp/p0_true_slam_v3_final --force
 ```
-验收结果见 `output/post_cleanup/p0_true_slam_v3_final/slam/tables/reconstruction_metrics.csv`：
+验收结果见 `output/tmp/p0_true_slam_v3_final/slam/tables/reconstruction_metrics.csv`：
 - `walking_xyz`: EGF `F-score=0.7033`, `ghost_tail_ratio=0.0171`
 - `walking_static`: EGF `F-score=0.7954`, `ghost_tail_ratio=0.0372`
 - `walking_halfsphere`: EGF `F-score=0.6582`, `ghost_tail_ratio=0.0180`
@@ -221,7 +200,7 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 
 ### 10) P1: 静态-动态同参自适应（同一参数集）
 - 参数集：`sigma_n0=0.26, surface_max_age_frames=16, surface_max_dscore=0.60`（并显式将 `egf_static_*` 设为相同值）。
-- 结果目录：`output/post_cleanup/p1_unified_v8_strictsame_refresh2/slam/tables/reconstruction_metrics.csv`
+- 结果目录：`output/tmp/p1_unified_v8_strictsame_refresh2/slam/tables/reconstruction_metrics.csv`
 - 验收：
   - `freiburg1_xyz`: `F-score=0.9010`（>=0.90）
   - `walking_xyz`: `F-score=0.7298`（>=0.70）, `ghost_tail_ratio=0.0500`（<=0.05）
@@ -235,7 +214,7 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
   --methods egf,tsdf,simple_removal,dynaslam \
   --frames 20 --stride 3 --max_points_per_frame 1200 \
   --voxel_size 0.03 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 \
-  --seed 7 --out_root output/post_cleanup/p2_strict_gate_check \
+  --seed 7 --out_root output/tmp/p2_strict_gate_check \
   --dynaslam_pred_points_template "{out_dir}/../simple_removal/surface_points.ply" \
   --external_require_real --force
 ```
@@ -243,54 +222,28 @@ EGF-DHMap 是一个面向动态场景的 3D 隐式建图原型：
 
 ### 12) P3: 一键接入真实外部输出（NICE-SLAM）
 ```bash
-/home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_p3_real_external.py \
+/home/zzy/anaconda3/envs/cgpm/bin/python experiments/p3/run_p3_real_external.py \
   --dataset_root data/tum \
   --sequence rgbd_dataset_freiburg3_walking_xyz \
   --subset_frames 10 \
   --frames 10 --stride 1 \
   --protocol slam \
-  --out_root output/post_cleanup/p3_real_external_niceslam \
+  --out_root output/tmp/p3_real_external_niceslam \
   --summary_root output/summary_tables \
   --ensure_rtree
 ```
 完成后查看：
-- `output/post_cleanup/p3_real_external_niceslam/slam/P3_REAL_EXTERNAL_REPORT.md`
+- `output/tmp/p3_real_external_niceslam/slam/P3_REAL_EXTERNAL_REPORT.md`
 - `output/summary_tables/p3_real_external_reconstruction.csv`
 - `output/summary_tables/p3_real_external_dynamic.csv`
 
-## 项目结构（精简后）
-- `egf_dhmap3d/`: 3D 核心实现（数据结构、预测、关联、更新、评估）。
-- `scripts/`: 实验与绘图入口（benchmark/temporal/bonn/ablation）。
-- `scripts/adapters/`: 外部强基线适配器（DynaSLAM/MID-Fusion/Neural）。
-- `data/`: TUM 与 Bonn 数据目录。
-- `assets/`: 论文级图表。
-- `output/post_cleanup/`: 删除 legacy 后的全量复现结果。
-- `output/summary_tables/`: 最终汇总 CSV（推荐对外分发）。
+## 结果与产物
 
-## 当前推荐入口脚本
-- `scripts/run_benchmark.py`: 通用基准入口（支持 `--dataset_kind tum|bonn|auto`）
-  - 支持 `--seeds` 多 seed 批跑与聚合表输出（`*_agg.csv`）
-  - 支持 `dynaslam/midfusion/neural_implicit` 适配方法
-- `scripts/run_temporal_ablation.py`: 时间维机理分析（收敛曲线 + rho 演化）
-- `scripts/run_benchmark_bonn.py`: Bonn 动态序列专项对比
-
-## 结果文件
 - 主报告：`BENCHMARK_REPORT.md`
-- 合并总文档：`MERGED_DOCS.md`
-- 当前正式主表：`output/summary_tables/paper_main_table_local_mapping.csv`, `output/summary_tables/local_mapping_main_metrics_toptier.csv`
-- 双协议显著性：`output/summary_tables/dual_protocol_multiseed_significance.csv`
-- TUM 汇总：`output/summary_tables/tum_reconstruction_metrics.csv`, `output/summary_tables/tum_dynamic_metrics.csv`
-- TUM 静态修复专项：`output/summary_tables/tum_reconstruction_metrics_static_fix.csv`, `output/summary_tables/tum_dynamic_metrics_static_fix.csv`
-- 时间维 CSV：`output/summary_tables/temporal_ablation_summary.csv`
-- Bonn CSV：`output/summary_tables/bonn_summary.csv`
-- 消融 CSV：`output/summary_tables/ablation_summary.csv`
-- P3 TUM 扩展：`output/post_cleanup/p3_tum_expanded/slam/tables/reconstruction_metrics.csv`, `output/post_cleanup/p3_tum_expanded/slam/tables/dynamic_metrics.csv`
-- P3 Bonn 扩展：`output/post_cleanup/p3_bonn_expanded/summary.csv`, `output/post_cleanup/p3_bonn_expanded/summary_agg.csv`
-- P3 合成压力：`output/post_cleanup/p3_stress_synth/stress_summary.csv`, `output/post_cleanup/p3_stress_synth/stress_summary_agg.csv`, `output/post_cleanup/p3_stress_synth/stress_curves.png`
-- P3 真实外部输出：`output/post_cleanup/p3_real_external_niceslam/slam/tables/reconstruction_metrics.csv`, `output/post_cleanup/p3_real_external_niceslam/slam/tables/dynamic_metrics.csv`
-- 时间收敛图：`assets/temporal_convergence_curve.png`
-- rho 演化图：`assets/temporal_rho_evolution.png`
-- Bonn 对比图：`assets/bonn_comparison.png`
-
-## 视频产物说明
-当前默认实验脚本不生成视频文件（无 `.mp4/.avi/.gif` 输出）；默认产物是 `tables/*.csv`、`summary.json`、`*.ply` 与 `assets/*.png`。
+- canonical 主表：`output/summary_tables/paper_main_table_local_mapping.csv`
+- canonical 主指标：`output/summary_tables/local_mapping_main_metrics_toptier.csv`
+- 显著性结果：`output/summary_tables/dual_protocol_multiseed_significance.csv`
+- 时间维结果：`output/summary_tables/temporal_ablation_summary.csv`
+- Bonn 结果：`output/summary_tables/bonn_summary.csv`
+- 消融结果：`output/summary_tables/ablation_summary.csv`
+- 默认产物类型：`tables/*.csv`、`summary.json`、`*.ply`、`assets/*.png`；默认不生成视频文件

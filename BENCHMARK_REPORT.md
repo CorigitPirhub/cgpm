@@ -179,7 +179,7 @@ Output: updated static map M_t and extracted static surface S_t
 - 机制 2：静态分支时间持久性门控（`egf_static_surface_max_age_frames=60`），削弱短时异常点对表面的污染。
 - 机制 3：动态分支参数保持不变，确保动态抑制特性不被“静态补丁”反向破坏。
 
-复现实验目录：`output/post_cleanup/static_target_v1/oracle/`；约束核验表：`output/summary_tables/static_target_constraint_check.csv`。
+复现实验目录：`output/tmp/static_target_v1/oracle/`；约束核验表：`output/summary_tables/static_target_constraint_check.csv`。
 
 | Sequence | Method | F-score | Chamfer | Target Check |
 |---|---:|---:|---:|---:|
@@ -209,7 +209,7 @@ Output: updated static map M_t and extracted static surface S_t
 
 ## 5. Temporal Convergence Analysis
 
-数据来源: `output/post_cleanup/temporal_ablation/summary.csv`。
+数据来源: `output/tmp/temporal_ablation/summary.csv`。
 
 | Frames | F-score ↑ | Standardized Ghost Score ↓ | Legacy Ghost Ratio | Mean rho (Dynamic) | Mean rho (Static) |
 |---:|---:|---:|---:|---:|---:|
@@ -229,7 +229,7 @@ Output: updated static map M_t and extracted static surface S_t
 
 ## 6. Generalization to Bonn
 
-数据来源: `output/post_cleanup/benchmark_bonn/summary.csv`（single-sequence example: `rgbd_bonn_balloon2`）。
+数据来源: `output/tmp/benchmark_bonn/summary.csv`（single-sequence example: `rgbd_bonn_balloon2`）。
 
 > 说明：本节保留单序列可视化示例；正式对外主结论以 `output/summary_tables/paper_main_table_local_mapping.csv` 与 `output/summary_tables/local_mapping_main_metrics_toptier.csv` 为准。
 
@@ -275,7 +275,7 @@ Output: updated static map M_t and extracted static surface S_t
   --frames_list 15,30,45,60,90,120 \
   --stride 3 --max_points_per_frame 3000 \
   --voxel_size 0.02 --eval_thresh 0.05 --bg_thresh 0.10 \
-  --out_root output/post_cleanup/temporal_ablation \
+  --out_root output/tmp/temporal_ablation \
   --curve_png assets/temporal_convergence_curve.png \
   --rho_png assets/temporal_rho_evolution.png \
   --force
@@ -288,7 +288,7 @@ Output: updated static map M_t and extracted static surface S_t
   --sequence rgbd_bonn_balloon2 \
   --frames 80 --stride 3 --max_points_per_frame 3000 \
   --voxel_size 0.02 --eval_thresh 0.05 --bg_thresh 0.10 \
-  --out_root output/post_cleanup/benchmark_bonn \
+  --out_root output/tmp/benchmark_bonn \
   --compare_png assets/bonn_comparison.png \
   --force
 ```
@@ -298,23 +298,23 @@ Output: updated static map M_t and extracted static surface S_t
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind tum \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/benchmark_tum \
+  --out_root output/tmp/benchmark_tum \
   --frames 80 --stride 3 --max_points_per_frame 3000 \
   --voxel_size 0.02 --eval_thresh 0.05 --ghost_thresh 0.08 --bg_thresh 0.05 \
   --methods egf,tsdf,simple_removal \
   --force
 
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/build_ablation_summary.py \
-  --out_csv output/post_cleanup/ablation_summary.csv \
+  --out_csv output/tmp/ablation_summary.csv \
   --variant 'EGF-Full-v6 (budget30)=output/ablation_study/b30_full' \
   --variant 'EGF-No-Evidence=output/ablation_study/b30_no_evidence' \
   --variant 'EGF-No-Gradient=output/ablation_study/b30_no_gradient' \
   --variant 'EGF-Classic-SDF=output/ablation_study/b30_classic_sdf'
 
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/make_paper_ready_figures.py \
-  --tsdf_points output/post_cleanup/benchmark_tum/rgbd_dataset_freiburg3_walking_xyz/tsdf/surface_points.ply \
-  --egf_points output/post_cleanup/benchmark_tum/rgbd_dataset_freiburg3_walking_xyz/egf/surface_points.ply \
-  --stable_bg_points output/post_cleanup/benchmark_tum/rgbd_dataset_freiburg3_walking_xyz/stable_background_reference.ply \
+  --tsdf_points output/tmp/benchmark_tum/rgbd_dataset_freiburg3_walking_xyz/tsdf/surface_points.ply \
+  --egf_points output/tmp/benchmark_tum/rgbd_dataset_freiburg3_walking_xyz/egf/surface_points.ply \
+  --stable_bg_points output/tmp/benchmark_tum/rgbd_dataset_freiburg3_walking_xyz/stable_background_reference.ply \
   --out_compare assets/final_comparison_paper_ready.png \
   --rho_npz output/ablation_study/b30_full_rho/egf/dynamic_score_voxels.npz \
   --out_rho assets/evidence_rho_mechanism.png
@@ -325,7 +325,7 @@ Output: updated static map M_t and extracted static surface S_t
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind tum \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/static_fix_fullverify \
+  --out_root output/tmp/static_fix_fullverify \
   --static_sequences rgbd_dataset_freiburg1_xyz \
   --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
   --methods egf,tsdf \
@@ -339,7 +339,7 @@ Output: updated static map M_t and extracted static surface S_t
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind tum \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/static_target_v1 \
+  --out_root output/tmp/static_target_v1 \
   --protocol oracle \
   --static_sequences rgbd_dataset_freiburg1_xyz \
   --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
@@ -358,42 +358,42 @@ Output: updated static map M_t and extracted static surface S_t
 
 - 已删除 legacy 2D/CGPM 目录：`config/`, `entity/`, `geometry/`, `lifecycle/`, `operators/`, `simulator/`, `tracker/`, `visualization/`, `egf_dhmap/`。
 - 删除后已完整重跑：
-  - TUM 全基准：`output/post_cleanup/benchmark_tum/`
-  - 时间维消融：`output/post_cleanup/temporal_ablation/`
-  - Bonn 泛化：`output/post_cleanup/benchmark_bonn/`
-  - 消融汇总：`output/post_cleanup/ablation_summary.csv`
+  - TUM 全基准：`output/tmp/benchmark_tum/`
+  - 时间维消融：`output/tmp/temporal_ablation/`
+  - Bonn 泛化：`output/tmp/benchmark_bonn/`
+  - 消融汇总：`output/tmp/ablation_summary.csv`
 - 对外统一汇总表位于：`output/summary_tables/`。
 
 ## 12. P3 Dataset Expansion Update (2026-02-28)
 
 ### 12.1 TUM 扩展（1 静态 + 6 动态）
-- 目录：`output/post_cleanup/p3_tum_expanded/`
+- 目录：`output/tmp/p3_tum_expanded/`
 - 汇总表：
-  - `output/post_cleanup/p3_tum_expanded/slam/tables/reconstruction_metrics.csv`
-  - `output/post_cleanup/p3_tum_expanded/slam/tables/dynamic_metrics.csv`
+  - `output/tmp/p3_tum_expanded/slam/tables/reconstruction_metrics.csv`
+  - `output/tmp/p3_tum_expanded/slam/tables/dynamic_metrics.csv`
 - 覆盖序列：
   - 静态：`rgbd_dataset_freiburg1_xyz`
   - 动态：`rgbd_dataset_freiburg3_walking_xyz`, `rgbd_dataset_freiburg3_walking_static`, `rgbd_dataset_freiburg3_walking_halfsphere`, `rgbd_dataset_freiburg2_desk_with_person`, `rgbd_dataset_freiburg3_sitting_xyz`, `rgbd_dataset_freiburg3_sitting_static`
 
 ### 12.2 Bonn 扩展（3 动态序列）
-- 目录：`output/post_cleanup/p3_bonn_expanded/`
+- 目录：`output/tmp/p3_bonn_expanded/`
 - 汇总表：
-  - `output/post_cleanup/p3_bonn_expanded/summary.csv`
-  - `output/post_cleanup/p3_bonn_expanded/summary_agg.csv`
+  - `output/tmp/p3_bonn_expanded/summary.csv`
+  - `output/tmp/p3_bonn_expanded/summary_agg.csv`
 - 覆盖序列：
   - `rgbd_bonn_balloon2`, `rgbd_bonn_balloon`, `rgbd_bonn_crowd2`
 - 多序列对比图：
-  - `output/post_cleanup/p3_bonn_expanded/figures/rgbd_bonn_balloon2_comparison.png`
-  - `output/post_cleanup/p3_bonn_expanded/figures/rgbd_bonn_balloon_comparison.png`
-  - `output/post_cleanup/p3_bonn_expanded/figures/rgbd_bonn_crowd2_comparison.png`
+  - `output/tmp/p3_bonn_expanded/figures/rgbd_bonn_balloon2_comparison.png`
+  - `output/tmp/p3_bonn_expanded/figures/rgbd_bonn_balloon_comparison.png`
+  - `output/tmp/p3_bonn_expanded/figures/rgbd_bonn_crowd2_comparison.png`
 
 ### 12.3 合成压力测试（动态比例/速度/遮挡）
 - 脚本：`scripts/run_stress_synth.py`
-- 目录：`output/post_cleanup/p3_stress_synth/`
+- 目录：`output/tmp/p3_stress_synth/`
 - 产物：
-  - `output/post_cleanup/p3_stress_synth/stress_summary.csv`（27 行，9 组场景 × 3 方法）
-  - `output/post_cleanup/p3_stress_synth/stress_summary_agg.csv`
-  - `output/post_cleanup/p3_stress_synth/stress_curves.png`
+  - `output/tmp/p3_stress_synth/stress_summary.csv`（27 行，9 组场景 × 3 方法）
+  - `output/tmp/p3_stress_synth/stress_summary_agg.csv`
+  - `output/tmp/p3_stress_synth/stress_curves.png`
 - 扫描维度：
   - `dynamic_ratio`: `0.08, 0.15, 0.28`
   - `speed`: `0.60, 1.00, 1.50`
@@ -423,12 +423,12 @@ Output: updated static map M_t and extracted static surface S_t
   --egf_surface_max_age_frames 12 --egf_surface_max_dscore 0.75 \
   --egf_surface_max_free_ratio 0.7 --egf_surface_prune_free_min 1.0 \
   --egf_surface_prune_residual_min 0.2 --egf_surface_max_clear_hits 6 \
-  --out_root output/post_cleanup/p0_true_slam_v3_final --force
+  --out_root output/tmp/p0_true_slam_v3_final --force
 ```
 
 结果文件：
-- `output/post_cleanup/p0_true_slam_v3_final/slam/tables/reconstruction_metrics.csv`
-- `output/post_cleanup/p0_true_slam_v3_final/slam/tables/dynamic_metrics.csv`
+- `output/tmp/p0_true_slam_v3_final/slam/tables/reconstruction_metrics.csv`
+- `output/tmp/p0_true_slam_v3_final/slam/tables/dynamic_metrics.csv`
 
 ### 13.2 验收结果
 
@@ -448,7 +448,7 @@ Output: updated static map M_t and extracted static surface S_t
 目标：同一套参数覆盖静态 `freiburg1_xyz` 与动态 `walking_xyz`。  
 参数：`sigma_n0=0.26, surface_max_age_frames=16, surface_max_dscore=0.60`，并显式设置 `egf_static_*` 与 dynamic 完全一致。
 
-结果目录：`output/post_cleanup/p1_unified_v8_strictsame_refresh2/slam/tables/reconstruction_metrics.csv`
+结果目录：`output/tmp/p1_unified_v8_strictsame_refresh2/slam/tables/reconstruction_metrics.csv`
 
 | Sequence | Method | F-score | Ghost Tail Ratio |
 |---|---:|---:|---:|
@@ -463,7 +463,7 @@ Output: updated static map M_t and extracted static surface S_t
 - 参数：`--external_require_real`
 - 行为：若外部方法输出指向占位路径（例如 `../simple_removal/surface_points.ply`），直接报错并中断。
 
-最小验证命令与错误样例见 `output/post_cleanup/p2_strict_gate_check/` 对应运行日志（错误为 `source is placeholder/non-real`）。
+最小验证命令与错误样例见 `output/tmp/p2_strict_gate_check/` 对应运行日志（错误为 `source is placeholder/non-real`）。
 
 结论：P2 的评估框架已“去适配器占位”并可复现，但要完成“真实 DynaSLAM/MID-Fusion/Neural 对比”，仍需提供三类方法的真实输出路径或 runner。
 
@@ -473,7 +473,7 @@ Output: updated static map M_t and extracted static surface S_t
 - 入口脚本：`scripts/run_p3_real_external.py`
 - 严格参数：`--external_require_real`
 - 外部真实源：`output/external/nice_slam/rgbd_dataset_freiburg3_walking_xyz_f010_fast/mesh/00005_mesh.ply`
-- 统一评估结果：`output/post_cleanup/p3_real_external_niceslam/slam/tables/reconstruction_metrics.csv`
+- 统一评估结果：`output/tmp/p3_real_external_niceslam/slam/tables/reconstruction_metrics.csv`
 - 汇总导出：
   - `output/summary_tables/p3_real_external_reconstruction.csv`
   - `output/summary_tables/p3_real_external_dynamic.csv`
@@ -495,7 +495,7 @@ Output: updated static map M_t and extracted static surface S_t
 
 ### 16.2 与我们当前 SLAM（no-GT-delta）差距
 
-`ours` 取自：`output/post_cleanup/p0_true_slam_v3_final/slam/tables/reconstruction_metrics.csv`（`method=egf`）。
+`ours` 取自：`output/tmp/p0_true_slam_v3_final/slam/tables/reconstruction_metrics.csv`（`method=egf`）。
 
 | Sequence | Best Literature Baseline | Baseline ATE (m) | Ours ATE (m) | Gap (m) | Ours/Baseline | Ours Eval-Align RMSE (m) | Ours F-score | Ours Ghost Tail Ratio |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -593,7 +593,7 @@ Output: updated static map M_t and extracted static surface S_t
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind tum \
   --dataset_root data/tum \
-  --out_root output/post_cleanup/p13_tum_oracle_5seed_fast \
+  --out_root output/tmp/p13_tum_oracle_5seed_fast \
   --protocol oracle \
   --static_sequences "" \
   --dynamic_sequences rgbd_dataset_freiburg3_walking_xyz,rgbd_dataset_freiburg3_walking_static,rgbd_dataset_freiburg3_walking_halfsphere \
@@ -607,7 +607,7 @@ Output: updated static map M_t and extracted static surface S_t
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind bonn \
   --dataset_root data/bonn \
-  --out_root output/post_cleanup/p5_multiseed_bonn_all3 \
+  --out_root output/tmp/p5_multiseed_bonn_all3 \
   --protocol slam \
   --static_sequences "" \
   --dynamic_sequences rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2 \
@@ -620,12 +620,12 @@ Output: updated static map M_t and extracted static surface S_t
 
 # 3) significance + consolidated checks
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
-  --root output/post_cleanup/p13_tum_oracle_5seed_fast \
-  --out output/post_cleanup/p13_tum_oracle_5seed_fast/tables/significance.csv
+  --root output/tmp/p13_tum_oracle_5seed_fast \
+  --out output/tmp/p13_tum_oracle_5seed_fast/tables/significance.csv
 
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
-  --root output/post_cleanup/p5_multiseed_bonn_all3 \
-  --out output/post_cleanup/p5_multiseed_bonn_all3/tables/significance.csv
+  --root output/tmp/p5_multiseed_bonn_all3 \
+  --out output/tmp/p5_multiseed_bonn_all3/tables/significance.csv
 ```
 
 ## 19. Round Update (2026-03-02, Follow-up): Bonn All-3 Multi-Seed + Summary Tooling
@@ -637,7 +637,7 @@ Output: updated static map M_t and extracted static surface S_t
 
 ### 19.1 Bonn 三序列 5-seed（slam）显著性
 
-- 实验根目录：`output/post_cleanup/p5_multiseed_bonn_all3/`
+- 实验根目录：`output/tmp/p5_multiseed_bonn_all3/`
 - 主表：
   - `output/summary_tables/bonn_reconstruction_metrics_multiseed.csv`
   - `output/summary_tables/bonn_reconstruction_metrics_multiseed_agg.csv`
@@ -659,8 +659,8 @@ Output: updated static map M_t and extracted static surface S_t
 
 新增能力：
 - `scripts/update_summary_tables.py --prefer_p4_final`
-  - 主表优先取 `output/post_cleanup/p4_final_merged/oracle/tables/`，避免手工覆盖。
-  - Bonn 多 seed 源优先取 `output/post_cleanup/p5_multiseed_bonn_all3/slam/tables/`（若存在），否则回退 `p4_multiseed_bonn_final`。
+  - 主表优先取 `output/tmp/p4_final_merged/oracle/tables/`，避免手工覆盖。
+  - Bonn 多 seed 源优先取 `output/tmp/p5_multiseed_bonn_all3/slam/tables/`（若存在），否则回退 `p4_multiseed_bonn_final`。
 - `scripts/build_dual_protocol_multiseed_summary.py`
   - 输出：
     - `output/summary_tables/dual_protocol_multiseed_reconstruction.csv`
@@ -676,7 +676,7 @@ Output: updated static map M_t and extracted static surface S_t
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/run_benchmark.py \
   --dataset_kind bonn \
   --dataset_root data/bonn \
-  --out_root output/post_cleanup/p5_multiseed_bonn_all3 \
+  --out_root output/tmp/p5_multiseed_bonn_all3 \
   --protocol slam \
   --static_sequences "" \
   --dynamic_sequences rgbd_bonn_balloon2,rgbd_bonn_balloon,rgbd_bonn_crowd2 \
@@ -689,14 +689,14 @@ Output: updated static map M_t and extracted static surface S_t
 
 # 2) significance (Bonn all-3)
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/stats_significance.py \
-  --root output/post_cleanup/p5_multiseed_bonn_all3 \
-  --out output/post_cleanup/p5_multiseed_bonn_all3/tables/significance.csv
+  --root output/tmp/p5_multiseed_bonn_all3 \
+  --out output/tmp/p5_multiseed_bonn_all3/tables/significance.csv
 
 # 3) dual protocol summary + main summary refresh
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/build_dual_protocol_multiseed_summary.py \
   --summary_root output/summary_tables \
-  --oracle_tables_root output/post_cleanup/p4_multiseed_tum_final_v2/oracle/tables \
-  --slam_tables_root output/post_cleanup/p5_multiseed_bonn_all3/slam/tables
+  --oracle_tables_root output/tmp/p4_multiseed_tum_final_v2/oracle/tables \
+  --slam_tables_root output/tmp/p5_multiseed_bonn_all3/slam/tables
 
 /home/zzy/anaconda3/envs/cgpm/bin/python scripts/update_summary_tables.py \
   --prefer_p4_final --verbose
@@ -767,7 +767,7 @@ Output: updated static map M_t and extracted static surface S_t
 - 产物：
   - `output/summary_tables/stress_test_summary.csv`
   - `assets/stress_degradation_curves.png`
-  - `output/post_cleanup/stress_test/FAILURE_CASES.md`
+  - `output/tmp/stress_test/FAILURE_CASES.md`
 
 Level-2 验收（EGF 对 TSDF 的 ghost_ratio 降幅）：
 - `point_budget`: `71.88%`

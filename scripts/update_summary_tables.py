@@ -359,13 +359,13 @@ def build_multiseed_mean_std_tum_bonn(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Update output/summary_tables from post_cleanup results.")
-    parser.add_argument("--post_cleanup_root", type=str, default="output/post_cleanup")
+    parser.add_argument("--post_cleanup_root", type=str, default="output/tmp")
     parser.add_argument("--summary_root", type=str, default="output/summary_tables")
     parser.add_argument("--legacy_ablation_csv", type=str, default="output/ablation_study/summary.csv")
     parser.add_argument(
         "--prefer_p4_final",
         action="store_true",
-        help="Prefer output/post_cleanup/p4_final_merged/oracle/tables as canonical main TUM table source.",
+        help="Prefer output/tmp/p4_final_merged/oracle/tables as canonical main TUM table source.",
     )
     parser.add_argument("--python_exe", type=str, default=sys.executable)
     parser.add_argument("--refresh_p6_p9", dest="refresh_p6_p9", action="store_true")
@@ -958,7 +958,7 @@ def main() -> None:
         # P7: efficiency v2 + quality-speed plot
         ok, err = run_python_script(
             python_exe=str(args.python_exe),
-            script_rel="scripts/run_p7_efficiency_v2.py",
+            script_rel="experiments/p7/run_p7_efficiency_v2.py",
             script_args=[
                 "--out_root",
                 str(post_cleanup_root / "p7_speed_probe"),
@@ -978,7 +978,7 @@ def main() -> None:
         # P8: native external baseline matrix
         ok, err = run_python_script(
             python_exe=str(args.python_exe),
-            script_rel="scripts/run_p8_native_external.py",
+            script_rel="experiments/p8/run_p8_native_external.py",
             script_args=[],
             project_root=project_root,
             verbose=bool(args.verbose),
@@ -1009,7 +1009,7 @@ def main() -> None:
         # P9: stress summary + failure boundaries
         ok, err = run_python_script(
             python_exe=str(args.python_exe),
-            script_rel="scripts/build_p9_stress_report.py",
+            script_rel="experiments/p9/build_p9_stress_report.py",
             script_args=[
                 "--out_csv",
                 str(p9_stress_csv),
@@ -1025,7 +1025,7 @@ def main() -> None:
         # P14: final 4D stress summary + final failure boundaries
         ok, err = run_python_script(
             python_exe=str(args.python_exe),
-            script_rel="scripts/build_p14_stress_report.py",
+            script_rel="experiments/p14/build_p14_stress_report.py",
             script_args=[
                 "--out_csv",
                 str(p14_stress_csv),

@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import time
+import sys
 from pathlib import Path
 from typing import Dict, List, Sequence
 
@@ -58,12 +59,12 @@ def main() -> None:
     parser.add_argument("--voxel_size", type=float, default=0.02)
     parser.add_argument("--eval_thresh", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--out_root", type=str, default="output/post_cleanup/efficiency_profile")
+    parser.add_argument("--out_root", type=str, default="output/tmp/efficiency_profile")
     parser.add_argument("--out_csv", type=str, default="output/summary_tables/local_mapping_efficiency.csv")
     parser.add_argument("--out_json", type=str, default="output/summary_tables/local_mapping_efficiency.json")
     args = parser.parse_args()
 
-    py = "/home/zzy/anaconda3/envs/cgpm/bin/python"
+    py = sys.executable
     out_root = Path(args.out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 

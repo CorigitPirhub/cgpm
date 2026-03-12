@@ -32,7 +32,7 @@ def _safe_spearman(x: np.ndarray, y: np.ndarray) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compute temporal trend statistics for local mapping metrics.")
-    parser.add_argument("--in_csv", type=str, default="output/post_cleanup/temporal_ablation/summary.csv")
+    parser.add_argument("--in_csv", type=str, default="output/tmp/temporal_ablation/summary.csv")
     parser.add_argument("--out_csv", type=str, default="output/summary_tables/temporal_trend_stats.csv")
     parser.add_argument("--out_json", type=str, default="output/summary_tables/temporal_trend_stats.json")
     args = parser.parse_args()
